@@ -34,9 +34,69 @@ export const STAGGER_MS = 180;
 /** True while the page is leaving: every Ink on it bleeds out. */
 export const InkStage = createContext(false);
 
+/*
+ * How the ink behaves. A design picks one for its whole page.
+ *  blots:   the original. Blots of ink soak through in a noise pattern.
+ *  seep:    many small wet points spread and join, pale at first, then dark.
+ *  write:   each line writes itself, left to right, in reading order.
+ *  develop: for photographs. The shadows come up first, like a print in the tray.
+ */
+export type InkMode = "blots" | "seep" | "write" | "develop";
+export const InkModeContext = createContext<InkMode>("blots");
+
+type Tune = {
+  freq: number;
+  octaves: number;
+  disp: number;
+  blur: number;
+  slope: number;
+  fade: number; // how pale the ink starts (0: no fade)
+  inMs: number;
+  outMs: number;
+};
+
+const TUNE: Record<InkMode, Tune> = {
+  blots: {
+    freq: 0.011,
+    octaves: 4,
+    disp: 26,
+    blur: 2.6,
+    slope: 9,
+    fade: 0,
+    inMs: IN_MS,
+    outMs: OUT_MS,
+  },
+  seep: {
+    freq: 0.022,
+    octaves: 3,
+    disp: 7,
+    blur: 1.4,
+    slope: 5,
+    fade: 0.75,
+    inMs: 5200,
+    outMs: 2400,
+  },
+  write: { freq: 0.03, octaves: 2, disp: 3, blur: 0.9, slope: 5, fade: 0.55, inMs: 0, outMs: 2200 },
+  develop: {
+    freq: 0.004,
+    octaves: 2,
+    disp: 0,
+    blur: 0,
+    slope: 2.2,
+    fade: 0,
+    inMs: 6500,
+    outMs: 2600,
+  },
+};
+
+/** Pixels of line a hand writes per second, at 1080p. */
+const WRITE_PX_PER_S = 1100;
+const WRITE_EDGE = 140;
+
 type Props = {
   k?: string | number;
   order?: number;
+  mode?: InkMode;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -52,14 +112,20 @@ function prefersStill() {
   );
 }
 
-export function Ink({ k = "", order = 0, className, style, children }: Props) {
+export function Ink({ k = "", order = 0, mode: asked, className, style, children }: Props) {
   const leaving = useContext(InkStage);
+  const designMode = useContext(InkModeContext);
+  const mode = asked ?? designMode;
+  const tune = TUNE[mode];
   const fid = `ink-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   const box = useRef<HTMLDivElement>(null);
   const disp = useRef<SVGFEDisplacementMapElement>(null);
   const blur = useRef<SVGFEGaussianBlurElement>(null);
   const alpha = useRef<SVGFEFuncAElement>(null);
+  const fade = useRef<SVGFEFuncAElement>(null);
+  const dev = useRef<SVGFEFuncAElement>(null);
+  const wash = useRef<SVGFEFuncAElement>(null);
   const frame = useRef(0);
   const firstIn = useRef(true);
 
@@ -74,15 +140,102 @@ export function Ink({ k = "", order = 0, className, style, children }: Props) {
   // p = 0: no ink on the paper. p = 1: dry, crisp type.
   function paint(p: number) {
     const q = 1 - p;
-    disp.current?.setAttribute("scale", (26 * q * q).toFixed(2));
-    blur.current?.setAttribute("stdDeviation", (2.6 * q).toFixed(2));
-    alpha.current?.setAttribute("intercept", (-7.5 * q).toFixed(3));
+    if (mode === "develop") {
+      // alpha = s(1 - lum) + (s + 1)p - s: shadows first, highlights last.
+      const s = tune.slope;
+      dev.current?.setAttribute("intercept", ((s + 1) * p - s).toFixed(3));
+      return;
+    }
+    disp.current?.setAttribute("scale", (tune.disp * q * q).toFixed(2));
+    blur.current?.setAttribute("stdDeviation", (tune.blur * q).toFixed(2));
+    const intercept = mode === "blots" ? -7.5 * q : -tune.slope * 0.85 * q + p;
+    alpha.current?.setAttribute("intercept", intercept.toFixed(3));
+    fade.current?.setAttribute("slope", (1 - tune.fade * q * q).toFixed(3));
+    // A pale wash of the whole passage runs ahead of the ink, then dries away.
+    wash.current?.setAttribute("slope", (0.32 * q * Math.min(1, p * 5)).toFixed(3));
   }
 
-  function play(dir: "in" | "out", delay: number, done?: () => void) {
+  // Write: a soft-edged mask sweeps each line box in reading order.
+  function writeIn(el: HTMLDivElement, delay: number, done?: () => void): void {
+    const box = el.getBoundingClientRect();
+    // One box per line of text, in reading order (text nodes only, so the
+    // boxes of the elements around them don't swallow the lines).
+    const range = document.createRange();
+    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (!n.textContent?.trim()) continue;
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) {
+        if (r.width > 2 && r.height > 2)
+          rects.push({ x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height });
+      }
+    }
+    // Merge fragments on the same line (spans inside one line).
+    const lines: typeof rects = [];
+    for (const r of rects) {
+      const last = lines.at(-1);
+      if (last && Math.abs(last.y + last.h / 2 - (r.y + r.h / 2)) < Math.min(last.h, r.h) / 2) {
+        const x = Math.min(last.x, r.x);
+        last.w = Math.max(last.x + last.w, r.x + r.w) - x;
+        last.x = x;
+        last.y = Math.min(last.y, r.y);
+        last.h = Math.max(last.h, r.h);
+      } else lines.push({ ...r });
+    }
+    if (!lines.length) return play("in", delay, done, "seep");
+    const scale = window.innerHeight / 1080;
+    const pxPerMs = (WRITE_PX_PER_S * scale) / 1000;
+    const edge = WRITE_EDGE * scale;
+    const spans = lines.map((l) => (l.w + edge) / pxPerMs);
+    const total = spans.reduce((a, b) => a + b, 0);
+    const pad = 6 * scale;
+    el.style.maskRepeat = "no-repeat";
+    el.style.maskSize = lines.map((l) => `${l.w + edge * 2}px ${l.h + pad * 2}px`).join(",");
+    const frameAt = (elapsed: number) => {
+      let t = elapsed;
+      const imgs: string[] = [];
+      const pos: string[] = [];
+      lines.forEach((l, i) => {
+        const x = Math.min(Math.max(t / spans[i], 0), 1);
+        t -= spans[i];
+        // The gradient's ink edge travels from the line's start to past its end.
+        const head = edge + x * (l.w + edge);
+        imgs.push(
+          `linear-gradient(to right, #000 ${Math.max(head - edge, 0).toFixed(1)}px, transparent ${head.toFixed(1)}px)`,
+        );
+        pos.push(`${(l.x - edge).toFixed(1)}px ${(l.y - pad).toFixed(1)}px`);
+      });
+      el.style.maskImage = imgs.join(",");
+      el.style.maskPosition = pos.join(",");
+    };
+    el.style.opacity = "1";
+    el.style.filter = `url(#${fid})`;
+    frameAt(0);
+    const start = performance.now() + delay;
+    const tick = (now: number) => {
+      const elapsed = Math.max(now - start, 0);
+      frameAt(elapsed);
+      // The wet look dries over the whole writing.
+      paint(Math.min(0.55 + (0.45 * elapsed) / total, 1));
+      if (elapsed < total) {
+        frame.current = requestAnimationFrame(tick);
+        return;
+      }
+      el.style.maskImage = "";
+      el.style.maskPosition = "";
+      el.style.maskSize = "";
+      el.style.filter = "none";
+      done?.();
+    };
+    frame.current = requestAnimationFrame(tick);
+  }
+
+  function play(dir: "in" | "out", delay: number, done?: () => void, as?: InkMode): void {
     const el = box.current;
     if (!el) return;
     cancelAnimationFrame(frame.current);
+    if (dir === "in" && mode === "write" && !as && !prefersStill()) return writeIn(el, delay, done);
 
     if (prefersStill()) {
       el.style.filter = "none";
@@ -95,7 +248,7 @@ export function Ink({ k = "", order = 0, className, style, children }: Props) {
 
     el.style.opacity = "1";
     el.style.filter = `url(#${fid})`;
-    const duration = dir === "in" ? IN_MS : OUT_MS;
+    const duration = dir === "in" ? tune.inMs || 4200 : tune.outMs;
     const start = performance.now() + delay;
     const tick = (t: number) => {
       const x = Math.min(Math.max((t - start) / duration, 0), 1);
@@ -150,33 +303,65 @@ export function Ink({ k = "", order = 0, className, style, children }: Props) {
           height="116%"
           colorInterpolationFilters="sRGB"
         >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.011"
-            numOctaves={4}
-            seed={seed}
-            result="noise"
-          />
-          <feDisplacementMap
-            ref={disp}
-            in="SourceGraphic"
-            in2="noise"
-            scale="26"
-            xChannelSelector="R"
-            yChannelSelector="G"
-            result="flow"
-          />
-          <feGaussianBlur ref={blur} in="flow" stdDeviation="2.6" result="wet" />
-          <feColorMatrix
-            in="noise"
-            type="matrix"
-            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"
-            result="noiseAlpha"
-          />
-          <feComponentTransfer in="noiseAlpha" result="blots">
-            <feFuncA ref={alpha} type="linear" slope="9" intercept="-7.5" />
-          </feComponentTransfer>
-          <feComposite in="wet" in2="blots" operator="in" />
+          {mode === "develop" ? (
+            <>
+              <feColorMatrix
+                in="SourceGraphic"
+                type="matrix"
+                values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -0.2126 -0.7152 -0.0722 0 1"
+                result="dark"
+              />
+              <feComponentTransfer in="dark" result="mask">
+                <feFuncA ref={dev} type="linear" slope={tune.slope} intercept={-tune.slope} />
+              </feComponentTransfer>
+              <feComposite in="SourceGraphic" in2="mask" operator="in" />
+            </>
+          ) : (
+            <>
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency={tune.freq}
+                numOctaves={tune.octaves}
+                seed={seed}
+                result="noise"
+              />
+              <feDisplacementMap
+                ref={disp}
+                in="SourceGraphic"
+                in2="noise"
+                scale={tune.disp}
+                xChannelSelector="R"
+                yChannelSelector="G"
+                result="flow"
+              />
+              <feGaussianBlur ref={blur} in="flow" stdDeviation={tune.blur} result="wet" />
+              <feColorMatrix
+                in="noise"
+                type="matrix"
+                values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"
+                result="noiseAlpha"
+              />
+              <feComponentTransfer in="noiseAlpha" result="blots">
+                <feFuncA ref={alpha} type="linear" slope={tune.slope} intercept={-tune.slope} />
+              </feComponentTransfer>
+              <feComposite in="wet" in2="blots" operator="in" result="inked" />
+              <feComponentTransfer in="inked" result="ink">
+                <feFuncA ref={fade} type="linear" slope={1 - tune.fade} />
+              </feComponentTransfer>
+              {mode === "blots" ? null : (
+                <>
+                  <feGaussianBlur in="SourceGraphic" stdDeviation={3.2} result="soft" />
+                  <feComponentTransfer in="soft" result="washed">
+                    <feFuncA ref={wash} type="linear" slope={0} />
+                  </feComponentTransfer>
+                  <feMerge>
+                    <feMergeNode in="washed" />
+                    <feMergeNode in="ink" />
+                  </feMerge>
+                </>
+              )}
+            </>
+          )}
         </filter>
       </svg>
       {current ? children : shown.children}

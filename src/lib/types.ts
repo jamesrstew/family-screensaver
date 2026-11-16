@@ -21,7 +21,13 @@ export type Weather = {
     label: string;
     code: number;
   }>;
-  hours: Array<{ time: string; temp: number; precipChance: number }>; // next 24
+  hours: Array<{
+    time: string;
+    temp: number;
+    precipChance: number;
+    code?: number;
+    isDay?: boolean;
+  }>; // next 24
 };
 
 export type Happening = {

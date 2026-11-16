@@ -10,7 +10,8 @@ import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
-import { Ink, InkStage, OUT_MS, STAGGER_MS } from "./Ink";
+import { DESIGNS, type Design } from "@/views/designs/registry";
+import { Ink, InkModeContext, InkStage, OUT_MS, STAGGER_MS } from "./Ink";
 import { useVoice } from "./useVoice";
 
 /*
@@ -38,7 +39,16 @@ const LEAVE_MS = OUT_MS + STAGGER_MS * 3;
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
 
-export function Screen({ initial, initialPage }: { initial: Snapshot; initialPage: Page }) {
+export function Screen({
+  initial,
+  initialPage,
+  design = null,
+}: {
+  initial: Snapshot;
+  initialPage: Page;
+  design?: Design | null;
+}) {
+  const kit = design ? DESIGNS[design] : null;
   const [snapshot, setSnapshot] = useState(initial);
   // First render uses the server's clock so hydration matches; then real time.
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
@@ -153,6 +163,13 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
     return () => window.removeEventListener("keydown", onKey);
   }, [page, show, voice, snapshot.voice]);
 
+  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 2500);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // ---- Protect the screen: the page drifts a few pixels, too slowly to see.
   const [drift, setDrift] = useState({ x: 0, y: 0 });
   useEffect(() => {
@@ -167,6 +184,8 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
     <div
       data-surface="tv"
       data-mood={mood}
+      data-design={design ?? undefined}
+      data-settled={settled ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -177,15 +196,18 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
           transition: "transform 180s linear",
         }}
       >
-        <InkStage.Provider value={leaving}>
-          <div key={view} className="h-full">
-            {view === "home" && <HomePage {...props} />}
-            {view === "night" && <NightPage {...props} />}
-            {view === "weather" && <WeatherPage {...props} />}
-            {view === "week" && <WeekPage {...props} />}
-            {view === "notebook" && <NotebookPage {...props} />}
-          </div>
-        </InkStage.Provider>
+        <InkModeContext.Provider value={kit?.ink ?? "blots"}>
+          <InkStage.Provider value={leaving}>
+            <div key={view} className="h-full">
+              {view === "home" && (kit ? <kit.Home {...props} /> : <HomePage {...props} />)}
+              {view === "night" && (kit ? <kit.Night {...props} /> : <NightPage {...props} />)}
+              {view === "weather" &&
+                (kit ? <kit.Weather {...props} /> : <WeatherPage {...props} />)}
+              {view === "week" && <WeekPage {...props} />}
+              {view === "notebook" && <NotebookPage {...props} />}
+            </div>
+          </InkStage.Provider>
+        </InkModeContext.Provider>
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
     </div>
