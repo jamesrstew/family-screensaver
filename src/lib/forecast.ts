@@ -547,6 +547,32 @@ const list = (xs: string[]) =>
   xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")}, and ${xs.at(-1)}`;
 
 /**
+ * The next day, hour by hour, in a sentence: rain or snow and when (or how
+ * long it stays dry), then the first turn of the temperature.
+ * "Snow likely from 2 p.m. until about 10 p.m. Down to 25° by 1 a.m."
+ */
+export function hoursLine(w: Weather, now: Date, tz: string): string {
+  const o = outlook(w, now, tz);
+  const hours = w.hours.filter((h) => Date.parse(h.time) + HOUR > now.getTime()).slice(0, 24);
+  if (hours.length < 2) return o.line;
+  // A couple of hours short of the end, so "dry through" never overreaches.
+  const wet =
+    o.timing ??
+    `Dry through ${periodWord(new Date(hours[Math.max(hours.length - 3, 0)].time), now, tz)}.`;
+  const temps = hours.map((h, i) => (i === 0 ? w.now.temp : h.temp));
+  const hi = temps.indexOf(Math.max(...temps));
+  const lo = temps.indexOf(Math.min(...temps));
+  const turn = [hi, lo]
+    .filter((i) => Math.abs(temps[i] - w.now.temp) >= 3)
+    .sort((a, b) => a - b)[0];
+  const temp =
+    turn === undefined
+      ? `Steady near ${w.now.temp}°.`
+      : `${temps[turn] > w.now.temp ? "Up" : "Down"} to ${temps[turn]}° by ${clock(new Date(hours[turn].time), tz)}.`;
+  return tidy(`${wet} ${temp}`);
+}
+
+/**
  * Two or three sentences for the voice and the other designs:
  * "Cloudy and 45° now, down to 32° tonight. Snow likely Wednesday."
  */

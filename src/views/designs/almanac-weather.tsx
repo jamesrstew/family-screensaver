@@ -2,7 +2,15 @@
 
 import { useSyncExternalStore } from "react";
 import { Ink } from "@/components/Ink";
-import { hourFall, outlook, partFromDay, weekLine, type Outlook, type Part } from "@/lib/forecast";
+import {
+  hourFall,
+  hoursLine,
+  outlook,
+  partFromDay,
+  skyOf,
+  weekLine,
+  type Outlook,
+} from "@/lib/forecast";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
@@ -10,46 +18,50 @@ import type { ViewProps } from "../parts";
 import { hourWord } from "./common";
 
 /*
- * The weather page, three ways (under review; ?weather=a|b|c).
+ * The weather, four views. Each stands alone: as the Weather page (Now is the
+ * default) and as a turn in home's carousel between quotes and photographs.
+ * No header, no clock: one idea each.
  *
- * Every version answers the same questions first, in the same words (from
- * `outlook`): what it's like now and where it's going, whether rain or snow is
- * coming and when, and what to wear. The oxblood accent marks the one thing to
- * act on: the rain or snow when there is some, otherwise what to wear.
+ * Every view answers in the same words (from `forecast.ts`). The oxblood
+ * accent marks the one thing to act on: rain or snow when it's coming,
+ * otherwise what to wear.
  *
- *  a. Answer: the answer in words, then three engraved panes (the rest of the day).
- *  b. Ribbon: the next 24 hours as one band of time; night is shaded, rain falls in it.
- *  c. One Sky: one large engraving of the sky that matters, the answer beneath it.
- *  d. Days: the week ahead as a row of engraved days, the weekend marked.
+ *  now:    the sky that matters, engraved; what it's like and what to wear.
+ *  ribbon: the next 24 hours as one band of time; night shaded, rain falling in it.
+ *  days:   the week as a row of engraved days, the weekend marked.
+ *  hours:  the next day as a row of engraved hours, the night marked.
  *
- * c and d are also built to stand alone in home's slow rotation (between
- * photographs and quotes): no header, no clock, one idea each.
+ * ?weather= picks one on the Weather page (old letters still work).
  */
 
-export type WeatherStyle = "answer" | "ribbon" | "sky" | "days";
+export type WeatherStyle = "now" | "ribbon" | "days" | "hours";
 const STYLES: Record<string, WeatherStyle> = {
-  a: "answer",
-  b: "ribbon",
-  c: "sky",
-  d: "days",
-  days: "days",
-  answer: "answer",
+  now: "now",
+  answer: "now",
+  sky: "now",
+  a: "now",
+  c: "now",
   ribbon: "ribbon",
-  sky: "sky",
+  b: "ribbon",
+  days: "days",
+  d: "days",
+  hours: "hours",
+  e: "hours",
 };
 
 const noop = () => () => {};
-function useStyle(): WeatherStyle {
+function useAsked(): WeatherStyle {
   const asked = useSyncExternalStore(
     noop,
     () => new URLSearchParams(window.location.search).get("weather") ?? "",
     () => "",
   );
-  return STYLES[asked.toLowerCase()] ?? "answer";
+  return STYLES[asked.toLowerCase()] ?? "now";
 }
 
-export function Weather(props: ViewProps) {
-  const style = useStyle();
+export function Weather({ view, ...props }: ViewProps & { view?: WeatherStyle }) {
+  const asked = useAsked();
+  const style = view ?? asked;
   const w = props.snapshot.weather;
   if (!w) {
     return (
@@ -60,81 +72,15 @@ export function Weather(props: ViewProps) {
   }
   const o = outlook(w, props.now, props.snapshot.timeZone);
   if (style === "ribbon") return <Ribbon {...props} w={w} o={o} />;
-  if (style === "sky") return <OneSky {...props} w={w} o={o} />;
   if (style === "days") return <Days {...props} w={w} o={o} />;
-  return <Answer {...props} w={w} o={o} />;
+  if (style === "hours") return <Hours {...props} w={w} o={o} />;
+  return <Now {...props} w={w} o={o} />;
 }
 
 type Drawn = ViewProps & { w: Sky; o: Outlook };
 
 /** Rain or snow on the way: that's the news. Otherwise, what to wear. */
 const urgent = (o: Outlook) => Boolean(o.spell);
-
-/* ------------------------------------------------------------------ a */
-
-function Answer({ o, now }: Drawn) {
-  const act = urgent(o);
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-1 flex-col items-center justify-center px-[6rem] text-center">
-        <Ink order={0}>
-          <p className="max-w-[88rem] text-[4.6rem] leading-[1.18] text-balance">{nb(o.line)}</p>
-        </Ink>
-        {o.timing ? (
-          <Ink order={1} className="mt-[2.4rem]">
-            <p
-              className={`text-[3.2rem] leading-[1.2] italic ${act ? "text-accent" : "text-ink-soft"}`}
-            >
-              {nb(o.timing)}
-            </p>
-          </Ink>
-        ) : null}
-        <Ink order={2} className="mt-[1.6rem]">
-          <p
-            className={`text-[3.2rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
-          >
-            {o.wear}
-          </p>
-        </Ink>
-      </div>
-      <Ink order={3} mode="seep" className="grid grid-cols-3 border-t border-rule pt-[2.6rem]">
-        {o.parts.map((p, i) => (
-          <Pane key={p.label} p={p} first={i === 0} now={now} />
-        ))}
-      </Ink>
-      {o.ahead ? (
-        <Ink order={4} mode="seep" className="mt-[1.6rem] text-center">
-          <p className="text-[1.85rem] text-ink-faint italic">{o.ahead && nb(o.ahead)}</p>
-        </Ink>
-      ) : null}
-    </div>
-  );
-}
-
-function Pane({ p, first, now }: { p: Part; first: boolean; now: Date }) {
-  return (
-    <div
-      className={`flex items-center justify-center gap-[1.8rem] ${first ? "" : "border-l border-rule"}`}
-    >
-      <Engraving
-        code={p.code}
-        isDay={p.isDay}
-        date={now}
-        className="size-[8.5rem] shrink-0 text-ink"
-      />
-      <div>
-        <p className="text-[1.85rem] leading-tight text-ink-soft italic">{p.label}</p>
-        <p className="text-[3.6rem] leading-[1.05] text-ink">
-          {p.temp}°
-          <span className="ml-[0.6rem] text-[1.6rem] text-ink-faint italic">
-            {p.high ? "high" : "low"}
-          </span>
-        </p>
-        <p className="text-[1.85rem] leading-tight text-ink-soft">{p.words}</p>
-      </div>
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ b */
 
@@ -416,7 +362,7 @@ function Fall({
   );
 }
 
-/* ------------------------------------------------------------------ c */
+/* ------------------------------------------------------------------ now */
 
 /** The sky worth drawing big: what's coming if it's wet, otherwise the focus. */
 function heroSky(w: Sky, o: Outlook, now: Date): { code: number; isDay: boolean } {
@@ -442,53 +388,62 @@ function heroSky(w: Sky, o: Outlook, now: Date): { code: number; isDay: boolean 
   return { code: w.now.code, isDay: w.now.isDay };
 }
 
-function OneSky({ w, o, now }: Drawn) {
+/**
+ * Now: one engraving of the sky that matters, then the answer. The sentence
+ * says what it's like and where it's going; the two italic lines say what's
+ * coming and what to wear. The rest of the day sits along the foot in words.
+ */
+function Now({ w, o, now }: Drawn) {
   const act = urgent(o);
   const sky = heroSky(w, o, now);
-  const notes = o.parts.slice(o.focus === "today" ? 1 : 0);
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-1 flex-col items-center justify-center px-[8rem] text-center">
-        <Ink order={0} mode="seep" k={`${sky.code}${sky.isDay}`} className="mb-[2.4rem]">
+      <div className="flex flex-1 flex-col items-center justify-center px-[6rem] text-center">
+        <Ink order={0} mode="seep" k={`${sky.code}${sky.isDay}`} className="mb-[2.2rem]">
           <Engraving
             code={sky.code}
             isDay={sky.isDay}
             date={now}
-            className="size-[16rem] text-ink"
+            className="size-[14rem] text-ink"
           />
         </Ink>
         <Ink order={1}>
-          <p className="max-w-[86rem] text-[4.6rem] leading-[1.16] text-balance">{nb(o.line)}</p>
+          <p className="max-w-[88rem] text-[4.6rem] leading-[1.16] text-balance">{nb(o.line)}</p>
         </Ink>
-        <Ink order={2} className="mt-[2rem]">
-          <p className="max-w-[90rem] text-[3rem] leading-[1.25] text-balance italic">
-            {o.timing ? (
-              <span className={act ? "text-accent" : "text-ink-soft"}>{nb(o.timing)} </span>
-            ) : null}
-            <span className={act ? "text-ink-soft" : "text-accent"}>{o.wear}</span>
+        {o.timing ? (
+          <Ink order={2} className="mt-[2.2rem]">
+            <p
+              className={`text-[3.1rem] leading-[1.2] text-balance italic ${act ? "text-accent" : "text-ink-soft"}`}
+            >
+              {nb(o.timing)}
+            </p>
+          </Ink>
+        ) : null}
+        <Ink order={3} className={o.timing ? "mt-[1.2rem]" : "mt-[2.2rem]"}>
+          <p
+            className={`text-[3.1rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
+          >
+            {o.wear}
           </p>
         </Ink>
       </div>
-      {/* Corner notes: what comes next, written small. */}
-      <Ink order={3} mode="seep" className="grid grid-cols-[1fr_auto_1fr] items-end gap-[3rem]">
-        {[notes[0], null, notes[1]].map((p, i) =>
-          i === 1 ? (
-            <p key="ahead" className="text-[1.85rem] text-ink-faint italic">
-              {o.ahead && nb(o.ahead)}
-            </p>
-          ) : p ? (
-            <p
-              key={p.label}
-              className={`text-[1.85rem] text-ink-soft ${i === 2 ? "text-right" : ""}`}
-            >
-              <span className="text-ink-faint italic">{p.label}, </span>
-              {p.temp}° {p.high ? "high" : "low"}, {lower(p.words)}
-            </p>
-          ) : (
-            <span key={i} />
-          ),
-        )}
+      {/* The rest of the day, in words, under one fine rule. */}
+      <Ink order={4} mode="seep" className="grid grid-cols-3 border-t border-rule pt-[1.8rem]">
+        {o.parts.map((p, i) => (
+          <p
+            key={p.label}
+            className={`text-[2rem] text-ink-soft ${i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right"}`}
+          >
+            <span className="text-ink-faint italic">{p.label}, </span>
+            <span className="text-ink">{p.temp}°</span> {p.high ? "high" : "low"}, {lower(p.words)}
+          </p>
+        ))}
       </Ink>
+      {o.ahead ? (
+        <Ink order={5} mode="seep" className="mt-[1rem] text-center">
+          <p className="text-[1.85rem] text-ink-faint italic">{nb(o.ahead)}</p>
+        </Ink>
+      ) : null}
     </div>
   );
 }
@@ -551,3 +506,61 @@ function Days({ w, now, snapshot }: Drawn) {
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ hours */
+
+const STEP = 3;
+const COLS = 8;
+
+/** Hours: Days' sibling. The next day every three hours, the night marked. */
+function Hours({ w, now, snapshot }: Drawn) {
+  const tz = snapshot.timeZone;
+  const hours = w.hours.filter((h) => Date.parse(h.time) + HOUR > now.getTime());
+  const slots = Array.from({ length: COLS }, (_, i) =>
+    hours.slice(i * STEP, i * STEP + STEP),
+  ).filter((s) => s.length > 0);
+  return (
+    <div className="flex h-full flex-col">
+      <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
+        <p className="max-w-[88rem] text-[4.4rem] leading-[1.18] text-balance">
+          {nb(hoursLine(w, now, tz))}
+        </p>
+      </Ink>
+      <Ink order={1} mode="seep" className="grid grid-cols-8 pb-[3rem]">
+        {slots.map((slot, i) => {
+          const first = slot[0];
+          // The first slot is now: the sky and temperature as they are.
+          const code = i === 0 ? w.now.code : skyOf(slot);
+          const isDay = i === 0 ? w.now.isDay : (first.isDay ?? true);
+          const temp = i === 0 ? w.now.temp : first.temp;
+          // Rain or snow only where it counts, with its chance.
+          const falls = slot.map(hourFall).filter((f) => f && f.sure !== "slight");
+          const chance = falls.length ? Math.max(...slot.map((h) => h.precipChance)) : 0;
+          const kind = falls[0]?.kind;
+          const night = !isDay;
+          return (
+            <div key={first.time} className="relative flex flex-col items-center text-center">
+              {/* The night: one fine rule over its hours, as the weekend has in Days. */}
+              {night ? <div className="absolute inset-x-0 -top-[2.2rem] h-px bg-rule" /> : null}
+              <p className={`text-[2rem] italic ${night ? "text-ink" : "text-ink-soft"}`}>
+                {i === 0 ? "Now" : nb(hourWord(first.time, tz))}
+              </p>
+              <Engraving
+                code={code}
+                isDay={isDay}
+                date={now}
+                className="my-[0.6rem] size-[9rem] text-ink"
+              />
+              <p className="text-[3.4rem] leading-none text-ink">{temp}°</p>
+              <p className="mt-[1rem] h-[2.4rem] text-[1.85rem] text-ink-soft">
+                {kind ? `${cap(kind === "storms" ? "storms" : kind)} ${chance}%` : ""}
+              </p>
+            </div>
+          );
+        })}
+      </Ink>
+    </div>
+  );
+}
+
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
