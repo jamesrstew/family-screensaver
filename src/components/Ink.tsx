@@ -124,6 +124,12 @@ function lightHand() {
   return light;
 }
 const LIGHT_BLUR_REM = 0.9;
+const LIGHT_OUT_MS = 1500;
+
+/** How long a turning page takes to sink out, in this hand. */
+export function leaveMs() {
+  return (lightHand() ? LIGHT_OUT_MS : OUT_MS_MAX) + STAGGER_MS * 3;
+}
 
 function prefersStill() {
   return (
@@ -260,7 +266,7 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
       return writeIn(el, delay, done);
 
     if (lightHand() && !prefersStill()) {
-      const ms = dir === "in" ? 2400 : Math.min(tune.outMs, 1500);
+      const ms = dir === "in" ? 2400 : Math.min(tune.outMs, LIGHT_OUT_MS);
       const blurred = `blur(${LIGHT_BLUR_REM}rem)`;
       el.style.willChange = "opacity, filter";
       if (dir === "in") {
@@ -275,6 +281,7 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
       el.style.filter = dir === "in" ? "blur(0)" : blurred;
       timer.current = window.setTimeout(() => {
         // Dry: nothing left for the compositor to hold on to.
+        el.style.transition = "none";
         if (dir === "in") el.style.filter = "none";
         el.style.willChange = "";
         done?.();
@@ -322,16 +329,27 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown.k]);
 
-  // New identity: sink the old ink, then swap.
+  // New identity: sink the old ink, then swap. If the identity comes back
+  // before the old ink has sunk, ink it straight back in.
+  const settledK = useRef(true);
   useEffect(() => {
-    if (current) return;
+    if (current) {
+      if (!settledK.current) play("in", 0);
+      settledK.current = true;
+      return;
+    }
+    settledK.current = false;
     play("out", 0, () => setShown((s) => ({ k, children: s.children })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [k]);
 
   // The whole page is leaving.
+  const wasLeaving = useRef(false);
   useEffect(() => {
     if (leaving) play("out", order * STAGGER_MS * 0.4);
+    // A turn called off midway (→ then ←): the page stays, so ink it back.
+    else if (wasLeaving.current) play("in", 0);
+    wasLeaving.current = leaving;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
 

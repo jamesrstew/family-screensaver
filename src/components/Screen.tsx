@@ -11,7 +11,7 @@ import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { DESIGNS, type Design } from "@/views/designs/registry";
-import { Ink, InkModeContext, InkStage, OUT_MS_MAX, STAGGER_MS } from "./Ink";
+import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { useVoice } from "./useVoice";
 
 /*
@@ -35,7 +35,6 @@ const STALE_WEATHER_MS = 3 * 60 * 60_000;
 const ASK_EVERY_MS = { day: 4_000, night: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
-const LEAVE_MS = OUT_MS_MAX + STAGGER_MS * 3;
 
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
@@ -63,7 +62,7 @@ export function Screen({
   const leaving = target !== view;
   useEffect(() => {
     if (!leaving) return;
-    const t = window.setTimeout(() => setView(target), LEAVE_MS);
+    const t = window.setTimeout(() => setView(target), leaveMs());
     return () => window.clearTimeout(t);
   }, [leaving, target]);
 

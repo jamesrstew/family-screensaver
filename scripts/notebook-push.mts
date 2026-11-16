@@ -1,23 +1,24 @@
 // Upload the notebook (content/private/notebook.json, never committed) to the
-// store production reads from.
-//   vercel env pull .env.local && pnpm notebook:push
+// store production reads from, through the app (PUT /api/notebook).
+//   FAMILY_KEY=… pnpm notebook:push [site-url]
 import { readFile } from "node:fs/promises";
-import { Redis } from "@upstash/redis";
 
-const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-if (!url || !token) {
-  console.error(
-    "No store configured: set KV_REST_API_URL and KV_REST_API_TOKEN (vercel env pull).",
-  );
+const site = (process.argv[2] ?? "https://family-screensaver.vercel.app").replace(/\/$/, "");
+const key = process.env.FAMILY_KEY;
+if (!key) {
+  console.error("Set FAMILY_KEY to the family key.");
   process.exit(1);
 }
 
-const notebook = JSON.parse(await readFile("content/private/notebook.json", "utf8"));
-if (!Array.isArray(notebook.items) || notebook.items.length === 0) {
-  console.error("content/private/notebook.json has no items.");
+const body = await readFile("content/private/notebook.json", "utf8");
+const res = await fetch(`${site}/api/notebook`, {
+  method: "PUT",
+  headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+  body,
+});
+const out = await res.text();
+if (!res.ok) {
+  console.error(`Upload failed (${res.status}): ${out}`);
   process.exit(1);
 }
-
-await new Redis({ url, token }).set("family:notebook", notebook);
-console.log(`Pushed ${notebook.items.length} notebook items.`);
+console.log(`Pushed ${JSON.parse(out).items} notebook items to ${site}.`);
