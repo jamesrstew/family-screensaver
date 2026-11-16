@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
-import { moodOf, type Mood } from "@/lib/time";
+import { moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -32,7 +32,8 @@ const HOLD_MS: Record<Page, number> = {
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
 const STALE_WEATHER_MS = 3 * 60 * 60_000;
-const ASK_EVERY_MS = { day: 4_000, night: 20_000 };
+// Ask often while people are up; rarely in the small hours (by the clock, not the sun).
+const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 
@@ -54,7 +55,10 @@ export function Screen({
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
   const [page, setPage] = useState<Page>(initialPage);
   const pageSince = useRef(0);
-  const mood = moodOf(now, snapshot.timeZone);
+  // Sunrise and sunset barely move day to day, so the last ones known keep the
+  // night honest even if the forecast is gone for a while.
+  const [sun, setSun] = useState(initial.weather?.today ?? null);
+  const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   const target = viewOf(page, mood);
@@ -97,7 +101,10 @@ export function Screen({
         if (!res.ok) return;
         const next: Snapshot = await res.json();
         // One missed weather report shouldn't wipe the sky; keep the last for a while.
-        if (next.weather) weatherAt = Date.now();
+        if (next.weather) {
+          weatherAt = Date.now();
+          setSun(next.weather.today);
+        }
         const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
         setSnapshot((prev) => (keep && prev.weather ? { ...next, weather: prev.weather } : next));
       } catch {
@@ -109,7 +116,10 @@ export function Screen({
 
   // ---- Requests from the phone remote, Siri, Alexa.
   const lastSeq = useRef<number | null>(null);
-  const night = mood === "night";
+  const asleep = (() => {
+    const h = parts(now, snapshot.timeZone).hour;
+    return h >= 22 || h < 5;
+  })();
   useEffect(() => {
     let alive = true;
     const poll = async () => {
@@ -129,12 +139,12 @@ export function Screen({
       }
     };
     poll();
-    const t = window.setInterval(poll, night ? ASK_EVERY_MS.night : ASK_EVERY_MS.day);
+    const t = window.setInterval(poll, asleep ? ASK_EVERY_MS.asleep : ASK_EVERY_MS.awake);
     return () => {
       alive = false;
       window.clearInterval(t);
     };
-  }, [night, show]);
+  }, [asleep, show]);
 
   // ---- The voice.
   const snapshotRef = useRef(snapshot);

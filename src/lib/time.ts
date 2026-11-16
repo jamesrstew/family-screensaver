@@ -58,14 +58,28 @@ export function addDays(key: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The paper's mood follows the sun, roughly. */
-export function moodOf(date: Date, timeZone: string): Mood {
+const minuteOfDay = (date: Date, timeZone: string) => {
   const { hour, minute } = parts(date, timeZone);
-  const m = hour * 60 + minute;
-  if (m >= 5 * 60 && m < 11 * 60) return "morning";
-  if (m >= 11 * 60 && m < 17 * 60) return "afternoon";
-  if (m >= 17 * 60 && m < 21 * 60 + 30) return "evening";
-  return "night";
+  return hour * 60 + minute;
+};
+
+/**
+ * The paper's mood follows the sun: night from sunset to sunrise. Sunrise and
+ * sunset are read as times of day, so a forecast from yesterday still works
+ * (they move a minute or two a day). With no forecast, 5 a.m. and 9:30 p.m.
+ */
+export function moodOf(
+  date: Date,
+  timeZone: string,
+  sun?: { sunrise: string; sunset: string } | null,
+): Mood {
+  const m = minuteOfDay(date, timeZone);
+  const rise = sun ? minuteOfDay(new Date(sun.sunrise), timeZone) : 5 * 60;
+  const set = sun ? minuteOfDay(new Date(sun.sunset), timeZone) : 21 * 60 + 30;
+  if (m < rise || m >= set) return "night";
+  if (m < 11 * 60) return "morning";
+  if (m < 17 * 60) return "afternoon";
+  return "evening";
 }
 
 /** AP style: "7 a.m.", "7:30 p.m.", "noon", "midnight". */

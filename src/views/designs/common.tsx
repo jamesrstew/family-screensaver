@@ -23,16 +23,37 @@ export function nextUp({ snapshot, now }: ViewProps): Happening | null {
   );
 }
 
-/** Tomorrow's first plan (past midnight, this morning's). */
-export function firstTomorrow({ snapshot, now }: ViewProps) {
+/** "This morning" / "This afternoon" / "Tonight", by when the plan starts. */
+function partOfDay(start: Date, tz: string): string {
+  const h = parts(start, tz).hour;
+  return h < 12 ? "This morning" : h < 17 ? "This afternoon" : "Tonight";
+}
+
+/**
+ * What's next, for the night page (which runs from sunset to sunrise): the
+ * next plan still to come today; before noon, today's all-day plan; else
+ * tomorrow's first.
+ */
+export function firstTomorrow(props: ViewProps) {
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
-  const morning = parts(now, tz).hour < 5;
-  const day = morning ? dayKey(now, tz) : addDays(dayKey(now, tz), 1);
-  const list = snapshot.happenings ? happeningsOn(snapshot.happenings, day, tz) : [];
+  const later = nextUp(props);
+  if (later) {
+    const start = new Date(later.start);
+    return { label: partOfDay(start, tz), title: later.title, when: clock(start, tz) };
+  }
+  const today = dayKey(now, tz);
+  if (parts(now, tz).hour < 12) {
+    const allDay = snapshot.happenings
+      ? happeningsOn(snapshot.happenings, today, tz).find((x) => x.allDay)
+      : undefined;
+    if (allDay) return { label: "Today", title: allDay.title, when: null };
+  }
+  const list = snapshot.happenings ? happeningsOn(snapshot.happenings, addDays(today, 1), tz) : [];
   const h = list.find((x) => !x.allDay) ?? list[0];
   if (!h) return null;
   return {
-    label: morning ? "This morning" : "Tomorrow",
+    label: "Tomorrow",
     title: h.title,
     when: h.allDay ? null : clock(new Date(h.start), tz),
   };

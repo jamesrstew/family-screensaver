@@ -252,7 +252,7 @@ export function Night(props: ViewProps) {
         <div className="flex-1" />
       )}
       {tomorrow ? (
-        <Ink order={2} mode="seep" className="text-center">
+        <Ink k={`${tomorrow.label}${tomorrow.title}`} order={2} mode="seep" className="text-center">
           <p className="text-[1.85rem] text-ink-faint">
             <span className="italic">{tomorrow.label}, </span>
             {tomorrow.title}
