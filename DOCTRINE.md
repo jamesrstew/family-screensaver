@@ -1,6 +1,6 @@
 # Doctrine
 
-Heritage is the Stewart family's living-room screen. Think of the enchanted pages in Harry Potter: cream paper where the ink moves. It shows one beautiful thing at a time (an idea, a quote, a question, someday a photograph), with the hour, the sky, and what's next written quietly in the corners. Ask it, and it turns the page.
+The Stewart Family App is the family's living-room screen. Think of the enchanted pages in Harry Potter: cream paper where the ink moves. It shows one beautiful thing at a time (an idea, a quote, a question, someday a photograph), with the hour, the sky, and what's next written quietly in the corners. Ask it, and it turns the page.
 
 These are the laws. A change that breaks one is a bug, even if someone asked for it. To change a law, change this file first, out loud, in its own commit, with the reason.
 
@@ -10,7 +10,7 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 ## I. Purpose
 
-1. **It serves the family. It never competes for them.** Heritage is part of the room, not a feed. Success is a glance, a smile, a question at dinner, and then everyone goes back to their lives. No feeds, no scrolling, no notifications, no badges, no streaks, no autoplay. We never measure how long anyone looked. A feature whose main effect is that someone stays longer needs a better reason than that, or it doesn't ship.
+1. **It serves the family. It never competes for them.** The app is part of the room, not a feed. Success is a glance, a smile, a question at dinner, and then everyone goes back to their lives. No feeds, no scrolling, no notifications, no badges, no streaks, no autoplay. We never measure how long anyone looked. A feature whose main effect is that someone stays longer needs a better reason than that, or it doesn't ship.
 
 2. **Less is more.** Home shows one thing. Everything else is a small note in a corner or lives one page away. Before adding anything to a screen, try taking something away.
 
@@ -18,7 +18,7 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 4. **Dim at night.** After the evening the paper goes dark and nearly empty: the time, tomorrow's first plan, and a question to sleep on. A bright screen in a dark room is a bug.
 
-5. **Everything returns home.** Any page someone asks for goes back home by itself. No one ever has to clean up after Heritage.
+5. **Everything returns home.** Any page someone asks for goes back home by itself. No one ever has to clean up after the app.
 
 6. **Effortless or not at all.** The family never configures, logs in twice, or waits on a spinner. One key pairs a device for a year. Voice, phone, and remote all lead to the same few pages. If a feature needs instructions on the fridge, it isn't finished.
 
@@ -26,11 +26,11 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 7. **Fewer things, finished.** One beautiful page beats four good ones. We would rather ship nothing than something half-made. A new page or feature has to earn its place against what's already here; until then it waits in [ROADMAP.md](ROADMAP.md).
 
-8. **Enchanted paper, not an app.** Ink on cream paper. Type does the work, with thin rules for structure. No emoji, app icons, cards, shadows, rounded corners, or gradients beyond the paper itself. Small symbols are drawn as fine ink engravings (`src/views/Sky.tsx`), never borrowed icon sets. It is not a newspaper either: no mastheads, editions, headlines, or press jargon. It's the family's own enchanted page.
+8. **Enchanted paper. It's called an app; it never looks like one.** Ink on cream paper. Type does the work, with thin rules for structure. No emoji, app icons, cards, shadows, rounded corners, or gradients beyond the paper itself. Small symbols are drawn as fine ink engravings (`src/views/Engraving.tsx`), never borrowed icon sets. It is not a newspaper either: no mastheads, editions, headlines, or press jargon. It's the family's own enchanted page.
 
-9. **Three faces and no more.** UnifrakturMaguntia for the name "Heritage" only. IM Fell English for everything else, IM Fell English SC for small labels. Colors come only from the paper tokens in `globals.css` (`--paper`, `--ink`, `--ink-soft`, `--ink-faint`, `--rule`, `--accent`). The accent (oxblood) appears at most once per page. The paper is light and milky (`#f8f4ea`), never brown.
+9. **One face on the TV.** On trial with the Almanac design (Nov. 16, 2026): Fraunces for every page Almanac draws (home, night, weather). Week and Ideas keep IM Fell English and its small caps until they're redrawn in Fraunces; then Fell goes. UnifrakturMaguntia appears only on the lock screen and the phone. Colors come only from the paper tokens (`--paper`, `--ink`, `--ink-soft`, `--ink-faint`, `--rule`, `--accent`, in `globals.css` and the design's block in `src/views/designs/designs.css`). The accent (oxblood) appears at most once per page. By day the paper is light and milky, never brown; at night it is nearly black, with the ink no brighter than a soft gray.
 
-10. **Ink, never pixels.** Content arrives and leaves by bleeding into the paper (`src/components/Ink.tsx`). Nothing slides, pops, fades on a timer, or cuts. Every block of type on the TV sits inside an `<Ink>`. When the ink is dry, the filter comes off and a still page costs nothing.
+10. **Ink, never pixels.** Content arrives and leaves by bleeding into the paper (`src/components/Ink.tsx`), in one of a few hands: _seep_ (a slow stain), _write_ (lines appear as if written), _develop_ (a photograph surfacing, for photos only), and the original _blots_. Nothing slides, pops, fades on a timer, or cuts. Every block of type on the TV sits inside an `<Ink>`. When the ink is dry, the filter comes off and a still page costs nothing.
 
 11. **Readable from the couch.** The TV is a fixed 120 × 67.5 rem sheet (1 rem = 16 px at 1080p). Anything meant to be read from across the room is at least 1.85 rem; corner notes at least 1.3 rem. Content stays inside the margins (5.5 rem sides, 3 rem top and bottom), which clears TV overscan.
 
@@ -64,7 +64,7 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 | Word             | Means                                                                                                                |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **Heritage**     | The whole thing: the screen, the voice, the remote. One constant in `src/config.ts`.                                 |
+| **The app**      | The Stewart Family App: the screen, the voice, the remote. Its name is one constant in `src/config.ts`.              |
 | **Page**         | A full-screen view: `home`, `weather`, `week`, `notebook` (shown as "Ideas"), and the automatic night page.          |
 | **Hero**         | The one piece set in the middle of home.                                                                             |
 | **Corner notes** | The hour, the sky, and what's next, written small at home's edges.                                                   |
