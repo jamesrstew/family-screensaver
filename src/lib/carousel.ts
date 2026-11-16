@@ -9,7 +9,7 @@ export const PASSAGE_MS = 4 * 60_000;
 const TURN_MS = WEATHER_MS + PASSAGE_MS;
 
 /** The approved weather views, in the order home shows them. */
-export const WEATHER_VIEWS = ["sky", "answer", "days", "ribbon"] as const;
+export const WEATHER_VIEWS = ["now", "hours", "days", "ribbon"] as const;
 export type WeatherView = (typeof WEATHER_VIEWS)[number];
 
 export type Slide = { kind: "passage"; n: number } | { kind: "weather"; view: WeatherView };
@@ -19,6 +19,8 @@ export function slideOf(now: Date, since: number, hasWeather: boolean): Slide {
   const elapsed = Math.max(now.getTime() - since, 0);
   const k = Math.floor(since / TURN_MS) + Math.floor(elapsed / TURN_MS);
   if (hasWeather && elapsed % TURN_MS < WEATHER_MS) {
+    // Home opens on "now", the view that answers what it's like out there.
+    if (elapsed < TURN_MS) return { kind: "weather", view: "now" };
     return { kind: "weather", view: WEATHER_VIEWS[k % WEATHER_VIEWS.length] };
   }
   return { kind: "passage", n: k };

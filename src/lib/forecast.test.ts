@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describe as label, forecastLine, outlook, weekLine } from "./forecast";
+import { describe as label, forecastLine, hoursLine, outlook, weekLine } from "./forecast";
 import type { Weather } from "./types";
 import { fakeWeather, SKIES } from "./weather-fixtures";
 
@@ -197,6 +197,19 @@ describe("weekLine", () => {
     const now = at("13:10");
     expect(weekLine(fakeWeather("fair", now, tz), now, tz)).toBe(
       "Mostly dry; a chance of rain Friday. Highs from 52° to 61°.",
+    );
+  });
+  it("hours: says when, then where the temperature turns", () => {
+    expect(hoursLine(bugMorning(), at("13:10"), tz)).toBe(
+      "A few flakes possible this evening. Down to 32° by 2 a.m.",
+    );
+    const am = at("07:30");
+    expect(hoursLine(fakeWeather("snow", am, tz), am, tz)).toMatch(
+      /^Snow likely from 2 p\.m\. until about 10 p\.m\. Up to 33° by \d+ (a|p)\.m\.$/,
+    );
+    const ev = at("19:00");
+    expect(hoursLine(fakeWeather("fair", ev, tz), ev, tz)).toMatch(
+      /^Dry through tomorrow (morning|afternoon)\. Down to 3\d° by \d a\.m\.$/,
     );
   });
   it("starts the week tomorrow, once the evening comes", () => {

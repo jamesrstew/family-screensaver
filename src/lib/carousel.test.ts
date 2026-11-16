@@ -25,6 +25,10 @@ describe("home's carousel", () => {
     expect(slideKey(a)).not.toBe(slideKey(b));
   });
 
+  it('opens on "now"', () => {
+    expect(slideOf(at(0), since, true)).toEqual({ kind: "weather", view: "now" });
+  });
+
   it("cycles through every weather view", () => {
     const seen = new Set(WEATHER_VIEWS.map((_, i) => slideKey(slideOf(at(i * turn), since, true))));
     expect(seen.size).toBe(WEATHER_VIEWS.length);
@@ -39,7 +43,7 @@ describe("slide keys", () => {
   it("round-trip", () => {
     for (const s of [
       { kind: "passage", n: 42 } as const,
-      { kind: "weather", view: "days" } as const,
+      { kind: "weather", view: "hours" } as const,
     ])
       expect(slideFromKey(slideKey(s))).toEqual(s);
     expect(slideFromKey("weather-tornado")).toBeUndefined();
