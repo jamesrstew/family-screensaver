@@ -142,7 +142,9 @@ export function Weather({ snapshot, now }: ViewProps) {
           />
         </Ink>
         <Ink order={1}>
-          <p className="text-[4.6rem] leading-[1.18] text-ink">{forecastLine(w)}</p>
+          <p className="text-[4.6rem] leading-[1.18] text-ink">
+            {forecastLine(w, now, snapshot.timeZone)}
+          </p>
           <p className="mt-[2rem] text-[2.2rem] text-ink-soft">
             Now <Deg v={w.now.temp} />, and {w.now.label.toLowerCase()}. Tonight{" "}
             <Deg v={w.today.low} />.

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { forecastLine } from "@/lib/forecast";
 import { clock, clockFace } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, Star, moonAge } from "../Engraving";
@@ -8,14 +7,11 @@ import type { ViewProps } from "../parts";
 import {
   Credit,
   Words,
-  dayShort,
   firstTomorrow,
   heroOf,
-  hourWord,
   nextUp,
   nextWords,
   sized,
-  steps,
   sunProgress,
   Deg,
 } from "./common";
@@ -264,73 +260,4 @@ export function Night(props: ViewProps) {
   );
 }
 
-/** Weather: the coming day laid along the same arc, hour by hour. */
-export function Weather({ snapshot, now }: ViewProps) {
-  const w = snapshot.weather;
-  const tz = snapshot.timeZone;
-  if (!w) {
-    return (
-      <Ink className="flex h-full items-center justify-center">
-        <p className="text-[3rem] text-ink-soft italic">The sky hasn&rsquo;t reported in yet.</p>
-      </Ink>
-    );
-  }
-  const marks = steps(w, 3, 8);
-  return (
-    <div className="flex h-full flex-col">
-      <Ink order={0} mode="seep" className="relative mt-[4rem] h-[24rem] w-full">
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="absolute inset-0 h-full w-full text-ink-faint"
-          fill="none"
-          stroke="currentColor"
-          aria-hidden
-        >
-          <path
-            d={`M${ARC.cx - ARC.rx} ${ARC.cy} A${ARC.rx} ${ARC.ry} 0 0 1 ${ARC.cx + ARC.rx} ${ARC.cy}`}
-            strokeWidth={1.6}
-            strokeDasharray="0.1 9"
-            strokeLinecap="round"
-          />
-        </svg>
-        {marks.map((h, i) => {
-          const p = at((i + 0.5) / marks.length);
-          return (
-            <div
-              key={h.time}
-              className="absolute -translate-x-1/2 -translate-y-[70%] text-center"
-              style={pct(p)}
-            >
-              <Engraving
-                code={h.code ?? w.now.code}
-                isDay={h.isDay ?? true}
-                date={new Date(h.time)}
-                className="mx-auto size-[6.4rem] text-ink"
-              />
-              <p className="text-[2.3rem] leading-none text-ink">
-                <Deg v={h.temp} />
-              </p>
-              <p className="mt-[0.3rem] text-[1.4rem] text-ink-soft italic">
-                {hourWord(h.time, tz)}
-              </p>
-            </div>
-          );
-        })}
-      </Ink>
-      <Ink order={1} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="text-[4.4rem] leading-[1.18]">{forecastLine(w)}</p>
-      </Ink>
-      <Ink order={2} mode="seep" className="flex justify-center gap-[4.4rem]">
-        {w.days.slice(1, 7).map((d, i) => (
-          <div key={d.date} className="flex items-center gap-[0.6rem]">
-            <p className="text-[1.85rem] text-ink-soft italic">{dayShort(d.date, i + 1)}</p>
-            <Engraving code={d.code} isDay date={now} className="size-[3.6rem] text-ink" />
-            <p className="text-[2rem] text-ink">
-              <Deg v={d.high} />
-            </p>
-          </div>
-        ))}
-      </Ink>
-    </div>
-  );
-}
+export { Weather } from "./almanac-weather";
