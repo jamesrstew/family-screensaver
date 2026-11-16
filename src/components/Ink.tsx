@@ -109,6 +109,22 @@ type Props = {
 const easeInOut = (x: number) => (1 - Math.cos(Math.PI * x)) / 2;
 const easeIn = (x: number) => x ** 2;
 
+/*
+ * The TV's chip can't redraw an SVG noise filter sixty times a second, so in
+ * the TV app (an Android WebView) ink arrives in a lighter hand: the type
+ * comes up out of a soft blur, which the GPU draws on its own. ?ink=light
+ * previews it anywhere; ?ink=full forces the full ink.
+ */
+let light: boolean | null = null;
+function lightHand() {
+  if (light === null) {
+    const asked = new URLSearchParams(window.location.search).get("ink");
+    light = asked ? asked === "light" : /; wv\)/.test(navigator.userAgent);
+  }
+  return light;
+}
+const LIGHT_BLUR_REM = 0.9;
+
 function prefersStill() {
   return (
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -130,6 +146,7 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
   const dev = useRef<SVGFEFuncAElement>(null);
   const wash = useRef<SVGFEFuncAElement>(null);
   const frame = useRef(0);
+  const timer = useRef(0);
   const firstIn = useRef(true);
 
   // What's on the paper now. When `k` changes, the old content stays until
@@ -238,7 +255,32 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
     const el = box.current;
     if (!el) return;
     cancelAnimationFrame(frame.current);
-    if (dir === "in" && mode === "write" && !as && !prefersStill()) return writeIn(el, delay, done);
+    window.clearTimeout(timer.current);
+    if (dir === "in" && mode === "write" && !as && !prefersStill() && !lightHand())
+      return writeIn(el, delay, done);
+
+    if (lightHand() && !prefersStill()) {
+      const ms = dir === "in" ? 2400 : Math.min(tune.outMs, 1500);
+      const blurred = `blur(${LIGHT_BLUR_REM}rem)`;
+      el.style.willChange = "opacity, filter";
+      if (dir === "in") {
+        // Start from nothing, with no transition, then let the GPU bring it up.
+        el.style.transition = "none";
+        el.style.opacity = "0";
+        el.style.filter = blurred;
+        void el.offsetWidth;
+      }
+      el.style.transition = `opacity ${ms}ms ease-in-out ${delay}ms, filter ${ms}ms ease-out ${delay}ms`;
+      el.style.opacity = dir === "in" ? "1" : "0";
+      el.style.filter = dir === "in" ? "blur(0)" : blurred;
+      timer.current = window.setTimeout(() => {
+        // Dry: nothing left for the compositor to hold on to.
+        if (dir === "in") el.style.filter = "none";
+        el.style.willChange = "";
+        done?.();
+      }, delay + ms);
+      return;
+    }
 
     if (prefersStill()) {
       el.style.filter = "none";
@@ -273,7 +315,10 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
     const delay = firstIn.current ? order * STAGGER_MS : 0;
     firstIn.current = false;
     play("in", delay);
-    return () => cancelAnimationFrame(frame.current);
+    return () => {
+      cancelAnimationFrame(frame.current);
+      window.clearTimeout(timer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown.k]);
 
