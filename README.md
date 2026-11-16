@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Heritage
 
-## Getting Started
+A quiet screen for the Stewart family's living room. Cream paper where the ink moves, like the enchanted pages in Harry Potter: one idea, quote, or question at a time, with the hour, the sky, and what's next written small in the corners. At dinner it asks the family a question. At night it goes dark. Ask it (by voice, phone, Siri, or the TV remote) and it turns the page, then finds its own way home.
 
-First, run the development server:
+It is built to serve the family, never to hold their attention. Read [DOCTRINE.md](DOCTRINE.md) before changing anything, and [ROADMAP.md](ROADMAP.md) for what's next.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## How it works
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **The TV** opens the web app full screen (via the small Android TV app in [`tv/`](tv/README.md), a TV browser, or a cast tab). `Screen` keeps time, refreshes its snapshot every five minutes, and checks `/api/show` every few seconds for requests.
+- **Pages:** home, weather, the week ahead, and ideas. Night replaces home after 9:30 p.m.
+- **Asking it:** the phone remote at `/remote`, `POST /api/show` with the family key (Siri Shortcuts, Alexa), the TV remote's arrows, or the voice.
+- **The voice** is OpenAI Realtime over WebRTC. The server mints a two-minute key; the browser talks to OpenAI and answers from the snapshot it already has.
+- **Sources:** Open-Meteo (weather, no key), the family's Google Calendar secret iCal address, and James Clear's 3-2-1 (extracted from Gmail; stored privately, never in git).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Set up
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. `pnpm install`, then `cp .env.example .env.local` and fill it in. `pnpm dev` and open http://localhost:3000.
+2. **Family key:** `pnpm key` prints four words and a number. Set `FAMILY_KEY` in Vercel. Pair a device by typing the key on the locked screen, or open `https://<site>/pair?key=<key>&next=/remote` on a phone.
+3. **Store:** add Upstash Redis from the Vercel Marketplace (Storage → Upstash → connect to this project), then `vercel env pull .env.local && pnpm notebook:push`.
+4. **Calendar:** in Google Calendar, open the family calendar's settings → _Integrate calendar_ → _Secret address in iCal format_. Put it in `CALENDAR_ICS_URLS` (comma-separate several). Treat it like a password.
+5. **Voice:** set `OPENAI_API_KEY`.
+6. **Home:** set `HOME_PLACE`, `HOME_LAT`, `HOME_LON`, `HOME_TIME_ZONE` (city-level coordinates are plenty).
 
-## Learn More
+### Siri
 
-To learn more about Next.js, take a look at the following resources:
+Make a Shortcut named, say, "Heritage weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Develop
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`pnpm check` runs lint, types, tests, and formatting. `node scripts/shot.mjs <url> out.png` takes a 1920 × 1080 screenshot (add `--at 2026-11-16T22:30:00-08:00` to see night). Look at the screen before calling a design change done.

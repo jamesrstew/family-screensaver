@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * The paper. Ink on cream by day, faint ink on dark stock at night.
+ * Colors come only from these tokens; there is no other palette.
+ */
+
+@property --paper {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f8f4ea;
+}
+@property --ink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #211b15;
+}
+@property --ink-soft {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #52483b;
+}
+@property --ink-faint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8a7d69;
+}
+@property --rule {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2b241c;
+}
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #7d2e24;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-masthead: var(--font-unifraktur), "Old English Text MT", serif;
+  --font-serif: var(--font-fell), "Iowan Old Style", Georgia, serif;
+  --font-caps: var(--font-fell-sc), "Iowan Old Style", Georgia, serif;
+
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: #f8f4ea;
+}
+
+/*
+ * The TV is a fixed 16:9 sheet, 120rem by 67.5rem, scaled to the screen:
+ * 1rem is 16px on a 1080p TV, and everything is measured in rem. Phones (the
+ * remote) keep the normal 16px root.
+ */
+:root:has([data-surface="tv"]) {
+  font-size: min(calc(100vw / 120), calc(100dvh / 67.5));
+  overflow: hidden;
+}
+
+.paper {
+  --paper: #f8f4ea;
+  --ink: #211b15;
+  --ink-soft: #52483b;
+  --ink-faint: #8a7d69;
+  --rule: #2b241c;
+  --accent: #7d2e24;
+  position: relative;
+  isolation: isolate;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-variant-numeric: oldstyle-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Night falls slowly. */
+  transition:
+    --paper 40s ease,
+    --ink 40s ease,
+    --ink-soft 40s ease,
+    --ink-faint 40s ease,
+    --rule 40s ease,
+    --accent 40s ease;
+}
+
+.paper[data-mood="night"] {
+  --paper: #13110e;
+  --ink: #9d917b;
+  --ink-soft: #776c5c;
+  --ink-faint: #544b40;
+  --rule: #3f382f;
+  --accent: #85483c;
+}
+
+/* Grain and a little unevenness, like newsprint. Rendered once, never animated. */
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.33 0 0 0 0 0.26 0 0 0 0 0.18 0 0 0 0.11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.006' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.36 0 0 0 0 0.22 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 45%, transparent 60%, rgb(120 96 60 / 0.08) 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.4;
+}
+.paper[data-mood="night"]::before {
+  mix-blend-mode: normal;
+  opacity: 0.2;
+}
+
+/* Rules: the only ornament. */
+.rule-double {
+  border-top: 0.1875rem solid var(--rule);
+  border-bottom: 0.0625rem solid var(--rule);
+  height: 0.3125rem;
+}
+.rule-thin {
+  border-top: 0.0625rem solid var(--rule);
+}
+
+/* Small caps labels with a little air. */
+.kicker {
+  font-family: var(--font-caps);
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+/* A drop cap for leading ideas. */
+.dropcap::first-letter {
+  float: left;
+  font-size: 3.15em;
+  line-height: 0.82;
+  padding: 0.06em 0.08em 0 0;
+  color: var(--ink);
+}
+
+/* Fell's degree sign is drawn large; set it smaller beside big numerals. */
+.deg {
+  font-size: 0.62em;
+  margin-left: 0.04em;
+}
+
+/* Hanging punctuation for pull quotes. */
+.hang {
+  text-indent: -0.42em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper {
+    transition: none;
+  }
 }

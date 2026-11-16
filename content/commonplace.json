@@ -1,0 +1,99 @@
+{
+  "source": "A commonplace book: short quotations and questions for the table. Used when no notebook has been loaded.",
+  "items": [
+    {
+      "id": "cp-thoreau-simplicity",
+      "kind": "quote",
+      "text": "Our life is frittered away by detail. Simplify, simplify.",
+      "author": "Henry David Thoreau",
+      "source": "Walden"
+    },
+    {
+      "id": "cp-thoreau-cost",
+      "kind": "quote",
+      "text": "The cost of a thing is the amount of what I will call life which is required to be exchanged for it, immediately or in the long run.",
+      "author": "Henry David Thoreau",
+      "source": "Walden"
+    },
+    {
+      "id": "cp-aurelius-be-one",
+      "kind": "quote",
+      "text": "Waste no more time arguing about what a good man should be. Be one.",
+      "author": "Marcus Aurelius",
+      "source": "Meditations"
+    },
+    {
+      "id": "cp-seneca-imagination",
+      "kind": "quote",
+      "text": "We suffer more often in imagination than in reality.",
+      "author": "Seneca",
+      "source": "Letters from a Stoic"
+    },
+    {
+      "id": "cp-seneca-postponing",
+      "kind": "quote",
+      "text": "While we are postponing, life speeds by.",
+      "author": "Seneca",
+      "source": "Letters from a Stoic"
+    },
+    {
+      "id": "cp-seneca-craves",
+      "kind": "quote",
+      "text": "It is not the man who has too little, but the man who craves more, that is poor.",
+      "author": "Seneca",
+      "source": "Letters from a Stoic"
+    },
+    {
+      "id": "cp-emerson-best-day",
+      "kind": "quote",
+      "text": "Write it on your heart that every day is the best day in the year.",
+      "author": "Ralph Waldo Emerson"
+    },
+    {
+      "id": "cp-emerson-years",
+      "kind": "quote",
+      "text": "The years teach much which the days never know.",
+      "author": "Ralph Waldo Emerson",
+      "source": "Experience"
+    },
+    {
+      "id": "cp-franklin-well-done",
+      "kind": "quote",
+      "text": "Well done is better than well said.",
+      "author": "Benjamin Franklin",
+      "source": "Poor Richard's Almanack"
+    },
+    {
+      "id": "cp-franklin-today",
+      "kind": "quote",
+      "text": "One today is worth two tomorrows.",
+      "author": "Benjamin Franklin",
+      "source": "Poor Richard's Almanack"
+    },
+    {
+      "id": "cp-q-laugh",
+      "kind": "question",
+      "text": "What made you laugh today?"
+    },
+    {
+      "id": "cp-q-kind",
+      "kind": "question",
+      "text": "Who was kind to you this week, and how could you be kind back?"
+    },
+    {
+      "id": "cp-q-better",
+      "kind": "question",
+      "text": "What is something you're getting better at?"
+    },
+    {
+      "id": "cp-q-motto",
+      "kind": "question",
+      "text": "If our family had a motto, what would it be?"
+    },
+    {
+      "id": "cp-q-best-hardest",
+      "kind": "question",
+      "text": "What was the best part of your day, and what was the hardest part?"
+    }
+  ]
+}
