@@ -207,14 +207,15 @@ function Band({ w, hours, now, tz }: { w: Sky; hours: Sky["hours"]; now: Date; t
   const n = hours.length;
   const col = RW / n;
   const xc = (i: number) => (i + 0.5) * col;
-  const temps = hours.map((h) => h.temp);
+  // The line starts where the sentence does: at the temperature right now.
+  const temps = hours.map((h, i) => (i === 0 ? w.now.temp : h.temp));
   const lo = Math.min(...temps);
   const hi = Math.max(...temps);
   const span = Math.max(hi - lo, 8);
   const y = (t: number) => CURVE.bottom - ((t - lo) / span) * (CURVE.bottom - CURVE.top);
 
   // One smooth stroke through every hour (Catmull-Rom as cubic Béziers).
-  const pts = hours.map((h, i) => [xc(i), y(h.temp)] as const);
+  const pts = temps.map((t, i) => [xc(i), y(t)] as const);
   let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {
     const [x0, y0] = pts[Math.max(i - 1, 0)];
