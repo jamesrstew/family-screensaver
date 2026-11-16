@@ -16,7 +16,7 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 3. **Calm by default.** Motion is slow and rare. Nothing blinks, ticks, bounces, or counts down. The page changes when the hour turns, when the piece rotates (every fifteen minutes), or when someone asks. Never to catch an eye.
 
-4. **Dim at night.** After the evening the paper goes dark and nearly empty: the time, tomorrow's first plan, and a question to sleep on. A bright screen in a dark room is a bug.
+4. **Dim at night.** Night is the real night: from today's sunset to tomorrow's sunrise where the family lives, the paper goes dark and nearly empty: the time, what's next (tonight's plan, or tomorrow's first), and a question to sleep on. A bright screen in a dark room is a bug.
 
 5. **Everything returns home.** Any page someone asks for goes back home by itself. No one ever has to clean up after the app.
 
@@ -62,16 +62,16 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 ## Vocabulary
 
-| Word             | Means                                                                                                                |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **The app**      | The Stewart Family App: the screen, the voice, the remote. Its name is one constant in `src/config.ts`.              |
-| **Page**         | A full-screen view: `home`, `weather`, `week`, `notebook` (shown as "Ideas"), and the automatic night page.          |
-| **Hero**         | The one piece set in the middle of home.                                                                             |
-| **Corner notes** | The hour, the sky, and what's next, written small at home's edges.                                                   |
-| **Snapshot**     | The data the TV draws from (weather, happenings, notebook), refreshed every few minutes.                             |
-| **Mood**         | Time of day: morning, afternoon, evening, night. Evening brings the question for the table; night darkens the paper. |
-| **Ink**          | The transition system. Content is "inked in" and "sinks out".                                                        |
-| **Show request** | "Put this page on the TV", from `/remote`, Siri, Alexa, or the voice, via `POST /api/show`.                          |
-| **Notebook**     | Ideas, quotes, and questions (James Clear's 3-2-1, or the small commonplace book in the repo).                       |
-| **Happening**    | One calendar event occurrence.                                                                                       |
-| **Family key**   | The one secret. A few plain words, easy to type with a remote.                                                       |
+| Word             | Means                                                                                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The app**      | The Stewart Family App: the screen, the voice, the remote. Its name is one constant in `src/config.ts`.                                                                                                     |
+| **Page**         | A full-screen view: `home`, `weather`, `week`, `notebook` (shown as "Ideas"), and the automatic night page.                                                                                                 |
+| **Hero**         | The one piece set in the middle of home.                                                                                                                                                                    |
+| **Corner notes** | The hour, the sky, and what's next, written small at home's edges.                                                                                                                                          |
+| **Snapshot**     | The data the TV draws from (weather, happenings, notebook), refreshed every few minutes.                                                                                                                    |
+| **Mood**         | Time of day, set by the sun: morning, afternoon, evening (5 p.m. to sunset, when it's still light), night (sunset to sunrise). Evening and night bring the question for the table; night darkens the paper. |
+| **Ink**          | The transition system. Content is "inked in" and "sinks out".                                                                                                                                               |
+| **Show request** | "Put this page on the TV", from `/remote`, Siri, Alexa, or the voice, via `POST /api/show`.                                                                                                                 |
+| **Notebook**     | Ideas, quotes, and questions (James Clear's 3-2-1, or the small commonplace book in the repo).                                                                                                              |
+| **Happening**    | One calendar event occurrence.                                                                                                                                                                              |
+| **Family key**   | The one secret. A few plain words, easy to type with a remote.                                                                                                                                              |
