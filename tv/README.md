@@ -87,12 +87,12 @@ Ambient mode may ignore third-party dreams; that's one of the things to find out
 
 ## Test checklist
 
-Record results here (TV model / OS version: ________________).
+Record results here (TV model / OS version: TCL Smart TV Pro, Android 11, WebView 157, tested Nov. 16, 2026).
 
 | # | Test | How | Result |
 |---|------|-----|--------|
-| 1 | Assistant opens the app | "Hey Google, open Stewart Family App" | |
-| 2a | Deep launch | "Hey Google, open Family Weather" — does the weather page open? | |
+| 1 | Assistant opens the app | "Hey Google, open Stewart Family App" | **No.** Assistant treated it as a content search (YouTube). Sideloaded apps aren't matched by name. |
+| 2a | Deep launch | "Hey Google, open Family Weather" — does the weather page open? | **No.** "open" and "launch" both went to a content search (logcat: `launcherx/.entity.EntityActivity`). |
 | 2b | | "…open Family Week" / "…open Family Ideas" | |
 | 2c | Switching while open | With the app open, "…open Family Weather" — does it switch pages? | |
 | 2d | Launcher row | Do all five entries appear in Apps? | |
@@ -102,7 +102,7 @@ Record results here (TV model / OS version: ________________).
 | 3b′ | Input devices | What types/product names are listed (e.g., `TYPE_BUILTIN_MIC`, `TYPE_REMOTE_SUBMIX`)? | |
 | 3c | WebView `getUserMedia` | Button 5; "getUserMedia OK" and a moving meter, or the error? | |
 | 3d | Remote keys | Press mic/Assistant, color, bookmark, and other keys; which show in the key log? | |
-| 4 | Screensaver | After the `settings put` above, does the app appear as the screensaver? | |
+| 4 | Screensaver | After the `settings put` above, does the app appear as the screensaver? | **Yes.** `FamilyDream` runs and shows home. |
 | — | Web app basics | D-pad/Enter work in the page? Back goes back, then exits? Screen stays on? | |
 
 Notes: the mic test asks for microphone permission on first launch; allow it. If the hands-free
