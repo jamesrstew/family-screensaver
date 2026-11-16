@@ -58,8 +58,13 @@ const heroFit = (i: NotebookItem) => i.text.length <= LEAD_CHARS && !i.text.incl
 
 /** The home screen's idea or quote right now. */
 export function leadFor(today: NotebookItem[], now: Date): NotebookItem | null {
+  return leadAt(today, slotOf(now));
+}
+
+/** The nth idea or quote of the day's run (home's carousel counts its passages). */
+export function leadAt(today: NotebookItem[], n: number): NotebookItem | null {
   const pool = today.filter((i) => i.kind !== "question" && heroFit(i));
-  return pool.length ? pool[slotOf(now) % pool.length] : null;
+  return pool.length ? pool[n % pool.length] : null;
 }
 
 /** The evening's question for the table: one per day, so it can be discussed. */

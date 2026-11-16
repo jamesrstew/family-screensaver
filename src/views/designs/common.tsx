@@ -1,14 +1,18 @@
 // Shared pieces for the design directions. Pure; no state.
 
-import { leadFor, questionFor } from "@/lib/pick";
+import { leadAt, leadFor, questionFor } from "@/lib/pick";
 import { addDays, clock, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
 import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 
 /** Home's one piece: the evening's question, otherwise the idea of the hour. */
-export function heroOf({ snapshot, now, mood }: ViewProps): NotebookItem | null {
+export function heroOf({ snapshot, now, mood, slide }: ViewProps): NotebookItem | null {
+  const n = slide?.kind === "passage" ? slide.n : null;
+  // In the evening the question for the table comes around every other passage.
+  const ask = mood === "evening" && (n === null || n % 2 === 0);
   return (
-    (mood === "evening" ? questionFor(snapshot.notebook) : null) ?? leadFor(snapshot.notebook, now)
+    (ask ? questionFor(snapshot.notebook) : null) ??
+    (n === null ? leadFor(snapshot.notebook, now) : leadAt(snapshot.notebook, n))
   );
 }
 

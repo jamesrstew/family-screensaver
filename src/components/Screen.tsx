@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
+import { slideFromKey, slideKey, slideOf } from "@/lib/carousel";
 import { moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
@@ -20,7 +21,8 @@ import { useVoice } from "./useVoice";
  * Everything here is quiet: nothing on screen moves unless something changed.
  */
 
-type View = Page | "night";
+// A page, the night page, or one piece of home's carousel ("home:passage-12").
+type View = Page | "night" | `home:${string}`;
 
 /** How long a page stays up before the screen returns home. */
 const HOLD_MS: Record<Page, number> = {
@@ -61,7 +63,11 @@ export function Screen({
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
-  const target = viewOf(page, mood);
+  // Home by day is a slow carousel (Almanac only): each piece turns like a page.
+  const carousel = page === "home" && mood !== "night" && design === "almanac";
+  const target: View = carousel
+    ? `home:${slideKey(slideOf(now, Boolean(snapshot.weather)))}`
+    : viewOf(page, mood);
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {
@@ -195,9 +201,11 @@ export function Screen({
     return () => window.clearInterval(t);
   }, []);
 
-  const props = { snapshot, now, mood };
+  const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
+  const props = { snapshot, now, mood, slide };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn = kit && (view === "home" || view === "night" || view === "weather") ? kit : null;
+  const drawn =
+    kit && (view === "home" || slide || view === "night" || view === "weather") ? kit : null;
   return (
     <div
       data-surface="tv"
@@ -218,6 +226,8 @@ export function Screen({
           <InkStage.Provider value={leaving}>
             <div key={view} className="h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
+              {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {view === "weather" &&
                 (drawn ? <drawn.Weather {...props} /> : <WeatherPage {...props} />)}

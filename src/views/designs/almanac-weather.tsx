@@ -48,8 +48,10 @@ function useStyle(): WeatherStyle {
   return STYLES[asked.toLowerCase()] ?? "answer";
 }
 
-export function Weather(props: ViewProps) {
-  const style = useStyle();
+/** The weather page (?weather= picks a view), or one view of it as a slide on home. */
+export function Weather(props: ViewProps & { view?: WeatherStyle }) {
+  const asked = useStyle();
+  const style = props.view ?? asked;
   const w = props.snapshot.weather;
   if (!w) {
     return (
