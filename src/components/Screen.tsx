@@ -64,10 +64,18 @@ export function Screen({
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home by day is a slow carousel (Almanac only): each piece turns like a page.
-  const carousel = page === "home" && mood !== "night" && design === "almanac";
+  // It counts from the moment home appears, so it always opens on the weather.
+  const base = viewOf(page, mood);
+  const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
+  const [lastBase, setLastBase] = useState(base);
+  if (base !== lastBase) {
+    setLastBase(base);
+    if (base === "home") setHomeSince(now.getTime());
+  }
+  const carousel = base === "home" && design === "almanac";
   const target: View = carousel
-    ? `home:${slideKey(slideOf(now, Boolean(snapshot.weather)))}`
-    : viewOf(page, mood);
+    ? `home:${slideKey(slideOf(now, homeSince, Boolean(snapshot.weather)))}`
+    : base;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {

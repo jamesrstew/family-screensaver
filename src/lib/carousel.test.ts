@@ -1,27 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { PASSAGE_MS, WEATHER_MS, WEATHER_VIEWS, slideFromKey, slideKey, slideOf } from "./carousel";
 
-const turn = PASSAGE_MS + WEATHER_MS;
-const at = (ms: number) => new Date(ms);
+const turn = WEATHER_MS + PASSAGE_MS;
+const since = 1_000 * turn + 12_345; // home appeared at an odd moment
+const at = (ms: number) => new Date(since + ms);
 
 describe("home's carousel", () => {
-  it("shows a passage, then the weather, then the next passage", () => {
-    const start = 1_000 * turn;
-    expect(slideOf(at(start), true)).toEqual({ kind: "passage", n: 1000 });
-    expect(slideOf(at(start + PASSAGE_MS - 1), true).kind).toBe("passage");
-    expect(slideOf(at(start + PASSAGE_MS), true).kind).toBe("weather");
-    expect(slideOf(at(start + turn), true)).toEqual({ kind: "passage", n: 1001 });
+  it("always opens on the weather, never a quote", () => {
+    for (const s of [0, 7_777, 99_999_999]) {
+      expect(slideOf(new Date(s), s, true).kind).toBe("weather");
+    }
+  });
+
+  it("then a passage, then the next weather view", () => {
+    expect(slideOf(at(WEATHER_MS - 1), since, true).kind).toBe("weather");
+    expect(slideOf(at(WEATHER_MS), since, true).kind).toBe("passage");
+    expect(slideOf(at(turn - 1), since, true).kind).toBe("passage");
+    expect(slideOf(at(turn), since, true).kind).toBe("weather");
+  });
+
+  it("each passage is a new one", () => {
+    const a = slideOf(at(WEATHER_MS), since, true);
+    const b = slideOf(at(turn + WEATHER_MS), since, true);
+    expect(slideKey(a)).not.toBe(slideKey(b));
   });
 
   it("cycles through every weather view", () => {
-    const seen = new Set(
-      WEATHER_VIEWS.map((_, i) => slideKey(slideOf(at(i * turn + PASSAGE_MS), true))),
-    );
+    const seen = new Set(WEATHER_VIEWS.map((_, i) => slideKey(slideOf(at(i * turn), since, true))));
     expect(seen.size).toBe(WEATHER_VIEWS.length);
   });
 
   it("without a weather report, stays on passages", () => {
-    expect(slideOf(at(7 * turn + PASSAGE_MS), false)).toEqual({ kind: "passage", n: 7 });
+    expect(slideOf(at(0), since, false).kind).toBe("passage");
   });
 });
 
