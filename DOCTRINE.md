@@ -12,9 +12,9 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 1. **It serves the family. It never competes for them.** The app is part of the room, not a feed. Success is a glance, a smile, a question at dinner, and then everyone goes back to their lives. No feeds, no scrolling, no notifications, no badges, no streaks, no autoplay. We never measure how long anyone looked. A feature whose main effect is that someone stays longer needs a better reason than that, or it doesn't ship.
 
-2. **Less is more.** Home shows one thing. Everything else is a small note in a corner or lives one page away. Before adding anything to a screen, try taking something away.
+2. **Less is more.** Home shows one thing at a time: a quote or a question, then the weather, then the next quote, slowly, in turn. Everything else is a small note in a corner or lives one page away. Before adding anything to a screen, try taking something away.
 
-3. **Calm by default.** Motion is slow and rare. Nothing blinks, ticks, bounces, or counts down. The page changes when the hour turns, when the piece rotates (every fifteen minutes), or when someone asks. Never to catch an eye.
+3. **Calm by default.** Motion is slow and rare. Nothing blinks, ticks, bounces, or counts down. The page changes when the hour turns, when home turns to its next piece (every few minutes, never faster), or when someone asks. Never to catch an eye.
 
 4. **Dim at night.** Night is the real night: from today's sunset to tomorrow's sunrise where the family lives, the paper goes dark and nearly empty: the time, what's next (tonight's plan, or tomorrow's first), and a question to sleep on. A bright screen in a dark room is a bug.
 
