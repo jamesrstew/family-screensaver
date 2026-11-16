@@ -11,7 +11,7 @@ import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { DESIGNS, type Design } from "@/views/designs/registry";
-import { Ink, InkModeContext, InkStage, OUT_MS, STAGGER_MS } from "./Ink";
+import { Ink, InkModeContext, InkStage, OUT_MS_MAX, STAGGER_MS } from "./Ink";
 import { useVoice } from "./useVoice";
 
 /*
@@ -31,10 +31,11 @@ const HOLD_MS: Record<Page, number> = {
 };
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
+const STALE_WEATHER_MS = 3 * 60 * 60_000;
 const ASK_EVERY_MS = { day: 4_000, night: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
-const LEAVE_MS = OUT_MS + STAGGER_MS * 3;
+const LEAVE_MS = OUT_MS_MAX + STAGGER_MS * 3;
 
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
@@ -89,11 +90,17 @@ export function Screen({
 
   // ---- A fresh snapshot every few minutes. A lost pairing shows the lock.
   useEffect(() => {
+    let weatherAt = Date.now();
     const t = window.setInterval(async () => {
       try {
         const res = await fetch("/api/snapshot", { cache: "no-store" });
         if (res.status === 401) return window.location.reload();
-        if (res.ok) setSnapshot(await res.json());
+        if (!res.ok) return;
+        const next: Snapshot = await res.json();
+        // One missed weather report shouldn't wipe the sky; keep the last for a while.
+        if (next.weather) weatherAt = Date.now();
+        const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
+        setSnapshot((prev) => (keep && prev.weather ? { ...next, weather: prev.weather } : next));
       } catch {
         // Offline: keep printing what we have.
       }
@@ -180,11 +187,13 @@ export function Screen({
   }, []);
 
   const props = { snapshot, now, mood };
+  // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
+  const drawn = kit && (view === "home" || view === "night" || view === "weather") ? kit : null;
   return (
     <div
       data-surface="tv"
       data-mood={mood}
-      data-design={design ?? undefined}
+      data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
@@ -196,13 +205,13 @@ export function Screen({
           transition: "transform 180s linear",
         }}
       >
-        <InkModeContext.Provider value={kit?.ink ?? "blots"}>
+        <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
           <InkStage.Provider value={leaving}>
             <div key={view} className="h-full">
-              {view === "home" && (kit ? <kit.Home {...props} /> : <HomePage {...props} />)}
-              {view === "night" && (kit ? <kit.Night {...props} /> : <NightPage {...props} />)}
+              {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
+              {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {view === "weather" &&
-                (kit ? <kit.Weather {...props} /> : <WeatherPage {...props} />)}
+                (drawn ? <drawn.Weather {...props} /> : <WeatherPage {...props} />)}
               {view === "week" && <WeekPage {...props} />}
               {view === "notebook" && <NotebookPage {...props} />}
             </div>

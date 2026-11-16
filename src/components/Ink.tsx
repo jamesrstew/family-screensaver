@@ -89,6 +89,9 @@ const TUNE: Record<InkMode, Tune> = {
   },
 };
 
+/** The longest any ink takes to sink out: a page turn waits this long. */
+export const OUT_MS_MAX = Math.max(...Object.values(TUNE).map((t) => t.outMs));
+
 /** Pixels of line a hand writes per second, at 1080p. */
 const WRITE_PX_PER_S = 1100;
 const WRITE_EDGE = 140;

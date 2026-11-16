@@ -33,6 +33,6 @@ const LETTERS: Record<string, Design> = { a: "still", b: "bookplate", c: "plate"
 
 export function designOf(param: string): Design | null {
   const p = param.toLowerCase();
-  if (p in LETTERS) return LETTERS[p];
-  return p in DESIGNS ? (p as Design) : null;
+  if (Object.hasOwn(LETTERS, p)) return LETTERS[p];
+  return Object.hasOwn(DESIGNS, p) ? (p as Design) : null;
 }

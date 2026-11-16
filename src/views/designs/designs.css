@@ -86,6 +86,8 @@
   --ink-faint: #4a443a;
   --rule: #2e2a24;
   --accent: #6d3b31;
+  /* On dark paper the lit side of the moon is the brighter one. */
+  --moon-lit: var(--ink-faint);
 }
 
 /* At night the paper's grain would show as blotches on a dark panel. */

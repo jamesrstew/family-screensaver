@@ -181,7 +181,7 @@ export function Home(props: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <Ink order={0} mode="seep">
+        <Ink k={skyNow(w, now).body} order={0} mode="seep">
           <SkyPlate w={w} now={now} tz={tz}>
             <p className="text-[2.2rem] leading-none text-ink-soft">
               {clockFace(now, tz)}
@@ -190,7 +190,12 @@ export function Home(props: ViewProps) {
             </p>
           </SkyPlate>
         </Ink>
-      ) : null}
+      ) : (
+        // No sky report: the hour alone, where the sky would be.
+        <Ink order={0} mode="seep" className="pt-[2rem] text-center">
+          <p className="text-[2.2rem] leading-none text-ink-soft">{clockFace(now, tz)}</p>
+        </Ink>
+      )}
       <Ink
         k={hero?.id ?? "none"}
         order={1}
@@ -227,7 +232,7 @@ export function Night(props: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <Ink order={0} mode="seep">
+        <Ink k={skyNow(w, now).body} order={0} mode="seep">
           <SkyPlate w={w} now={now} tz={tz} night>
             <p className="text-[3.2rem] leading-none text-ink">{clockFace(now, tz)}</p>
           </SkyPlate>
@@ -248,7 +253,7 @@ export function Night(props: ViewProps) {
       )}
       {tomorrow ? (
         <Ink order={2} mode="seep" className="text-center">
-          <p className="text-[1.8rem] text-ink-faint">
+          <p className="text-[1.85rem] text-ink-faint">
             <span className="italic">{tomorrow.label}, </span>
             {tomorrow.title}
             {tomorrow.when ? `, ${tomorrow.when}` : ""}
@@ -273,7 +278,7 @@ export function Weather({ snapshot, now }: ViewProps) {
   const marks = steps(w, 3, 8);
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} mode="seep" className="relative h-[24rem] w-full">
+      <Ink order={0} mode="seep" className="relative mt-[4rem] h-[24rem] w-full">
         <svg
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0 h-full w-full text-ink-faint"
@@ -318,7 +323,7 @@ export function Weather({ snapshot, now }: ViewProps) {
       <Ink order={2} mode="seep" className="flex justify-center gap-[4.4rem]">
         {w.days.slice(1, 7).map((d, i) => (
           <div key={d.date} className="flex items-center gap-[0.6rem]">
-            <p className="text-[1.8rem] text-ink-soft italic">{dayShort(d.date, i + 1)}</p>
+            <p className="text-[1.85rem] text-ink-soft italic">{dayShort(d.date, i + 1)}</p>
             <Engraving code={d.code} isDay date={now} className="size-[3.6rem] text-ink" />
             <p className="text-[2rem] text-ink">
               <Deg v={d.high} />

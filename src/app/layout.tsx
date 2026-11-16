@@ -10,12 +10,14 @@ import {
 import { family } from "@/config";
 import "./globals.css";
 
-// Three faces and no more: blackletter for the name, Fell for everything
-// else, Fell small caps for labels.
+// Fraunces is on trial for the TV (DOCTRINE §9); Fell and its small caps
+// remain on the pages not yet redrawn; blackletter only on the lock screen
+// and the phone. Only Fraunces is preloaded: it's what home draws first.
 const unifraktur = UnifrakturMaguntia({
   variable: "--font-unifraktur",
   weight: "400",
   subsets: ["latin"],
+  preload: false,
 });
 const fell = IM_Fell_English({
   variable: "--font-fell",
@@ -29,8 +31,7 @@ const fellSC = IM_Fell_English_SC({
   subsets: ["latin"],
 });
 
-// Faces for the design directions under review (src/views/designs). Not
-// preloaded: only the chosen direction's face is fetched.
+// Faces for the other directions still under review (src/views/designs).
 const garamond = EB_Garamond({
   variable: "--font-garamond",
   style: ["normal", "italic"],
@@ -49,7 +50,6 @@ const fraunces = Fraunces({
   style: ["normal", "italic"],
   axes: ["opsz", "SOFT", "WONK"],
   subsets: ["latin"],
-  preload: false,
 });
 
 export const metadata: Metadata = {

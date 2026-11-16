@@ -35,8 +35,8 @@ function Hatch({
     lines.push(<line key={y} x1={-20} y1={y} x2={120} y2={y} />);
   }
   return (
-    <g clipPath={`url(#${clip})`} strokeWidth={w} transform={`rotate(${angle} 50 50)`}>
-      {lines}
+    <g clipPath={`url(#${clip})`} strokeWidth={w}>
+      <g transform={`rotate(${angle} 50 50)`}>{lines}</g>
     </g>
   );
 }
@@ -85,7 +85,7 @@ function Sun({
 }) {
   return (
     <g>
-      <circle cx={cx} cy={cy} r={r} strokeWidth={1.9} />
+      <circle cx={cx} cy={cy} r={r} strokeWidth={1.9} fill="var(--paper)" />
       <circle cx={cx} cy={cy} r={r * 0.78} strokeWidth={0.55} />
       {Array.from({ length: rays }, (_, i) => {
         const a = (i / rays) * Math.PI * 2 - Math.PI / 2;
@@ -143,12 +143,13 @@ export function Moon({
           <circle cx={cx} cy={cy} r={r} />
         </clipPath>
       </defs>
+      <circle cx={cx} cy={cy} r={r} fill="var(--paper)" stroke="none" />
       {/* The dark side, barely there: earthshine in fine hatching. */}
       <g opacity={0.45}>
         <Hatch clip={id} from={cy - r} to={cy + r} gap={2.6} w={0.45} angle={-30} />
       </g>
       <circle cx={cx} cy={cy} r={r} strokeWidth={0.6} opacity={0.7} />
-      <path d={lit} fill="var(--paper)" strokeWidth={1.6} />
+      <path d={lit} fill="var(--moon-lit, var(--paper))" strokeWidth={1.6} />
       {/* A few craters on the lit face. */}
       <g strokeWidth={0.6} opacity={0.6} clipPath={`url(#${id}l)`}>
         <circle cx={cx + (waxing ? 6 : -6)} cy={cy - 6} r={3} />
