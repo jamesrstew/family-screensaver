@@ -54,7 +54,7 @@ export function Screen({
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
   const [page, setPage] = useState<Page>(initialPage);
   const pageSince = useRef(0);
-  const mood = moodOf(now, snapshot.timeZone);
+  const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today);
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   const target = viewOf(page, mood);

@@ -23,16 +23,27 @@ export function nextUp({ snapshot, now }: ViewProps): Happening | null {
   );
 }
 
-/** Tomorrow's first plan (past midnight, this morning's). */
-export function firstTomorrow({ snapshot, now }: ViewProps) {
+/**
+ * What's next for the night page: anything still to come today ("Tonight",
+ * or "This morning" before noon), else tomorrow's first plan.
+ */
+export function firstTomorrow(props: ViewProps) {
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
-  const morning = parts(now, tz).hour < 5;
-  const day = morning ? dayKey(now, tz) : addDays(dayKey(now, tz), 1);
+  const later = nextUp(props);
+  if (later) {
+    return {
+      label: parts(now, tz).hour < 12 ? "This morning" : "Tonight",
+      title: later.title,
+      when: clock(new Date(later.start), tz),
+    };
+  }
+  const day = addDays(dayKey(now, tz), 1);
   const list = snapshot.happenings ? happeningsOn(snapshot.happenings, day, tz) : [];
   const h = list.find((x) => !x.allDay) ?? list[0];
   if (!h) return null;
   return {
-    label: morning ? "This morning" : "Tomorrow",
+    label: "Tomorrow",
     title: h.title,
     when: h.allDay ? null : clock(new Date(h.start), tz),
   };

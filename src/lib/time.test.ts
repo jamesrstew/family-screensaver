@@ -41,8 +41,32 @@ describe("moodOf", () => {
     ["2026-11-16T18:00:00-08:00", "evening"],
     ["2026-11-16T21:29:00-08:00", "evening"],
     ["2026-11-16T21:30:00-08:00", "night"],
-  ])("%s is %s", (iso, mood) => {
+  ])("%s is %s with no forecast", (iso, mood) => {
     expect(moodOf(at(iso), TZ)).toBe(mood);
+  });
+
+  // A November day: sunrise 7:01 a.m., sunset 4:37 p.m.
+  const winter = { sunrise: "2026-11-16T07:01:00-08:00", sunset: "2026-11-16T16:37:00-08:00" };
+  it.each([
+    ["2026-11-16T07:00:00-08:00", "night"],
+    ["2026-11-16T07:01:00-08:00", "morning"],
+    ["2026-11-16T16:36:00-08:00", "afternoon"],
+    ["2026-11-16T16:37:00-08:00", "night"],
+    ["2026-11-16T23:59:00-08:00", "night"],
+    // Yesterday's forecast still reads as a time of day.
+    ["2026-11-17T07:30:00-08:00", "morning"],
+  ])("%s is %s in November", (iso, mood) => {
+    expect(moodOf(at(iso), TZ, winter)).toBe(mood);
+  });
+
+  // A June day: sunset 8:48 p.m., so the evening stays light.
+  const summer = { sunrise: "2026-06-21T05:25:00-07:00", sunset: "2026-06-21T20:48:00-07:00" };
+  it.each([
+    ["2026-06-21T05:24:00-07:00", "night"],
+    ["2026-06-21T18:00:00-07:00", "evening"],
+    ["2026-06-21T20:48:00-07:00", "night"],
+  ])("%s is %s in June", (iso, mood) => {
+    expect(moodOf(at(iso), TZ, summer)).toBe(mood);
   });
 });
 
