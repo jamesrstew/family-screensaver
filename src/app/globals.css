@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../views/designs/designs.css";
 
 /*
  * The paper. Ink on cream by day, faint ink on dark stock at night.
@@ -153,6 +154,11 @@ body {
 /* Hanging punctuation for pull quotes. */
 .hang {
   text-indent: -0.42em;
+}
+
+/* Waking up at night shouldn't take forty seconds of bright paper. */
+.paper:not([data-settled]) {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

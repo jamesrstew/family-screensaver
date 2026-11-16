@@ -1,4 +1,4 @@
-# Heritage: notes for Claude sessions
+# Stewart Family App: notes for Claude sessions
 
 The Stewart family's living-room screen (Google TV). Enchanted paper, like the moving pages in Harry Potter: cream paper, ink that bleeds in and out, one beautiful piece at a time (a James Clear idea, quote, or question), with the hour, the sky, and what's next in the corners. Voice, phone, Siri, and the TV remote can ask it to turn the page.
 

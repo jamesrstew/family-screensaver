@@ -80,7 +80,7 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
             onClick={voice.toggle}
             className="w-full border-2 border-rule py-5 text-[1.6rem] active:opacity-60"
           >
-            {talking ? "Hang up" : `Talk to ${family.name}`}
+            {talking ? "Hang up" : "Talk to the TV"}
           </button>
           <p className="mt-3 min-h-[3.5rem] text-lg text-ink-soft italic">
             {voice.state === "speaking"

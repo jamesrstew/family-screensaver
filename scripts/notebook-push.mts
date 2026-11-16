@@ -19,5 +19,5 @@ if (!Array.isArray(notebook.items) || notebook.items.length === 0) {
   process.exit(1);
 }
 
-await new Redis({ url, token }).set("heritage:notebook", notebook);
+await new Redis({ url, token }).set("family:notebook", notebook);
 console.log(`Pushed ${notebook.items.length} notebook items.`);

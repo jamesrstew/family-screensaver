@@ -10,7 +10,7 @@ export const VOICE_MODEL = process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-rea
 export const VOICE_NAME = "marin";
 
 function instructions(place: string, timeZone: string, now: Date) {
-  return `You are ${family.name}, the voice of the living-room screen for ${family.household} in ${place}. It is ${longDate(now, timeZone)}, ${clock(now, timeZone)}.
+  return `You are the voice of the living-room screen for ${family.household} in ${place}. It is ${longDate(now, timeZone)}, ${clock(now, timeZone)}.
 
 How you speak:
 - Briefly. One or two short sentences, like a kind neighbor, never a salesperson. Children may be talking to you; keep it simple and warm.

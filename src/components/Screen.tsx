@@ -10,7 +10,8 @@ import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
-import { Ink, InkStage, OUT_MS, STAGGER_MS } from "./Ink";
+import { DESIGNS, type Design } from "@/views/designs/registry";
+import { Ink, InkModeContext, InkStage, OUT_MS_MAX, STAGGER_MS } from "./Ink";
 import { useVoice } from "./useVoice";
 
 /*
@@ -30,15 +31,25 @@ const HOLD_MS: Record<Page, number> = {
 };
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
+const STALE_WEATHER_MS = 3 * 60 * 60_000;
 const ASK_EVERY_MS = { day: 4_000, night: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
-const LEAVE_MS = OUT_MS + STAGGER_MS * 3;
+const LEAVE_MS = OUT_MS_MAX + STAGGER_MS * 3;
 
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
 
-export function Screen({ initial, initialPage }: { initial: Snapshot; initialPage: Page }) {
+export function Screen({
+  initial,
+  initialPage,
+  design = null,
+}: {
+  initial: Snapshot;
+  initialPage: Page;
+  design?: Design | null;
+}) {
+  const kit = design ? DESIGNS[design] : null;
   const [snapshot, setSnapshot] = useState(initial);
   // First render uses the server's clock so hydration matches; then real time.
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
@@ -79,11 +90,17 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
 
   // ---- A fresh snapshot every few minutes. A lost pairing shows the lock.
   useEffect(() => {
+    let weatherAt = Date.now();
     const t = window.setInterval(async () => {
       try {
         const res = await fetch("/api/snapshot", { cache: "no-store" });
         if (res.status === 401) return window.location.reload();
-        if (res.ok) setSnapshot(await res.json());
+        if (!res.ok) return;
+        const next: Snapshot = await res.json();
+        // One missed weather report shouldn't wipe the sky; keep the last for a while.
+        if (next.weather) weatherAt = Date.now();
+        const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
+        setSnapshot((prev) => (keep && prev.weather ? { ...next, weather: prev.weather } : next));
       } catch {
         // Offline: keep printing what we have.
       }
@@ -153,6 +170,13 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
     return () => window.removeEventListener("keydown", onKey);
   }, [page, show, voice, snapshot.voice]);
 
+  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 2500);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // ---- Protect the screen: the page drifts a few pixels, too slowly to see.
   const [drift, setDrift] = useState({ x: 0, y: 0 });
   useEffect(() => {
@@ -163,10 +187,14 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
   }, []);
 
   const props = { snapshot, now, mood };
+  // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
+  const drawn = kit && (view === "home" || view === "night" || view === "weather") ? kit : null;
   return (
     <div
       data-surface="tv"
       data-mood={mood}
+      data-design={drawn ? (design ?? undefined) : undefined}
+      data-settled={settled ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -177,15 +205,18 @@ export function Screen({ initial, initialPage }: { initial: Snapshot; initialPag
           transition: "transform 180s linear",
         }}
       >
-        <InkStage.Provider value={leaving}>
-          <div key={view} className="h-full">
-            {view === "home" && <HomePage {...props} />}
-            {view === "night" && <NightPage {...props} />}
-            {view === "weather" && <WeatherPage {...props} />}
-            {view === "week" && <WeekPage {...props} />}
-            {view === "notebook" && <NotebookPage {...props} />}
-          </div>
-        </InkStage.Provider>
+        <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
+          <InkStage.Provider value={leaving}>
+            <div key={view} className="h-full">
+              {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
+              {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
+              {view === "weather" &&
+                (drawn ? <drawn.Weather {...props} /> : <WeatherPage {...props} />)}
+              {view === "week" && <WeekPage {...props} />}
+              {view === "notebook" && <NotebookPage {...props} />}
+            </div>
+          </InkStage.Provider>
+        </InkModeContext.Provider>
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
     </div>

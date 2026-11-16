@@ -1,4 +1,4 @@
-# Heritage
+# Stewart Family App
 
 A quiet screen for the Stewart family's living room. Cream paper where the ink moves, like the enchanted pages in Harry Potter: one idea, quote, or question at a time, with the hour, the sky, and what's next written small in the corners. At dinner it asks the family a question. At night it goes dark. Ask it (by voice, phone, Siri, or the TV remote) and it turns the page, then finds its own way home.
 
@@ -23,7 +23,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 ### Siri
 
-Make a Shortcut named, say, "Heritage weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`.
+Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`.
 
 ## Develop
 

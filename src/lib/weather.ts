@@ -12,6 +12,8 @@ type OpenMeteo = {
     time: string[];
     temperature_2m: number[];
     precipitation_probability: number[];
+    weather_code?: number[];
+    is_day?: number[];
   };
   daily: {
     time: string[];
@@ -35,7 +37,7 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
     timezone: timeZone,
     temperature_unit: "fahrenheit",
     current: "temperature_2m,weather_code,is_day",
-    hourly: "temperature_2m,precipitation_probability",
+    hourly: "temperature_2m,precipitation_probability,weather_code,is_day",
     daily:
       "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
     forecast_days: "7",
@@ -74,6 +76,8 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     time: instant(t, off),
     temp: Math.round(d.hourly.temperature_2m[from + i]),
     precipChance: d.hourly.precipitation_probability[from + i] ?? 0,
+    code: d.hourly.weather_code?.[from + i],
+    isDay: d.hourly.is_day ? d.hourly.is_day[from + i] === 1 : undefined,
   }));
 
   return {

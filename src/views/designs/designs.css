@@ -1,0 +1,140 @@
+/*
+ * Paper for the design directions under review (?design=a|b|c|d).
+ * Each direction is one face and one set of paper tokens, day and night.
+ */
+
+/* A. Still: one passage, set like the last page of a fine book. */
+.paper[data-design="still"] {
+  --paper: #f8f5ee;
+  --ink: #241e18;
+  --ink-soft: #625849;
+  --ink-faint: #9b9180;
+  --rule: #d6cdbd;
+  --accent: #7d2e24;
+  font-family: var(--font-garamond), Georgia, serif;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+.paper[data-design="still"][data-mood="night"] {
+  --paper: #090807;
+  --ink: #857b6b;
+  --ink-soft: #6c6354;
+  --ink-faint: #4a443a;
+  --rule: #2a2621;
+  --accent: #6d3b31;
+}
+
+/* B. Bookplate: an engraved frame, a cartouche of sky. */
+.paper[data-design="bookplate"] {
+  --paper: #f7f2e7;
+  --ink: #2a2119;
+  --ink-soft: #5f5244;
+  --ink-faint: #998b77;
+  --rule: #3a2f24;
+  --accent: #7d2e24;
+  font-family: var(--font-cormorant), Georgia, serif;
+  font-weight: 500;
+  font-variant-numeric: oldstyle-nums;
+}
+.paper[data-design="bookplate"][data-mood="night"] {
+  --paper: #0b0a08;
+  --ink: #877c6a;
+  --ink-soft: #6c6354;
+  --ink-faint: #4a443a;
+  --rule: #3f382f;
+  --accent: #6d3b31;
+}
+
+/* C. Plate: a photograph printed in ink, mounted on the paper. */
+.paper[data-design="plate"] {
+  --paper: #f6f2e9;
+  --ink: #261f18;
+  --ink-soft: #625747;
+  --ink-faint: #9a8f7d;
+  --rule: #cbbfa9;
+  --accent: #7d2e24;
+  font-family: var(--font-garamond), Georgia, serif;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+.paper[data-design="plate"][data-mood="night"] {
+  --paper: #090807;
+  --ink: #857b6b;
+  --ink-soft: #6c6354;
+  --ink-faint: #4a443a;
+  --rule: #2a2621;
+  --accent: #6d3b31;
+}
+
+/* D. Almanac: the day's sky drawn as an arc; the sun is the clock. */
+.paper[data-design="almanac"] {
+  --paper: #f8f4eb;
+  --ink: #2a2219;
+  --ink-soft: #64584a;
+  --ink-faint: #a1957f;
+  --rule: #bfb39e;
+  --accent: #8a3a2b;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-variation-settings:
+    "SOFT" 60,
+    "WONK" 0;
+  font-weight: 340;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+.paper[data-design="almanac"][data-mood="night"] {
+  --paper: #080807;
+  --ink: #847a69;
+  --ink-soft: #6c6354;
+  --ink-faint: #4a443a;
+  --rule: #2e2a24;
+  --accent: #6d3b31;
+  /* On dark paper the lit side of the moon is the brighter one. */
+  --moon-lit: var(--ink-faint);
+}
+
+/* At night the paper's grain would show as blotches on a dark panel. */
+.paper[data-design][data-mood="night"]::before {
+  opacity: 0.05;
+}
+
+/* Small letterspaced capitals for the few labels a page needs. */
+.spaced {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-variant-numeric: lining-nums;
+}
+
+/* The bookplate's frame draws itself once, when the page arrives. */
+.draw [pathLength] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-line 5.5s cubic-bezier(0.55, 0.1, 0.25, 1) forwards;
+}
+@keyframes draw-line {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* A photograph breathes: a slow push in over fifteen minutes, then back. */
+.breathe {
+  animation: breathe 900s ease-in-out infinite alternate;
+  transform-origin: 58% 46%;
+  will-change: transform;
+}
+@keyframes breathe {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw [pathLength] {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .breathe {
+    animation: none;
+  }
+}

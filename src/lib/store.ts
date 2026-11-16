@@ -24,8 +24,8 @@ function redis(r: Redis): Store {
 }
 
 function memory(): Store {
-  const g = globalThis as { __heritageStore?: Map<string, unknown> };
-  const m = (g.__heritageStore ??= new Map());
+  const g = globalThis as { __familyStore?: Map<string, unknown> };
+  const m = (g.__familyStore ??= new Map());
   return {
     get: async <T>(key: string) => (m.get(key) as T | undefined) ?? null,
     set: async (key, value) => {
@@ -38,6 +38,6 @@ export const hasStore = Boolean(url && token);
 export const store: Store = url && token ? redis(new Redis({ url, token })) : memory();
 
 export const KEYS = {
-  show: "heritage:show",
-  notebook: "heritage:notebook",
+  show: "family:show",
+  notebook: "family:notebook",
 } as const;

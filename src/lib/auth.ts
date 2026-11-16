@@ -6,7 +6,7 @@ import { cookies, headers } from "next/headers";
 // Rotating the key signs every device out. Scripts (Siri, Alexa) send it as
 // "Authorization: Bearer <key>".
 
-export const COOKIE = "heritage";
+export const COOKIE = "family";
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 400; // the browser maximum
 
 /** Without a key, local dev is open and production is locked. */
@@ -17,7 +17,7 @@ export function familyKey(): string | null {
 export const isOpen = () => !familyKey() && process.env.NODE_ENV !== "production";
 
 export function tokenFor(key: string): string {
-  return createHmac("sha256", key).update("heritage-device-v1").digest("base64url");
+  return createHmac("sha256", key).update("family-device-v1").digest("base64url");
 }
 
 /** Constant-time string comparison (hash both so lengths match). */
