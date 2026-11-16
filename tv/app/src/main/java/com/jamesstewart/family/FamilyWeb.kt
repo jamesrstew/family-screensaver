@@ -1,4 +1,4 @@
-package com.jamesstewart.heritage
+package com.jamesstewart.family
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -14,28 +14,28 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 
-private const val TAG = "Heritage"
+private const val TAG = "Family"
 private const val UNCONFIGURED_URL = "https://example.invalid"
 const val NOT_CONFIGURED_ASSET = "file:///android_asset/not_configured.html"
 
-/** The page URL for [page], or null when no Heritage URL was baked into the build. */
-fun heritageUrl(page: String, extraQuery: String? = null): String? {
-    val base = BuildConfig.HERITAGE_URL
+/** The page URL for [page], or null when no app URL was baked into the build. */
+fun familyUrl(page: String, extraQuery: String? = null): String? {
+    val base = BuildConfig.FAMILY_URL
     if (base.isBlank() || base == UNCONFIGURED_URL) return null
     val query = "page=" + Uri.encode(page) + (extraQuery?.let { "&$it" } ?: "")
     return "$base/?$query"
 }
 
-fun WebView.loadHeritage(page: String, extraQuery: String? = null) {
-    loadUrl(heritageUrl(page, extraQuery) ?: notConfiguredUrl("No Heritage URL was set at build time."))
+fun WebView.loadFamily(page: String, extraQuery: String? = null) {
+    loadUrl(familyUrl(page, extraQuery) ?: notConfiguredUrl("No app URL was set at build time."))
 }
 
 private fun notConfiguredUrl(reason: String) =
-    "$NOT_CONFIGURED_ASSET?url=${Uri.encode(BuildConfig.HERITAGE_URL)}&reason=${Uri.encode(reason)}"
+    "$NOT_CONFIGURED_ASSET?url=${Uri.encode(BuildConfig.FAMILY_URL)}&reason=${Uri.encode(reason)}"
 
-/** A full-screen WebView configured for the Heritage web app. Shared by the activity and the dream. */
+/** A full-screen WebView configured for the family web app. Shared by the activity and the dream. */
 @SuppressLint("SetJavaScriptEnabled")
-fun createHeritageWebView(context: Context): WebView = WebView(context).apply {
+fun createFamilyWebView(context: Context): WebView = WebView(context).apply {
     setBackgroundColor(Color.parseColor("#f8f4ea"))
     isFocusable = true
     isFocusableInTouchMode = true
@@ -50,16 +50,16 @@ fun createHeritageWebView(context: Context): WebView = WebView(context).apply {
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame || request.url.scheme == "file") return
             Log.w(TAG, "Main frame failed: ${error.errorCode} ${error.description} (${request.url})")
-            view.loadUrl(notConfiguredUrl("Could not reach Heritage (${error.description})."))
+            view.loadUrl(notConfiguredUrl("Could not reach the family app (${error.description})."))
         }
     }
     webChromeClient = AudioGrantingChromeClient(context)
 }
 
-/** The only origins that may use the microphone: Heritage itself and the bundled mic test. */
+/** The only origins that may use the microphone: the family app itself and the bundled mic test. */
 private fun trusted(origin: Uri): Boolean {
-    val heritage = Uri.parse(BuildConfig.HERITAGE_URL)
-    val same = origin.scheme == heritage.scheme && origin.host == heritage.host && origin.port == heritage.port
+    val app = Uri.parse(BuildConfig.FAMILY_URL)
+    val same = origin.scheme == app.scheme && origin.host == app.host && origin.port == app.port
     return same || origin.host == "appassets.androidplatform.net"
 }
 

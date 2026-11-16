@@ -1,10 +1,10 @@
-package com.jamesstewart.heritage
+package com.jamesstewart.family
 
 import android.service.dreams.DreamService
 import android.webkit.WebView
 
-/** "Heritage screensaver": the same WebView, non-interactive, with `mode=screensaver` for the page. */
-class HeritageDream : DreamService() {
+/** "Stewart Family App screensaver": the same WebView, non-interactive, with `mode=screensaver` for the page. */
+class FamilyDream : DreamService() {
     private var webView: WebView? = null
 
     override fun onAttachedToWindow() {
@@ -12,14 +12,14 @@ class HeritageDream : DreamService() {
         isInteractive = false
         isFullscreen = true
         isScreenBright = true
-        webView = createHeritageWebView(this).also { setContentView(it) }
+        webView = createFamilyWebView(this).also { setContentView(it) }
     }
 
     override fun onDreamingStarted() {
         super.onDreamingStarted()
         webView?.run {
             onResume()
-            loadHeritage("home", "mode=screensaver")
+            loadFamily("home", "mode=screensaver")
         }
     }
 

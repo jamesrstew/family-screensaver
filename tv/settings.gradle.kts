@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "heritage-tv"
+rootProject.name = "family-tv"
 include(":app")

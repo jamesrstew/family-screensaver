@@ -1,4 +1,4 @@
-package com.jamesstewart.heritage
+package com.jamesstewart.family
 
 import android.Manifest
 import android.app.Activity
@@ -39,7 +39,7 @@ import kotlin.math.sqrt
 
 /**
  * Diagnostics: can this TV app hear the user, and which remote keys reach it?
- * Everything shown on screen is also written to logcat under the "HeritageMic" tag.
+ * Everything shown on screen is also written to logcat under the "FamilyMic" tag.
  */
 class MicTestActivity : Activity() {
     private lateinit var logView: TextView
@@ -246,7 +246,7 @@ class MicTestActivity : Activity() {
         val pad = dp(40)
         val left = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text("Heritage Mic Test", 28f, bold = true))
+            addView(text("Family Mic Test", 28f, bold = true))
             addView(button("1. SpeechRecognizer (in-app)") { startSpeechRecognizer() })
             addView(button("2. RecognizerIntent (system UI)") { startRecognizerIntent() })
             addView(button("3. AudioRecord VOICE_RECOGNITION, 5 s") {
@@ -320,7 +320,7 @@ class MicTestActivity : Activity() {
     }
 
     companion object {
-        private const val TAG = "HeritageMic"
+        private const val TAG = "FamilyMic"
         private const val REQ_MIC = 1
         private const val REQ_SPEECH = 2
         private val TIME = SimpleDateFormat("HH:mm:ss", Locale.US)

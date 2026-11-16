@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Heritage</string>
-    <string name="label_weather">Heritage Weather</string>
-    <string name="label_week">Heritage Week</string>
-    <string name="label_ideas">Heritage Ideas</string>
-    <string name="label_mic_test">Heritage Mic Test</string>
-    <string name="label_dream">Heritage</string>
+    <string name="app_name">Stewart Family App</string>
+    <string name="label_weather">Family Weather</string>
+    <string name="label_week">Family Week</string>
+    <string name="label_ideas">Family Ideas</string>
+    <string name="label_mic_test">Family Mic Test</string>
+    <string name="label_dream">Stewart Family App</string>
 </resources>

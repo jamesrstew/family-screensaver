@@ -1,4 +1,4 @@
-package com.jamesstewart.heritage
+package com.jamesstewart.family
 
 import android.app.Activity
 import android.content.Intent
@@ -12,21 +12,21 @@ import android.webkit.WebView
 import android.window.OnBackInvokedDispatcher
 
 /**
- * Full-screen WebView shell. Each launcher alias (Heritage, Heritage Weather, ...) targets this
- * activity and names its page in `heritage.page` meta-data. `adb shell am start ... --es page X`
+ * Full-screen WebView shell. Each launcher alias (Stewart Family App, Family Weather, ...) targets this
+ * activity and names its page in `family.page` meta-data. `adb shell am start ... --es page X`
  * overrides it for testing.
  */
-class HeritageActivity : Activity() {
+class FamilyActivity : Activity() {
     private lateinit var webView: WebView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        webView = createHeritageWebView(this)
+        webView = createFamilyWebView(this)
         setContentView(webView)
         webView.requestFocus()
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
-            webView.loadHeritage(pageFor(intent))
+            webView.loadFamily(pageFor(intent))
         }
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
@@ -39,7 +39,7 @@ class HeritageActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        webView.loadHeritage(pageFor(intent))
+        webView.loadFamily(pageFor(intent))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -63,7 +63,7 @@ class HeritageActivity : Activity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        Log.d("Heritage", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action}")
+        Log.d("Family", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action}")
         return super.dispatchKeyEvent(event)
     }
 
@@ -81,7 +81,7 @@ class HeritageActivity : Activity() {
         val component = intent.component ?: return "home"
         return try {
             packageManager.getActivityInfo(component, PackageManager.GET_META_DATA)
-                .metaData?.getString("heritage.page") ?: "home"
+                .metaData?.getString("family.page") ?: "home"
         } catch (e: PackageManager.NameNotFoundException) {
             "home"
         }
