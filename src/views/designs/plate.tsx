@@ -159,7 +159,7 @@ export function Night(props: ViewProps) {
 }
 
 /** Weather as a plate of the sky: the next day drawn as a frieze, hour by hour. */
-export function Weather({ snapshot }: ViewProps) {
+export function Weather({ snapshot, now }: ViewProps) {
   const w = snapshot.weather;
   const tz = snapshot.timeZone;
   if (!w) {
@@ -173,7 +173,7 @@ export function Weather({ snapshot }: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="mt-[6rem] max-w-[90rem]">
-        <p className="text-[4.6rem] leading-[1.16]">{forecastLine(w)}</p>
+        <p className="text-[4.6rem] leading-[1.16]">{forecastLine(w, now, snapshot.timeZone)}</p>
       </Ink>
       <Ink order={1} className="mt-[7rem]">
         <div className="grid grid-cols-8 border-y border-rule py-[2.4rem]">

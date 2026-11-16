@@ -220,7 +220,9 @@ export function Weather({ snapshot, now }: ViewProps) {
             />
           </Ink>
           <Ink order={2} className="mt-[0.5rem] max-w-[82rem]">
-            <p className="text-[4.4rem] leading-[1.12] text-ink">{forecastLine(w)}</p>
+            <p className="text-[4.4rem] leading-[1.12] text-ink">
+              {forecastLine(w, now, snapshot.timeZone)}
+            </p>
           </Ink>
           <Ink order={3} className="mt-auto grid w-full grid-cols-7">
             {w.days.slice(0, 7).map((d, i) => (

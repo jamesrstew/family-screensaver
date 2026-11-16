@@ -21,7 +21,7 @@ export function WeatherPage({ snapshot, now }: ViewProps) {
       ) : (
         <>
           <Ink order={1} className="mt-8 grid grid-cols-[1fr_28rem] items-start gap-14">
-            <p className="text-[3.6rem] leading-[1.2]">{forecastLine(w)}</p>
+            <p className="text-[3.6rem] leading-[1.2]">{forecastLine(w, now, snapshot.timeZone)}</p>
             <div className="pt-2">
               <Leader label="Now" value={`${w.now.temp}° ${w.now.label.toLowerCase()}`} />
               <Leader label="Sunrise" value={clock(new Date(w.today.sunrise), tz)} />
