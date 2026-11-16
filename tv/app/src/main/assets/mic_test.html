@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 8px; background: #fffaf0; color: #221e1a; font: 16px monospace; }
+  #bar { height: 24px; background: #ddd; margin: 8px 0; }
+  #fill { height: 100%; width: 0; background: #221e1a; }
+</style>
+</head>
+<body>
+<div id="status">WebView getUserMedia: requesting audio...</div>
+<div id="bar"><div id="fill"></div></div>
+<div id="level"></div>
+<script>
+  const status = (s) => { document.getElementById("status").textContent = s; console.log(s); };
+  status("isSecureContext=" + window.isSecureContext + ", requesting audio...");
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    const track = stream.getAudioTracks()[0];
+    status("getUserMedia OK: " + track.label);
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    const data = new Float32Array(analyser.fftSize);
+    let peak = -120;
+    const started = performance.now();
+    const tick = () => {
+      analyser.getFloatTimeDomainData(data);
+      let sum = 0;
+      for (const v of data) sum += v * v;
+      const db = 20 * Math.log10(Math.max(Math.sqrt(sum / data.length), 1e-6));
+      peak = Math.max(peak, db);
+      document.getElementById("fill").style.width = Math.max(0, Math.min(100, (db + 90) / 90 * 100)) + "%";
+      document.getElementById("level").textContent = db.toFixed(1) + " dBFS (peak " + peak.toFixed(1) + ")";
+      if (performance.now() - started < 10000) requestAnimationFrame(tick);
+      else { status("done, peak " + peak.toFixed(1) + " dBFS"); stream.getTracks().forEach((t) => t.stop()); }
+    };
+    ctx.resume().then(tick);
+  }).catch((err) => status("getUserMedia FAILED: " + err.name + ": " + err.message));
+</script>
+</body>
+</html>
