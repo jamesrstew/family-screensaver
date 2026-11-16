@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
+import { WEATHER_MS, slideFromKey, slideKey, slideOf } from "@/lib/carousel";
 import { moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
@@ -20,7 +21,8 @@ import { useVoice } from "./useVoice";
  * Everything here is quiet: nothing on screen moves unless something changed.
  */
 
-type View = Page | "night";
+// A page, the night page, or one piece of home's carousel ("home:passage-12").
+type View = Page | "night" | `home:${string}`;
 
 /** How long a page stays up before the screen returns home. */
 const HOLD_MS: Record<Page, number> = {
@@ -61,7 +63,20 @@ export function Screen({
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
-  const target = viewOf(page, mood);
+  // Home by day is a slow carousel (Almanac only): each piece turns like a page.
+  // It counts from the moment home appears, so it always opens on the weather.
+  const base = viewOf(page, mood);
+  const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
+  const [lastBase, setLastBase] = useState(base);
+  if (base !== lastBase) {
+    setLastBase(base);
+    // Back from the Weather page, the weather's just been seen: open on a passage.
+    if (base === "home") setHomeSince(now.getTime() - (lastBase === "weather" ? WEATHER_MS : 0));
+  }
+  const carousel = base === "home" && design === "almanac";
+  const target: View = carousel
+    ? `home:${slideKey(slideOf(now, homeSince, Boolean(snapshot.weather)))}`
+    : base;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {
@@ -78,7 +93,11 @@ export function Screen({
   // ---- Time. A tick every few seconds; the clock shows minutes.
   useEffect(() => {
     pageSince.current = Date.now();
-    const first = window.setTimeout(() => setNow(new Date()), 0);
+    const first = window.setTimeout(() => {
+      setNow(new Date());
+      // A restored or stale page still opens home on the weather.
+      setHomeSince(Date.now());
+    }, 0);
     const t = window.setInterval(() => setNow(new Date()), TICK_MS);
     return () => {
       window.clearTimeout(first);
@@ -195,9 +214,11 @@ export function Screen({
     return () => window.clearInterval(t);
   }, []);
 
-  const props = { snapshot, now, mood };
+  const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
+  const props = { snapshot, now, mood, slide };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn = kit && (view === "home" || view === "night" || view === "weather") ? kit : null;
+  const drawn =
+    kit && (view === "home" || slide || view === "night" || view === "weather") ? kit : null;
   return (
     <div
       data-surface="tv"
@@ -218,6 +239,8 @@ export function Screen({
           <InkStage.Provider value={leaving}>
             <div key={view} className="h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
+              {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {view === "weather" &&
                 (drawn ? <drawn.Weather {...props} /> : <WeatherPage {...props} />)}

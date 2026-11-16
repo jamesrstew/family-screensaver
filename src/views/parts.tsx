@@ -1,9 +1,16 @@
 // Pieces of type shared by the pages. Server-safe; no state.
 
 import { clock, longDate, type Mood } from "@/lib/time";
+import type { Slide } from "@/lib/carousel";
 import type { Snapshot, NotebookItem } from "@/lib/types";
 
-export type ViewProps = { snapshot: Snapshot; now: Date; mood: Mood };
+export type ViewProps = {
+  snapshot: Snapshot;
+  now: Date;
+  mood: Mood;
+  /** Home only: which piece of the carousel is up. */
+  slide?: Slide;
+};
 
 /** The quiet header on every page but home: date, title, time. */
 export function SectionHead({ title, snapshot, now }: { title: string } & Omit<ViewProps, "mood">) {

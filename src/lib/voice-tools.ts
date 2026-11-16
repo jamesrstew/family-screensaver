@@ -31,7 +31,7 @@ export async function runTool(
       const w = snapshot.weather;
       if (!w) return { available: false };
       return {
-        summary: forecastLine(w),
+        summary: forecastLine(w, now, tz),
         now: `${w.now.temp}°F, ${w.now.label}`,
         days: w.days.map((d, i) => ({
           day: i === 0 ? "today" : weekdayOf(d.date),

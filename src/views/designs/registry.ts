@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { InkMode } from "@/components/Ink";
+import type { WeatherView } from "@/lib/carousel";
 import type { ViewProps } from "../parts";
 import * as almanac from "./almanac";
 import * as bookplate from "./bookplate";
@@ -19,7 +20,7 @@ type Kit = {
   ink: InkMode;
   Home: ComponentType<ViewProps>;
   Night: ComponentType<ViewProps>;
-  Weather: ComponentType<ViewProps>;
+  Weather: ComponentType<ViewProps & { view?: WeatherView }>;
 };
 
 export const DESIGNS: Record<Design, Kit> = {
