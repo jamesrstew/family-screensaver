@@ -12,7 +12,10 @@ export function heroOf({ snapshot, now, mood, slide }: ViewProps): NotebookItem 
   const ask = mood === "evening" && (n === null || n % 2 === 0);
   return (
     (ask ? questionFor(snapshot.notebook) : null) ??
-    (n === null ? leadFor(snapshot.notebook, now) : leadAt(snapshot.notebook, n))
+    (n === null
+      ? leadFor(snapshot.notebook, now)
+      : // In the evening only every other passage is a quote; count those alone.
+        leadAt(snapshot.notebook, mood === "evening" ? Math.floor(n / 2) : n))
   );
 }
 

@@ -17,13 +17,13 @@ export type Slide = { kind: "passage"; n: number } | { kind: "weather"; view: We
 /** What home shows at `now`, having appeared at `since`. No weather report: passages only. */
 export function slideOf(now: Date, since: number, hasWeather: boolean): Slide {
   const elapsed = Math.max(now.getTime() - since, 0);
-  const k = Math.floor(since / TURN_MS) + Math.floor(elapsed / TURN_MS);
+  const turn = Math.floor(elapsed / TURN_MS);
+  // The weather views go in order from the moment home appeared, starting
+  // with "now"; the passages follow the clock, so a reload brings new ones.
   if (hasWeather && elapsed % TURN_MS < WEATHER_MS) {
-    // Home opens on "now", the view that answers what it's like out there.
-    if (elapsed < TURN_MS) return { kind: "weather", view: "now" };
-    return { kind: "weather", view: WEATHER_VIEWS[k % WEATHER_VIEWS.length] };
+    return { kind: "weather", view: WEATHER_VIEWS[turn % WEATHER_VIEWS.length] };
   }
-  return { kind: "passage", n: k };
+  return { kind: "passage", n: Math.floor(since / TURN_MS) + turn };
 }
 
 export const slideKey = (s: Slide) =>

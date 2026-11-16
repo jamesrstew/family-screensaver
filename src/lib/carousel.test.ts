@@ -29,9 +29,12 @@ describe("home's carousel", () => {
     expect(slideOf(at(0), since, true)).toEqual({ kind: "weather", view: "now" });
   });
 
-  it("cycles through every weather view", () => {
-    const seen = new Set(WEATHER_VIEWS.map((_, i) => slideKey(slideOf(at(i * turn), since, true))));
-    expect(seen.size).toBe(WEATHER_VIEWS.length);
+  it("goes through every weather view in order, whenever home appeared", () => {
+    for (let r = 0; r < 4; r++) {
+      const s = r * turn + 4_321;
+      const views = WEATHER_VIEWS.map((_, i) => slideOf(new Date(s + i * turn), s, true));
+      expect(views.map((v) => (v.kind === "weather" ? v.view : null))).toEqual([...WEATHER_VIEWS]);
+    }
   });
 
   it("without a weather report, stays on passages", () => {

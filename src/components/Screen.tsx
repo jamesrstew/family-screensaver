@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
-import { slideFromKey, slideKey, slideOf } from "@/lib/carousel";
+import { WEATHER_MS, slideFromKey, slideKey, slideOf } from "@/lib/carousel";
 import { moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
@@ -70,7 +70,8 @@ export function Screen({
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
     setLastBase(base);
-    if (base === "home") setHomeSince(now.getTime());
+    // Back from the Weather page, the weather's just been seen: open on a passage.
+    if (base === "home") setHomeSince(now.getTime() - (lastBase === "weather" ? WEATHER_MS : 0));
   }
   const carousel = base === "home" && design === "almanac";
   const target: View = carousel
@@ -92,7 +93,11 @@ export function Screen({
   // ---- Time. A tick every few seconds; the clock shows minutes.
   useEffect(() => {
     pageSince.current = Date.now();
-    const first = window.setTimeout(() => setNow(new Date()), 0);
+    const first = window.setTimeout(() => {
+      setNow(new Date());
+      // A restored or stale page still opens home on the weather.
+      setHomeSince(Date.now());
+    }, 0);
     const t = window.setInterval(() => setNow(new Date()), TICK_MS);
     return () => {
       window.clearTimeout(first);
