@@ -20,7 +20,7 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   if (!(await isFamily())) return <Locked next="/" wrong={params.nope === "1"} />;
   const asked = String(params.page ?? "");
   const page: Page = PAGES.includes(asked as Page) ? (asked as Page) : "home";
-  // ?design=a|b|c|d: the design directions under review (see src/views/designs).
-  const design = designOf(String(params.design ?? ""));
+  // Almanac, tentatively chosen; ?design=a|b|c|d still shows the other directions.
+  const design = designOf(String(params.design ?? "")) ?? "almanac";
   return <Screen initial={await getSnapshot()} initialPage={page} design={design} />;
 }

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees and the Android shell are not part of the web app.
+    ".claude/**",
+    "tv/**",
   ]),
 ]);
 
