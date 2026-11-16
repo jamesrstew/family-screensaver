@@ -13,7 +13,7 @@
     "format:check": "prettier --check .",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm format:check",
     "key": "node scripts/key.mjs",
-    "notebook:push": "tsx --env-file=.env.local scripts/notebook-push.mts"
+    "notebook:push": "tsx scripts/notebook-push.mts"
   },
   "dependencies": {
     "@upstash/redis": "^1.41.0",
