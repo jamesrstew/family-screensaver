@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
+import { insideOf, insideShape, type Inside } from "@/lib/indoor";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -46,11 +47,14 @@ function SkyWords({
   w,
   now,
   tz,
+  shape = "",
   children,
 }: {
   w: Sky;
   now: Date;
   tz: string;
+  /** What else is written with the hour; a new shape re-inks the words. */
+  shape?: string;
   children: ReactNode;
 }) {
   const p = placeOf(w, now);
@@ -99,7 +103,7 @@ function SkyWords({
         ) : null,
       )}
       <Ink
-        k={`${sky.body}${low}`}
+        k={`${sky.body}${low}${shape}`}
         order={0}
         mode="seep"
         className="absolute isolate text-center whitespace-nowrap"
@@ -118,6 +122,7 @@ export function Home(props: ViewProps) {
   const tz = snapshot.timeZone;
   const next = nextUp(props);
   const w = snapshot.weather;
+  const inside = insideOf(snapshot.indoor);
   const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
   const boxFor = (item: NotebookItem) =>
     heroBox({ sky: Boolean(w), next: Boolean(next), ask: asks(item), item });
@@ -130,7 +135,7 @@ export function Home(props: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <SkyWords w={w} now={now} tz={tz}>
+        <SkyWords w={w} now={now} tz={tz} shape={insideShape(inside)}>
           {/* The most-glanced fact on the screen: the hour in ink, the temperature softer. */}
           <p className="text-[4.6rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
@@ -139,13 +144,20 @@ export function Home(props: ViewProps) {
               <Deg v={w.now.temp} />
             </span>
           </p>
+          {inside ? <InsideWords inside={inside} /> : null}
         </SkyWords>
       ) : (
         // No sky report: the hour alone, where the sky would be.
-        <Ink order={0} mode="seep" className="pt-[6rem] pb-[4rem] text-center">
+        <Ink
+          k={insideShape(inside)}
+          order={0}
+          mode="seep"
+          className="pt-[6rem] pb-[4rem] text-center"
+        >
           <p className="text-[4.4rem] leading-none text-ink-soft">
             <ClockFace now={now} tz={tz} />
           </p>
+          {inside ? <InsideWords inside={inside} /> : null}
         </Ink>
       )}
       <Ink
@@ -178,6 +190,42 @@ export function Home(props: ViewProps) {
   );
 }
 
+/**
+ * Inside the house, a quiet line under the hour: "68° inside", or each room
+ * when they differ. The numbers in soft ink, the words fainter, like the
+ * ends of the day at the horizon.
+ */
+function InsideWords({ inside }: { inside: Inside }) {
+  const word = (s: string) => <span className="text-ink-faint italic">{s}</span>;
+  const dot = <span className="mx-[0.6rem] text-ink-faint">·</span>;
+  return (
+    <p className="mt-[1.1rem] text-[2.6rem] leading-none text-ink-soft">
+      {inside.kind === "one" ? (
+        <>
+          <Deg v={inside.temp} /> {word("inside")}
+        </>
+      ) : inside.kind === "range" ? (
+        <>
+          <Deg v={inside.low} /> to <Deg v={inside.high} /> {word("inside")}
+        </>
+      ) : (
+        inside.rooms.map((r, i) => (
+          <span key={r.name}>
+            {i ? dot : null}
+            {word(r.name)} <Deg v={r.temp} />
+          </span>
+        ))
+      )}
+      {inside.air ? (
+        <>
+          {dot}
+          {word(`${inside.air} air`)}
+        </>
+      ) : null}
+    </p>
+  );
+}
+
 export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
@@ -194,6 +242,7 @@ export function Night(props: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       {w ? (
+        // The hour alone: neither the sky's temperature nor the house's at night.
         <SkyWords w={w} now={now} tz={tz}>
           <p className="text-[5.4rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
