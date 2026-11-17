@@ -41,7 +41,8 @@ const SNAPSHOT_EVERY_MS = 5 * 60_000;
 const STALE_WEATHER_MS = 3 * 60 * 60_000;
 // Ask often while people are up; rarely in the small hours (by the clock, not the sun).
 const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
-const TICK_MS = 10_000;
+// Often enough that a half-minute turn lands within a few seconds of its time.
+const TICK_MS = 5_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 
 // Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up

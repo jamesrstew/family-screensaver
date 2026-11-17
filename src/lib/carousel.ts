@@ -1,11 +1,12 @@
-// Home turns slowly between pieces: a view of the weather first (home always
-// opens on the weather, never on a quote), then a passage (a quote, or in the
-// afternoon the question for the table), then the next weather view, and so on.
+// Home turns between pieces every half minute: a view of the weather first
+// (home always opens on the weather's "now", never on a quote), then a
+// passage (a quote, or in the afternoon the question for the table), then the
+// next weather view, and so on.
 // It counts from the moment home appeared; which quote and which view come up
 // follow the clock, so a reload doesn't repeat the same ones.
 
-export const WEATHER_MS = 2 * 60_000;
-export const PASSAGE_MS = 4 * 60_000;
+export const WEATHER_MS = 30_000;
+export const PASSAGE_MS = 30_000;
 const TURN_MS = WEATHER_MS + PASSAGE_MS;
 
 /** The approved weather views, in the order home shows them. */
