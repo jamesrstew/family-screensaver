@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
+    "dev:lan": "echo 'Open to the network: set FAMILY_KEY in .env.local first.' && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

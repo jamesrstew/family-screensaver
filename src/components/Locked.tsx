@@ -31,7 +31,7 @@ export function Locked({
         <input type="hidden" name="next" value={next} />
         <label className="kicker" htmlFor="key">
           {wait
-            ? "Too many wrong keys lately. Try again in an hour."
+            ? "Too many tries lately. Try again in a little while."
             : wrong
               ? "That key didn’t fit. Try again."
               : "The family key"}
