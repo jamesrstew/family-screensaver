@@ -95,6 +95,8 @@ export async function getIndoor(): Promise<Indoor | null> {
       Array.isArray(devices) ? devices : [],
       new Date().toISOString(),
       process.env.NEST_ROOM ?? "",
+      // Never the name itself: room names stay out of logs.
+      () => console.error("[nest] NEST_ROOM matched no online thermostat; showing the average"),
     );
   } catch (err) {
     cacheLife({ stale: 60, revalidate: 120, expire: 120 });
@@ -110,12 +112,17 @@ const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 /**
  * Each thermostat's room, temperature (°F), and humidity, and the house's one
- * number: the thermostat in the room named `pick` (any case), else the
- * average of them all. Pure. A thermostat that's offline is left out: Google
+ * number: the thermostat named `pick` (by its own name or its room's, any
+ * case), else the average of them all, with `missed` told so. Pure. A thermostat that's offline is left out: Google
  * keeps answering with its last reading, which may be hours old. Anything
  * malformed is skipped, never the whole list.
  */
-export function indoorOf(devices: Device[], at: string, pick = ""): Indoor | null {
+export function indoorOf(
+  devices: Device[],
+  at: string,
+  pick = "",
+  missed: () => void = () => {},
+): Indoor | null {
   const read = devices.flatMap((d) => {
     const t = d?.traits;
     if (d?.type !== "sdm.devices.types.THERMOSTAT" || !t) return [];
@@ -123,17 +130,21 @@ export function indoorOf(devices: Device[], at: string, pick = ""): Indoor | nul
     const celsius = num(t["sdm.devices.traits.Temperature"]?.ambientTemperatureCelsius);
     if (celsius === undefined) return [];
     const humidity = num(t["sdm.devices.traits.Humidity"]?.ambientHumidityPercent);
+    const custom = text(t["sdm.devices.traits.Info"]?.customName);
+    const parent = text(d.parentRelations?.[0]?.displayName);
     const room = {
-      name:
-        text(t["sdm.devices.traits.Info"]?.customName) || text(d.parentRelations?.[0]?.displayName),
+      name: custom || parent,
       temp: fahrenheit(celsius),
       ...(humidity !== undefined ? { humidity: Math.round(humidity) } : {}),
     } satisfies Indoor["rooms"][number];
-    return [{ celsius, room }];
+    // Either name can pick it: the thermostat's own, or its room's.
+    const names = [custom, parent].filter(Boolean).map((n) => n.toLowerCase());
+    return [{ celsius, room, names }];
   });
   if (!read.length) return null;
   const want = pick.trim().toLowerCase();
-  const chosen = want ? read.find((r) => r.room.name.toLowerCase() === want) : undefined;
+  const chosen = want ? read.find((r) => r.names.includes(want)) : undefined;
+  if (want && !chosen) missed();
   // The chosen room's own reading; else the house's average from the raw
   // readings, rounded once.
   const temp = chosen

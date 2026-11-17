@@ -34,7 +34,7 @@ Optional: "68° inside" in home's corner, and the voice can say how warm each ro
 3. **OAuth client:** _Credentials_ → _Create credentials_ → _OAuth client ID_ → _Web application_, with the authorized redirect URI `https://www.google.com`. Keep the client ID and secret.
 4. **Device Access:** register at console.nest.google.com/device-access (a one-time $5 fee) and create a project with that OAuth client ID. Note the project ID.
 5. From this folder, in your own terminal: `pnpm nest:connect`. It asks for the project ID, client ID, and secret, prints Google's consent link (grant the thermostats only, in this home only; then paste back the google.com address you land on), and stores `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET`, and `NEST_REFRESH_TOKEN` in Vercel. Redeploy.
-6. **Which thermostat:** the corner shows one number. Set `NEST_ROOM` in Vercel to the room name of the thermostat to show, as it appears in Google Home (any case). Without it, or if it matches no thermostat, the corner shows the house's average.
+6. **Which thermostat:** the corner shows one number. Set `NEST_ROOM` in Vercel to the thermostat's name or its room's name, as either appears in Google Home (any case). Without it, or if it matches no online thermostat, the corner shows the house's average.
 
 To disconnect: Google Account → _Security_ → _Third-party access_ (remove the app), and remove the project in the Device Access console.
 

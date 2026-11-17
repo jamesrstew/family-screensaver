@@ -123,4 +123,27 @@ describe("indoorOf: the one thermostat", () => {
   it("keeps every room for the voice, whichever is shown", () => {
     expect(read(house, AT, "Loft")?.rooms.map((r) => r.name)).toEqual(["Den", "Loft"]);
   });
+
+  it("picks a thermostat by its own name or its room's, either one", () => {
+    const named = thermostat(
+      {
+        "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: 22 },
+        "sdm.devices.traits.Info": { customName: "Main Thermostat" },
+      },
+      "Study",
+    );
+    const other = at(20, "Den");
+    expect(read([other, named], AT, "main thermostat")?.temp).toBe(72);
+    expect(read([other, named], AT, " STUDY ")?.temp).toBe(72);
+  });
+
+  it("says when the name matched no thermostat, and only then", () => {
+    let misses = 0;
+    const missed = () => misses++;
+    expect(read(house, AT, "Attic", missed)?.temp).toBe(70);
+    expect(misses).toBe(1);
+    read(house, AT, "Loft", missed);
+    read(house, AT, "", missed);
+    expect(misses).toBe(1);
+  });
 });
