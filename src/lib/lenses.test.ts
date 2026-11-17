@@ -10,6 +10,7 @@ import {
   daysUvLine,
   daysWindLine,
   feelsDayFigure,
+  feelsFigure,
   hourKind,
   hoursAirLine,
   hoursFeelsLine,
@@ -437,10 +438,25 @@ describe("how it feels, in words", () => {
       "Feels about like the thermometer all week.",
     );
   });
-  it("sets a day's feel from the end that strays, in plain words", () => {
-    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({ big: "15°", sub: "", quiet: false });
-    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({ big: "108°", sub: "", quiet: false });
-    expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true, sub: "" });
+  it("sets a day's feel over the thermometer it strays from, in plain words", () => {
+    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({
+      big: "15°",
+      sub: "low 24°",
+      quiet: false,
+      small: true,
+      aside: true,
+    });
+    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({
+      big: "108°",
+      sub: "high 96°",
+      quiet: false,
+      small: true,
+      aside: true,
+    });
+    expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true, sub: "low 45°" });
+    // An hour: its feel over a faint thermometer.
+    expect(feelsFigure(18, 29)).toMatchObject({ big: "18°", sub: "29° out", aside: true });
+    expect(feelsFigure(28, 29)).toMatchObject({ quiet: true });
   });
 });
 

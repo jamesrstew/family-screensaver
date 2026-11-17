@@ -470,7 +470,13 @@ export function Figures({ f, act }: { f: Figure; act: boolean }) {
       </p>
       <p
         className={`mt-[0.6rem] h-[3rem] leading-none whitespace-nowrap ${f.small ? "text-[2.6rem]" : "text-[3rem]"} ${
-          act ? "text-accent" : f.quiet ? "text-ink-faint italic" : "text-ink-soft"
+          act
+            ? "text-accent"
+            : f.quiet
+              ? "text-ink-faint italic"
+              : f.aside
+                ? "text-ink-faint"
+                : "text-ink-soft"
         }`}
       >
         {f.sub}

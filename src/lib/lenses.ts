@@ -347,6 +347,8 @@ export type Figure = {
   note?: string;
   /** Long words (the EPA's air words) set a size smaller to fit the column. */
   small?: boolean;
+  /** The line under is only a reference (the thermometer under a feel): always faint. */
+  aside?: boolean;
 };
 
 /** Enough to act on: 2 inches of snow or an inch of rain. */
@@ -672,15 +674,21 @@ const list = (xs: string[]) =>
 
 /* ---------------------------------------------------------------- how it feels */
 
-/** "18°": what an hour feels like, faint when that's just what it reads. */
+/** "18°" over a faint "29° out": what an hour feels like, and what it reads. */
 export function feelsFigure(feels: number, temp: number): Figure {
-  return { big: `${feels}°`, sub: "", quiet: !feelsSays(temp, feels) };
+  return {
+    big: `${feels}°`,
+    sub: `${temp}° out`,
+    quiet: !feelsSays(temp, feels),
+    small: true,
+    aside: true,
+  };
 }
 
 /**
  * What a day feels like, from whichever end of it strays further from the
- * thermometer: its coldest feel ("11°") or its hottest ("104°"). The line
- * above says which; a caption under every day would only repeat it.
+ * thermometer: its coldest feel over a faint "low 19°", or its hottest over
+ * "high 98°".
  */
 export function feelsDayFigure(
   high: number,
@@ -691,7 +699,13 @@ export function feelsDayFigure(
   const chill = low - feelsLow;
   const heat = feelsHigh - high;
   const [feels, air] = chill >= heat ? [feelsLow, low] : [feelsHigh, high];
-  return { big: `${feels}°`, sub: "", quiet: !feelsSays(air, feels) };
+  return {
+    big: `${feels}°`,
+    sub: `${chill >= heat ? "low" : "high"} ${air}°`,
+    quiet: !feelsSays(air, feels),
+    small: true,
+    aside: true,
+  };
 }
 
 /** "Feels like 12° tonight.": plain words, never how far from the thermometer. */
