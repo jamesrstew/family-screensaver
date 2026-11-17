@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
-import { COOKIE, COOKIE_MAX_AGE, familyKey, keyMatches, tokenFor } from "@/lib/auth";
+import { COOKIE, COOKIE_MAX_AGE, addressOf, familyKey, tokenFor, tryKey } from "@/lib/auth";
 
-// Pair a device: the TV types the family key once (or a phone opens a link
-// with ?key=…), and gets a cookie for a year. The key never stays in the URL.
+// Pair a device: the TV or a phone types the family key once on the locked
+// page, and gets a cookie for a year. The key is only ever posted, never put
+// in a link (links end up in logs, histories, and message previews).
 
 const PLACES = new Set(["/", "/remote"]);
 
-async function pair(request: Request, key: string | null, next: string | null) {
-  const to = new URL(PLACES.has(next ?? "") ? next! : "/", request.url);
-  if (!key || !keyMatches(key)) {
-    to.searchParams.set("nope", "1");
+export async function POST(request: Request) {
+  const form = await request.formData();
+  const key = form.get("key")?.toString() ?? "";
+  const next = form.get("next")?.toString() ?? "";
+  const to = new URL(PLACES.has(next) ? next : "/", request.url);
+  const tried = key ? await tryKey(key, addressOf(request.headers)) : "wrong";
+  if (tried !== "ok") {
+    to.searchParams.set(tried === "wait" ? "wait" : "nope", "1");
     return NextResponse.redirect(to, 303);
   }
   const res = NextResponse.redirect(to, 303);
@@ -23,12 +28,8 @@ async function pair(request: Request, key: string | null, next: string | null) {
   return res;
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  return pair(request, url.searchParams.get("key"), url.searchParams.get("next"));
-}
-
-export async function POST(request: Request) {
-  const form = await request.formData();
-  return pair(request, form.get("key")?.toString() ?? null, form.get("next")?.toString() ?? null);
+// An old pairing link: send it to the locked page, and ignore any key in it.
+export function GET(request: Request) {
+  const next = new URL(request.url).searchParams.get("next") ?? "";
+  return NextResponse.redirect(new URL(PLACES.has(next) ? next : "/", request.url), 303);
 }
