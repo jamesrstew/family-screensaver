@@ -24,6 +24,17 @@ type Options = {
 const ADVANCE = { roman: 0.43, italic: 0.4 };
 const PARA_GAP = 0.45; // em, as Words sets it
 
+/**
+ * A line's width in em, by kind of character: Fraunces' capitals run about
+ * 0.68 em, its digits 0.55, everything else about 0.45 (padded). For a single
+ * line that must not run into its neighbor, such as a calendar title in caps.
+ */
+export function widthEm(text: string): number {
+  let w = 0;
+  for (const ch of text) w += /[A-Z]/.test(ch) ? 0.68 : /[0-9]/.test(ch) ? 0.55 : 0.45;
+  return w;
+}
+
 /** Big type is set tight; reading type gets more air. */
 export const leadingFor = (size: number) => (size >= 7 ? 1.06 : size >= 5 ? 1.12 : 1.2);
 

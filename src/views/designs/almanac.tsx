@@ -18,7 +18,7 @@ import {
   heroFitting,
   Deg,
 } from "./common";
-import { fitType } from "./fit";
+import { fitType, widthEm } from "./fit";
 
 /*
  * D. Almanac. The sheet is a window onto the day's sky (living.tsx): one
@@ -121,7 +121,7 @@ export function Home(props: ViewProps) {
   const w = snapshot.weather;
   const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
   // The house's temperature, in the corner, when what's next leaves it room.
-  const inside = cornerNote(props.inside, cornerRoom(nextLine));
+  const inside = cornerNote(props.inside, nextLine);
   const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
   const boxFor = (item: NotebookItem) =>
     heroBox({ sky: Boolean(w), next: Boolean(next || inside), ask: asks(item), item });
@@ -186,7 +186,14 @@ export function Home(props: ViewProps) {
             </p>
           </Ink>
           {inside ? (
-            <Ink k={inside.kind} order={3} mode="seep" className="absolute right-0 bottom-[0.7rem]">
+            <Ink
+              k={inside.kind}
+              order={3}
+              mode="seep"
+              className="absolute right-0 bottom-[0.7rem] isolate"
+            >
+              {/* Its own small clearing of paper, so no river runs through it. */}
+              <div className="sky-word-clearing" aria-hidden />
               <Inside inside={inside} />
             </Ink>
           ) : null}
@@ -196,27 +203,25 @@ export function Home(props: ViewProps) {
   );
 }
 
-// The foot's measure (the page inside its margins), and the corner note's
-// type, in rem. About 0.45 em a character (fit.ts), padded.
+// The foot's measure (the page inside its margins), the type of what's next
+// and of the corner note, and the air kept between them, in rem.
 const FOOT_W = 109;
-const CORNER = 2;
 const NEXT = 2.6;
-const EM = 0.45;
+const CORNER = 2;
+const AIR = 3;
 
 /**
- * How many characters the corner has beside what's next, which is centered:
- * half the foot, less half of what's next, less a little air between them.
+ * The note, if the corner has room for it beside what's next (centered on
+ * the same line): the range, else the one number, else nothing.
  */
-function cornerRoom(nextLine: string): number {
-  const free = FOOT_W / 2 - (nextLine.length * EM * NEXT) / 2 - 3;
-  return Math.floor(free / (EM * CORNER));
-}
-
-/** The note, if the corner has room for it: the range, else the one number, else nothing. */
-function cornerNote(inside: InsideNote | null | undefined, room: number): InsideNote | null {
+export function cornerNote(
+  inside: InsideNote | null | undefined,
+  nextLine: string,
+): InsideNote | null {
   if (!inside) return null;
+  const room = FOOT_W / 2 - (widthEm(nextLine) * NEXT) / 2 - AIR;
   const one = { kind: "one", temp: inside.temp } as const;
-  return [inside, one].find((i) => insideText(i).length <= room) ?? null;
+  return [inside, one].find((i) => widthEm(insideText(i)) * CORNER <= room) ?? null;
 }
 
 /**
