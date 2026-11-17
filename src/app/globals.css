@@ -73,6 +73,8 @@ body {
   --ink-faint: #8a7d69;
   --rule: #2b241c;
   --accent: #7d2e24;
+  /* The dark of the room: the veil that falls over the day's paper at dusk. */
+  --shade: #080807;
   position: relative;
   isolation: isolate;
   background-color: var(--paper);
@@ -156,13 +158,93 @@ body {
   text-indent: -0.42em;
 }
 
+/*
+ * Dusk and dawn (components/Dusk.tsx): the room's dark laid over the day's
+ * paper, words and all, deepening and lifting a minute at a time. Painted
+ * once; only its opacity moves, on the compositor. Under a clear sky the
+ * veil is deeper away from the sun, so the dusk crosses the sky rather than
+ * coming down like a dimmer; under cloud it's even.
+ */
+.dusk {
+  position: absolute;
+  inset: -3rem;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--shade);
+  transition:
+    opacity 60s linear,
+    display 60s allow-discrete;
+}
+.dusk[data-sky="clear"][data-side="dusk"] {
+  background: linear-gradient(
+    to bottom right,
+    var(--shade),
+    color-mix(in srgb, var(--shade) 72%, transparent)
+  );
+}
+.dusk[data-sky="clear"][data-side="dawn"] {
+  background: linear-gradient(
+    to bottom left,
+    var(--shade),
+    color-mix(in srgb, var(--shade) 72%, transparent)
+  );
+}
+/* At the turn, over empty paper: quickly. */
+.dusk[data-quick] {
+  transition-duration: 1.2s;
+}
+.dusk[data-on="0"] {
+  display: none;
+}
+/* Drawn again (at the dawn turn, say), it rises from clear, never in one step. */
+@starting-style {
+  [data-settled] .dusk[data-on="1"] {
+    opacity: 0 !important;
+  }
+}
+/* The sky just above the horizon where the sun went down holds its light
+   longest: half of a flat glow of the day's paper, inside the veil (so it
+   lifts the veil there by a third, and goes with it). */
+.dusk-glow {
+  position: absolute;
+  width: 48rem;
+  height: 7rem;
+  background: radial-gradient(
+    ellipse 50% 100% at 50% 100%,
+    color-mix(in srgb, var(--paper) 32%, transparent),
+    transparent
+  );
+  /* The sky layers' own pace, so it follows the arc rather than pulsing
+     with home's turning pieces. */
+  transition: opacity 24s ease;
+}
+.dusk-glow[data-on="0"] {
+  opacity: 0;
+}
+/* At the turn the paper changes quickly, with nothing written on it. */
+.paper[data-turning] {
+  transition:
+    --paper 3s ease,
+    --ink 3s ease,
+    --ink-soft 3s ease,
+    --ink-faint 3s ease,
+    --rule 3s ease,
+    --accent 3s ease;
+}
+.paper:not([data-settled]) .dusk,
+.paper:not([data-settled]) .dusk-glow {
+  transition: none;
+}
+
 /* Waking up at night shouldn't take forty seconds of bright paper. */
 .paper:not([data-settled]) {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .paper {
+  .paper,
+  .dusk,
+  .dusk-glow {
     transition: none;
   }
 }

@@ -339,6 +339,7 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       sunrise: new Date(midnight + rise * 60_000).toISOString(),
       sunset: new Date(midnight + set * 60_000).toISOString(),
       nextSunrise: new Date(midnight + (24 * 60 + rise + 1) * 60_000).toISOString(),
+      twilight: 28,
     },
     days,
     hours,

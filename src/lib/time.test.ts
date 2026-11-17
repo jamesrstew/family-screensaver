@@ -6,6 +6,9 @@ import {
   dayKey,
   happeningsOn,
   moodOf,
+  twilightOf,
+  veilOf,
+  DUSK_PEAK,
   shortDate,
   weekdayOf,
   whenOf,
@@ -77,6 +80,93 @@ describe("moodOf", () => {
     ["2026-06-21T20:48:00-07:00", "night"],
   ])("%s is %s in June", (iso, mood) => {
     expect(moodOf(at(iso), TZ, summer)).toBe(mood);
+  });
+});
+
+describe("twilight", () => {
+  // November again, with 28 minutes of civil twilight at each end.
+  const sun = {
+    sunrise: "2026-11-16T07:01:00-08:00",
+    sunset: "2026-11-16T16:37:00-08:00",
+    twilight: 28,
+  };
+  it.each([
+    ["2026-11-16T16:36:00-08:00", null, "afternoon"],
+    ["2026-11-16T16:37:00-08:00", { side: "dusk", depth: 0 }, "afternoon"],
+    ["2026-11-16T16:50:00-08:00", { side: "dusk", depth: 13 / 28 }, "afternoon"],
+    // The first stars: the paper turns to night.
+    ["2026-11-16T16:51:00-08:00", { side: "dusk", depth: 0.5 }, "night"],
+    ["2026-11-16T17:04:00-08:00", { side: "dusk", depth: 27 / 28 }, "night"],
+    ["2026-11-16T17:05:00-08:00", null, "night"],
+    ["2026-11-17T06:32:00-08:00", null, "night"],
+    ["2026-11-17T06:33:00-08:00", { side: "dawn", depth: 1 }, "night"],
+    ["2026-11-17T06:47:00-08:00", { side: "dawn", depth: 0.5 }, "night"],
+    ["2026-11-17T06:48:00-08:00", { side: "dawn", depth: 13 / 28 }, "morning"],
+    ["2026-11-17T07:01:00-08:00", null, "morning"],
+  ] as const)("%s is %o, %s", (iso, twilight, mood) => {
+    expect(twilightOf(at(iso), TZ, sun)).toEqual(twilight);
+    expect(moodOf(at(iso), TZ, sun)).toBe(mood);
+  });
+
+  it("veils the light most at the turn, and not at all at either end", () => {
+    expect(veilOf(null)).toBe(0);
+    expect(veilOf({ side: "dusk", depth: 0 })).toBe(0);
+    expect(veilOf({ side: "dusk", depth: 0.499 })).toBeCloseTo(DUSK_PEAK.dusk, 2);
+    expect(veilOf({ side: "dawn", depth: 0.499 })).toBeCloseTo(DUSK_PEAK.dawn, 2);
+    // Never over the night's paper.
+    expect(veilOf({ side: "dusk", depth: 0.5 })).toBe(0);
+    expect(veilOf({ side: "dawn", depth: 0.7 })).toBe(0);
+    expect(veilOf({ side: "dawn", depth: 1 })).toBe(0);
+    const curve = [0, 0.1, 0.2, 0.3, 0.4, 0.49].map((depth) => veilOf({ side: "dusk", depth }));
+    expect(curve).toEqual([...curve].sort((a, b) => a - b));
+  });
+
+  it("runs past midnight in a northern summer", () => {
+    // Far north in June: sunset 11:40 p.m., sunrise 3:10 a.m., 90 minutes each.
+    const north = {
+      sunrise: "2026-06-21T03:10:00-07:00",
+      sunset: "2026-06-21T23:40:00-07:00",
+      twilight: 90,
+    };
+    expect(twilightOf(at("2026-06-21T23:50:00-07:00"), TZ, north)).toEqual({
+      side: "dusk",
+      depth: 10 / 90,
+    });
+    expect(twilightOf(at("2026-06-22T00:40:00-07:00"), TZ, north)).toEqual({
+      side: "dusk",
+      depth: 60 / 90,
+    });
+    expect(moodOf(at("2026-06-22T00:40:00-07:00"), TZ, north)).toBe("night");
+    expect(twilightOf(at("2026-06-22T01:40:00-07:00"), TZ, north)).toEqual({
+      side: "dawn",
+      depth: 1,
+    });
+    expect(moodOf(at("2026-06-22T02:30:00-07:00"), TZ, north)).toBe("morning");
+  });
+
+  it("gives each side half the night when the night is shorter than two dusks", () => {
+    // Sunset 12:30 a.m., sunrise 2 a.m., 90 minutes of civil twilight each:
+    // 45 minutes each way, and night in the middle.
+    const white = {
+      sunrise: "2026-06-21T02:00:00-07:00",
+      sunset: "2026-06-21T00:30:00-07:00",
+      twilight: 90,
+    };
+    expect(twilightOf(at("2026-06-21T00:50:00-07:00"), TZ, white)).toEqual({
+      side: "dusk",
+      depth: 20 / 45,
+    });
+    expect(moodOf(at("2026-06-21T01:10:00-07:00"), TZ, white)).toBe("night");
+    expect(twilightOf(at("2026-06-21T01:20:00-07:00"), TZ, white)).toEqual({
+      side: "dawn",
+      depth: 40 / 45,
+    });
+  });
+
+  it("isn't drawn without a forecast's twilight", () => {
+    const bare = { sunrise: sun.sunrise, sunset: sun.sunset };
+    expect(twilightOf(at("2026-11-16T16:50:00-08:00"), TZ, bare)).toBeNull();
+    expect(twilightOf(at("2026-11-16T16:50:00-08:00"), TZ, null)).toBeNull();
   });
 });
 

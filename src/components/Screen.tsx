@@ -13,7 +13,7 @@ import {
 } from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
-import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
+import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -22,7 +22,10 @@ import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
+import { glowsAt } from "@/views/designs/living";
 import { DESIGNS, type Design } from "@/views/designs/registry";
+import { swapDelay } from "@/lib/turn";
+import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
 import { useVoice } from "./useVoice";
@@ -96,6 +99,7 @@ export function Screen({
   // night honest even if the forecast is gone for a while.
   const [sun, setSun] = useState(initial.weather?.today ?? null);
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
+  const twilight = twilightOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Inside the house. Each snapshot's note is decided against the last
   // one decided (before the corner narrows it for room), so a reading that
@@ -107,10 +111,19 @@ export function Screen({
     setInside(insideOf(snapshot.indoor, inside));
   }
 
+  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 2500);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home and night are a carousel (Almanac only), half a minute a piece, each turning like a page.
   // It counts from the moment home appears, so it always opens on the weather.
   const base = viewOf(page, mood);
+  // At dusk and dawn the paper turns between the two (Dusk.tsx).
+  const { paper, turning } = useTurn(mood, settled);
   const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
@@ -130,11 +143,16 @@ export function Screen({
   }) as View;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
+  // Just after a turn the old page has already sunk: the next takes the paper at once.
+  const wasTurning = useRef(false);
   useEffect(() => {
-    if (!leaving) return;
-    const t = window.setTimeout(() => setView(target), leaveMs());
+    const justTurned = wasTurning.current && !turning;
+    wasTurning.current = turning;
+    const wait = swapDelay(leaving, turning, justTurned, leaveMs());
+    if (wait === null) return;
+    const t = window.setTimeout(() => setView(target), wait);
     return () => window.clearTimeout(t);
-  }, [leaving, target]);
+  }, [leaving, target, turning]);
 
   const show = useCallback((p: Page, v?: WeatherView) => {
     pageSince.current = Date.now();
@@ -264,13 +282,6 @@ export function Screen({
     return () => window.removeEventListener("keydown", onKey);
   }, [page, show, voice, snapshot.voice]);
 
-  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setSettled(true), 2500);
-    return () => window.clearTimeout(t);
-  }, []);
-
   // ---- Protect the screen: the page drifts a few pixels, too slowly to see.
   const [drift, setDrift] = useState({ x: 0, y: 0 });
   useEffect(() => {
@@ -302,9 +313,10 @@ export function Screen({
   return (
     <div
       data-surface="tv"
-      data-mood={mood}
+      data-mood={paper}
       data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
+      data-turning={turning ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -322,7 +334,7 @@ export function Screen({
             hidden={!drawn}
             w={snapshot.weather}
             now={now}
-            mood={mood}
+            mood={paper}
             // The carousel's sky holds steady, slide to slide: the sun or moon
             // on its arc, nothing dimmed by the long fades (they take longer
             // than a slide, so following the slides would make the sky pulse).
@@ -333,10 +345,13 @@ export function Screen({
             words={slide?.kind === "weather"}
             seed={seed}
             epoch={epoch}
+            twilight={twilight}
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
-          <InkStage.Provider value={leaving}>
+          {/* At the turn, whatever is up sinks, so the paper turns empty
+              (and an asked page inks back in afterward). */}
+          <InkStage.Provider value={leaving || turning}>
             <div
               key={view}
               className="relative z-[1] h-full"
@@ -355,7 +370,19 @@ export function Screen({
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>
-        <VoiceLine state={voice.state} caption={voice.caption} />
+        {design === "almanac" ? (
+          <Dusk
+            twilight={twilight}
+            paper={paper}
+            turning={turning}
+            on={page === "home"}
+            clear={glowsAt(snapshot.weather)}
+          />
+        ) : null}
+        {/* The voice's line sinks at the turn too, and comes back after. */}
+        <InkStage.Provider value={turning}>
+          <VoiceLine state={voice.state} caption={voice.caption} />
+        </InkStage.Provider>
       </main>
       <Fps />
     </div>
