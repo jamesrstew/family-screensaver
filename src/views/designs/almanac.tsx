@@ -121,12 +121,13 @@ export function Home(props: ViewProps) {
   const next = nextUp(props);
   const w = snapshot.weather;
   const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
-  // The house's temperature, in the corner, when what's next leaves it room.
-  const inside = cornerNote(props.inside, nextLine);
+  // The two temperatures in the bottom corners, outside on the left and the
+  // house on the right, when what's next leaves them room.
+  const { outside, inside } = corners(w ? w.now.temp : null, props.inside, nextLine);
   const asks = (item: NotebookItem) => item.kind === "question";
-  // The foot is kept whenever the house has been read, note or not, so the
-  // reading coming and going never resizes or changes the passage.
-  const foot = Boolean(next || snapshot.indoor);
+  // The foot is kept whenever there's a sky or the house has been read, note
+  // or not, so a reading coming and going never resizes or changes the passage.
+  const foot = Boolean(next || w || snapshot.indoor);
   const boxFor = (item: NotebookItem) =>
     heroBox({ sky: Boolean(w), next: foot, ask: asks(item), item });
   const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
@@ -139,13 +140,9 @@ export function Home(props: ViewProps) {
     <div className="flex h-full flex-col">
       {w ? (
         <SkyWords w={w} now={now} tz={tz}>
-          {/* The most-glanced fact on the screen: the hour in ink, the temperature softer. */}
+          {/* The most-glanced fact on the screen: the hour, in ink. */}
           <p className="text-[4.6rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
-            <span className="mx-[1rem] text-ink-faint">·</span>
-            <span className="text-ink-soft">
-              <Deg v={w.now.temp} />
-            </span>
           </p>
         </SkyWords>
       ) : (
@@ -175,7 +172,8 @@ export function Home(props: ViewProps) {
         ) : null}
       </Ink>
       {foot ? (
-        // The foot of the page: what's next in the middle, the house in the corner.
+        // The foot of the page: outside in the left corner, what's next in the
+        // middle, the house in the right corner.
         <div className="relative pt-[1rem] text-center">
           <Ink order={2} mode="seep">
             <p className="text-[2.6rem] text-ink-soft">
@@ -189,7 +187,23 @@ export function Home(props: ViewProps) {
               )}
             </p>
           </Ink>
-          {/* Always on the page, so the note sinks away rather than vanishing. */}
+          {/* Always on the page, so the notes sink away rather than vanish. */}
+          <Ink
+            k={outside === null ? "none" : "outside"}
+            order={3}
+            mode="seep"
+            className="absolute bottom-[0.7rem] left-0 isolate"
+          >
+            {outside !== null ? (
+              <>
+                {/* Its own small clearing of paper, so no river runs through it. */}
+                <div className="sky-word-clearing corner-clearing" aria-hidden />
+                <Corner word="outside">
+                  <Deg v={outside} />
+                </Corner>
+              </>
+            ) : null}
+          </Ink>
           <Ink
             k={inside?.kind ?? "none"}
             order={3}
@@ -198,9 +212,17 @@ export function Home(props: ViewProps) {
           >
             {inside ? (
               <>
-                {/* Its own small clearing of paper, so no river runs through it. */}
                 <div className="sky-word-clearing corner-clearing" aria-hidden />
-                <Inside inside={inside} />
+                <Corner word="inside">
+                  {inside.kind === "one" ? (
+                    <Deg v={inside.temp} />
+                  ) : (
+                    <>
+                      <Deg v={inside.low} /> <span className="text-ink-faint italic">to</span>{" "}
+                      <Deg v={inside.high} />
+                    </>
+                  )}
+                </Corner>
               </>
             ) : null}
           </Ink>
@@ -217,42 +239,48 @@ const NEXT = 2.6;
 const CORNER = 2;
 const AIR = 3;
 
+/** "50° outside": the words as written, for measuring. */
+const outsideText = (t: number) => `${t}° outside`;
+
 /**
- * The note, if the corner has room for it beside what's next (centered on
- * the same line): the range, else the one number, else nothing.
+ * The corner notes, if they have room beside what's next (centered on the
+ * same line, so both corners have the same room). The house's range narrows
+ * to its one number first; then the two give way together, so the foot stays
+ * balanced rather than leaning to one side. The outside temperature is never
+ * gone for long: the weather comes round on its own turn. With no reading
+ * from the house, outside stands alone; with no sky, inside does.
  */
-export function cornerNote(
+export function corners(
+  outside: number | null,
   inside: InsideNote | null | undefined,
   nextLine: string,
-): InsideNote | null {
-  if (!inside) return null;
+): { outside: number | null; inside: InsideNote | null } {
   const room = FOOT_W / 2 - (widthEm(nextLine) * NEXT) / 2 - AIR;
-  const one = { kind: "one", temp: inside.temp } as const;
-  return [inside, one].find((i) => widthEm(insideText(i)) * CORNER <= room) ?? null;
+  const fits = (words: string) => widthEm(words) * CORNER <= room;
+  const one = inside ? ({ kind: "one", temp: inside.temp } as const) : null;
+  const house = inside && one ? [inside, one].find((i) => fits(insideText(i))) : undefined;
+  const sky = outside !== null && fits(outsideText(outside)) ? outside : null;
+  // Both, or neither, when both have something to say.
+  if (inside && outside !== null && (!house || sky === null)) {
+    return { outside: null, inside: null };
+  }
+  return { outside: sky, inside: house ?? null };
 }
 
 /**
- * Inside the house, a note in the corner, written as the ends of the day are
- * at the horizon: "68° inside", or "66° to 71° inside" when the rooms really
- * differ. Part of the paper's furniture; it stays put while the sun moves,
- * and comes and goes with the passages. A new number just changes; a new
- * form re-inks.
+ * A temperature in a bottom corner, written as the ends of the day are at the
+ * horizon: the number in soft ink, the word in faint italic ("50° outside",
+ * "68° inside", "66° to 71° inside"). Part of the paper's furniture: they stay
+ * put while the sun moves, and come and go with the passages. A new number
+ * just changes; a new form re-inks.
  */
-function Inside({ inside }: { inside: InsideNote }) {
+function Corner({ word, children }: { word: string; children: ReactNode }) {
   return (
     <p
       className="leading-none whitespace-nowrap text-ink-soft"
       style={{ fontSize: `${CORNER}rem` }}
     >
-      {inside.kind === "one" ? (
-        <Deg v={inside.temp} />
-      ) : (
-        <>
-          <Deg v={inside.low} /> <span className="text-ink-faint italic">to</span>{" "}
-          <Deg v={inside.high} />
-        </>
-      )}{" "}
-      <span className="text-ink-faint italic">inside</span>
+      {children} <span className="text-ink-faint italic">{word}</span>
     </p>
   );
 }
