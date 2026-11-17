@@ -62,7 +62,7 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
     // Snowfall comes in inches of snow; precipitation in inches of water.
     precipitation_unit: "inch",
     wind_speed_unit: "mph",
-    // Visibility (meters) helps tell haze.
+    // Visibility helps tell haze (it comes in feet; shape() keeps meters).
     current: "temperature_2m,weather_code,is_day,visibility",
     hourly:
       "temperature_2m,precipitation_probability,weather_code,is_day," +
@@ -186,7 +186,9 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
       label: describe(d.current.weather_code, d.current.is_day === 1),
       code: d.current.weather_code,
       isDay: d.current.is_day === 1,
-      visibility: r0(d.current.visibility),
+      // Open-Meteo sends visibility in feet with Fahrenheit; we keep meters.
+      visibility:
+        d.current.visibility == null ? undefined : Math.round(d.current.visibility * 0.3048),
     },
     today: {
       high: days[0].high,

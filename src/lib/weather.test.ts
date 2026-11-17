@@ -118,3 +118,17 @@ describe("shape, with yesterday", () => {
     expect(w.yesterday?.hourly.snow[20]).toBe(0.7);
   });
 });
+
+describe("shape, visibility", () => {
+  it("turns Open-Meteo's feet into meters", () => {
+    // As Open-Meteo answers with temperature_unit=fahrenheit: current_units.visibility is "ft".
+    const w = shape(
+      {
+        ...base,
+        current: { temperature_2m: 30.4, weather_code: 0, is_day: 1, visibility: 26246.7 },
+      },
+      new Date("2026-11-18T10:20:00Z"),
+    );
+    expect(w.now.visibility).toBe(8000);
+  });
+});
