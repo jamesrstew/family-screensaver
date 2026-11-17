@@ -3,6 +3,7 @@ import { LAND_H, LAND_TOP, landOf } from "@/lib/land";
 import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import type { Mood } from "@/lib/time";
+import { smokeOf as smokeOfNow, type Smoke } from "@/lib/smoke";
 import type { Weather } from "@/lib/types";
 import { CLOUD, CLOUD_BOX, Cloud, Moon, Star, moonAge } from "../Engraving";
 import { ARC, arcAt, placeOf, type Place } from "./arc";
@@ -20,7 +21,9 @@ import { ARC, arcAt, placeOf, type Place } from "./arc";
  * ends the sun swelling and sinking behind long horizontal strokes.
  *
  * The sky tells the truth: under overcast or rain there is no blazing sun
- * (a dot on the arc keeps the hour), and no stars through snow.
+ * (a dot on the arc keeps the hour), and no stars through snow. Under smoke
+ * or haze the sun is a dim veiled disc without rays, long hazy strokes lie
+ * across the low sky, the land is softened, and the stars go out.
  *
  * Performance is the design (the TV's GPU is weak): every shape is drawn once,
  * and only whole layers move or fade (CSS transform and opacity, on the
@@ -92,11 +95,19 @@ export function skyOf(code: number | null): SkyState {
   };
 }
 
-/** How the sun or moon shows through the cover: whole, softened, or only a dot on the arc. */
-export const bodyLook = (code: number | null, newMoon = false) => {
+/** Smoke and haze over the family's sky now (`lib/smoke.ts` says how much). */
+export type { Smoke };
+export const smokeOf = (w: Weather | null): Smoke => smokeOfNow(w?.now ?? null);
+
+/**
+ * How the sun or moon shows through the cover: whole, softened, veiled by
+ * smoke (a dim disc, no rays), or only a dot on the arc.
+ */
+export const bodyLook = (code: number | null, newMoon = false, smoke: Smoke = "none") => {
   const { cover, fall, fog } = skyOf(code);
   if (newMoon || fall || fog || cover === "over") return "dot" as const;
-  return cover === "partly" ? ("soft" as const) : ("full" as const);
+  if (smoke === "smoke" || smoke === "thick") return "veiled" as const;
+  return cover === "partly" || smoke === "haze" ? ("soft" as const) : ("full" as const);
 };
 
 /** Within a day and a half of new moon there's no moon to draw: only the dot. */
@@ -107,18 +118,18 @@ export function nearNewMoon(now: Date): boolean {
 
 /** The look of whatever rides the arc right now. */
 export const lookOf = (w: Weather, place: Place, now: Date) =>
-  bodyLook(w.now.code, place.body.body === "moon" && nearNewMoon(now));
+  bodyLook(w.now.code, place.body.body === "moon" && nearNewMoon(now), smokeOf(w));
 
 /**
  * How many stars: all on a clear or fair night, the brightest few through
  * partly cloudy skies, none through overcast, fog, rain, or snow, and none
  * when there's no report at all (a quiet sky).
  */
-export function starsOf(code: number | null): "all" | "few" | "none" {
+export function starsOf(code: number | null, smoke: Smoke = "none"): "all" | "few" | "none" {
   if (code === null) return "none";
   const { cover, fall, fog } = skyOf(code);
-  if (fall || fog || cover === "over") return "none";
-  return cover === "partly" ? "few" : "all";
+  if (fall || fog || cover === "over" || smoke === "smoke" || smoke === "thick") return "none";
+  return cover === "partly" || smoke === "haze" ? "few" : "all";
 }
 
 export function LivingSky({
@@ -132,13 +143,15 @@ export function LivingSky({
   hidden = false,
 }: LivingSkyProps) {
   const sky = skyOf(w ? w.now.code : null);
+  const smoke = smokeOf(w);
+  const smoky = smoke !== "none";
   const place = w ? placeOf(w, now) : null;
   const look = w && place ? lookOf(w, place, now) : bodyLook(null);
   const night = mood === "night";
   const sun = place?.body.body === "sun";
   const low = sun ? place!.low : 0;
   const dawn = sun && place!.body.t < 0.5 && low > 0;
-  const starsLevel = starsOf(w ? w.now.code : null);
+  const starsLevel = starsOf(w ? w.now.code : null, smoke);
   const day = !night;
 
   return (
@@ -156,7 +169,13 @@ export function LivingSky({
       <Arc place={place} show={arc && Boolean(place)} />
       {/* Then everything alive, back to front. */}
       <Still.Land seed={seed} />
-      <Still.Shadows seed={seed} epoch={epoch} show={day && !sky.fall && sky.cover !== "over"} />
+      <Still.Shadows
+        seed={seed}
+        epoch={epoch}
+        show={day && !sky.fall && sky.cover !== "over" && !smoky}
+      />
+      {/* Smoke softens the land: a veil of paper over it, painted once. */}
+      <Layer show={smoky} className="sky-fill sky-smoke-veil" data-smoke={smoke} />
       <Light place={place} show={arc && night && look !== "dot"} />
       <Still.Stars seed={seed} show={night} level={starsLevel} part="twinkle" />
       <Still.ShootingStar seed={seed} epoch={epoch} show={night && starsLevel === "all"} />
@@ -164,7 +183,8 @@ export function LivingSky({
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
         <Streaks place={place} show={arc && low > 0 && look !== "dot"} />
       </Above>
-      <Still.Wisps seed={seed} epoch={epoch} count={sky.wisps} />
+      {/* Smoke hides the high wisps. */}
+      <Still.Wisps seed={seed} epoch={epoch} count={smoky && smoke !== "haze" ? 0 : sky.wisps} />
       <Still.Clouds
         seed={seed}
         epoch={epoch}
@@ -180,7 +200,12 @@ export function LivingSky({
         flash={day && sky.fall === "storms"}
         depth="near"
       />
-      <Still.Birds seed={seed} epoch={epoch} show={day && !sky.fall && sky.cover !== "over"} />
+      <Still.Birds
+        seed={seed}
+        epoch={epoch}
+        show={day && !sky.fall && sky.cover !== "over" && smoke !== "thick"}
+      />
+      <Still.Haze seed={seed} smoke={smoke} />
       <Still.Mist seed={seed} fog={sky.fog} dawn={dawn && !sky.fall} />
       <Still.Fall kind={sky.fall} hard={sky.hard} quiet={quiet} night={night} />
       {/* A quiet clearing of paper behind the words, painted once. */}
@@ -197,14 +222,16 @@ function Layer({
   className = "",
   style,
   children,
+  "data-smoke": level,
 }: {
   show: boolean;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
+  "data-smoke"?: Smoke;
 }) {
   return (
-    <div className={`sky-layer ${className}`} data-on={on(show)} style={style}>
+    <div className={`sky-layer ${className}`} data-on={on(show)} data-smoke={level} style={style}>
       {children}
     </div>
   );
@@ -348,7 +375,7 @@ function Body({
   show,
 }: {
   place: Place | null;
-  look: "full" | "soft" | "dot";
+  look: "full" | "soft" | "dot" | "veiled";
   now: Date;
   show: boolean;
 }) {
@@ -365,7 +392,11 @@ function Body({
       {look === "dot" ? (
         <div className="sky-dot" style={{ width: rem(size), height: rem(size) }} />
       ) : moon ? (
-        <MoonBody size={size} now={now} ring={look === "soft" || look === "full"} />
+        <div className={look === "veiled" ? "sky-veiled" : undefined}>
+          <MoonBody size={size} now={now} ring={look === "soft" || look === "full"} />
+        </div>
+      ) : look === "veiled" ? (
+        <VeiledSun size={size} />
       ) : (
         <Sun size={size} soft={look === "soft"} />
       )}
@@ -444,6 +475,35 @@ function Sun({ size, soft }: { size: number; soft: boolean }) {
             />
           );
         })}
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * The sun through smoke: no rays, no halo, only a dim disc, its face crossed
+ * by fine horizontal strokes, the way an engraver veils a body in haze.
+ */
+function VeiledSun({ size }: { size: number }) {
+  return (
+    <div className="relative" style={{ width: rem(size), height: rem(size) }}>
+      <svg
+        viewBox="0 0 100 100"
+        className="sky-fill sky-veiled text-ink-soft"
+        fill="none"
+        stroke="currentColor"
+      >
+        <defs>
+          <clipPath id="sky-veil-disc">
+            <circle cx={50} cy={50} r={19} />
+          </clipPath>
+        </defs>
+        <circle cx={50} cy={50} r={20} strokeWidth={0.9} fill="var(--paper)" />
+        <g clipPath="url(#sky-veil-disc)" strokeWidth={0.45}>
+          {Array.from({ length: 13 }, (_, i) => (
+            <line key={i} x1={28} y1={32 + i * 3} x2={72} y2={32 + i * 3} />
+          ))}
+        </g>
       </svg>
     </div>
   );
@@ -1019,6 +1079,78 @@ function Mist({ seed, fog, dawn }: { seed: number; fog: boolean; dawn: boolean }
   );
 }
 
+/* ---------------------------------------------------------------- smoke and haze */
+
+/**
+ * Smoke lies low, as an engraver tones a sky: long, nearly unbroken fine
+ * lines, packed close at the horizon and opening out as they rise, so they
+ * read as a gray band rather than as lines; drifting so slowly they hardly
+ * seem to move. Haze is a lighter band; smoke carries a few lines over the
+ * far land too, and thick smoke is darker.
+ */
+function Haze({ seed, smoke }: { seed: number; smoke: Smoke }) {
+  const r = rng(seed ^ 0x2545f491);
+  const bands = [
+    { top: ARC.cy - 10.5, h: 10, lines: 11, from: "haze" },
+    { top: ARC.cy + 1.2, h: 4, lines: 3, from: "smoke" },
+  ] as const;
+  const rank: Record<Smoke, number> = { none: 0, haze: 1, smoke: 2, thick: 3 };
+  return (
+    <>
+      {bands.map((band, b) => {
+        const H = band.h * 10;
+        const lines = Array.from({ length: band.lines }, (_, k) => {
+          // Closest at the bottom of the band (the horizon), spreading upward.
+          const t = (k + 0.5) / band.lines;
+          const yy = H * (1 - t ** 2.2) + (r() - 0.5) * 1.5;
+          let d = `M0 ${yy.toFixed(1)}`;
+          for (let x = 0; x < 1700; x += 340) d += ` q170 ${((r() - 0.5) * 2.5).toFixed(1)} 340 0`;
+          return {
+            d,
+            dash: `${(900 + r() * 900).toFixed(0)} ${(30 + r() * 90).toFixed(0)}`,
+            w: (0.45 + (1 - t) * 0.45).toFixed(2),
+          };
+        });
+        return (
+          <Layer
+            key={b}
+            show={rank[smoke] >= rank[band.from]}
+            className="sky-haze-band"
+            data-smoke={smoke}
+            style={{ top: rem(band.top) }}
+          >
+            <div
+              className="sky-haze"
+              style={{
+                animationDuration: `${PRIMES[20 + b] * 2}s`,
+                animationDelay: `${(-r() * 150).toFixed(0)}s`,
+              }}
+            >
+              <svg
+                viewBox={`0 0 1700 ${H}`}
+                style={{ width: "170rem", height: rem(band.h) }}
+                fill="none"
+                stroke="currentColor"
+                className="text-ink-faint"
+              >
+                {lines.map((l, i) => (
+                  <path
+                    key={i}
+                    d={l.d}
+                    strokeWidth={l.w}
+                    strokeDasharray={l.dash}
+                    strokeLinecap="round"
+                  />
+                ))}
+              </svg>
+            </div>
+          </Layer>
+        );
+      })}
+    </>
+  );
+}
+
 /* ---------------------------------------------------------------- rain and snow */
 
 // Each layer is one sheet-wide tile of marks, repeated only downward and
@@ -1254,5 +1386,6 @@ const Still = {
   Stratus: memo(Stratus),
   Birds: memo(Birds),
   Mist: memo(Mist),
+  Haze: memo(Haze),
   Fall: memo(Fall),
 };

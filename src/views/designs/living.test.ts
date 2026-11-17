@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Weather } from "@/lib/types";
 import { ARC, placeOf, skyNow } from "./arc";
 import { ClockFace } from "./common";
-import { bodyLook, nearNewMoon, skyOf, starsOf } from "./living";
+import { bodyLook, nearNewMoon, skyOf, smokeOf, starsOf } from "./living";
 
 const TZ = "America/Los_Angeles";
 
@@ -117,5 +117,33 @@ describe("ClockFace", () => {
   it("says noon and midnight in words", () => {
     expect(face("2026-11-16T20:00:00Z")).toBe("noon");
     expect(face("2026-11-17T08:00:00Z")).toBe("midnight");
+  });
+});
+
+describe("smokeOf", () => {
+  const sky = (now: Partial<Weather["now"]>, code = 0): Weather => ({
+    ...day(code),
+    now: { ...day(code).now, ...now },
+  });
+  it("reads smoke from the air", () => {
+    expect(smokeOf(null)).toBe("none");
+    expect(smokeOf(sky({ aqi: 30, pm: 6, visibility: 40_000 }))).toBe("none");
+    expect(smokeOf(sky({ aqi: 70, pm: 18 }))).toBe("haze");
+    expect(smokeOf(sky({ pm: 40 }))).toBe("smoke");
+    // Ozone is invisible: a high-ozone day is clear.
+    expect(smokeOf(sky({ aqi: 140, ozone: 140, pm: 5 }))).toBe("none");
+    expect(smokeOf(sky({ pm: 60 }))).toBe("thick");
+  });
+  it("calls a short view on a dry day haze, but not fog or rain", () => {
+    expect(smokeOf(sky({ visibility: 5000 }))).toBe("haze");
+    expect(smokeOf(sky({ visibility: 5000 }, 45))).toBe("none");
+    expect(smokeOf(sky({ visibility: 5000 }, 61))).toBe("none");
+  });
+  it("veils the sun and hides the stars", () => {
+    expect(bodyLook(0, false, "smoke")).toBe("veiled");
+    expect(bodyLook(0, false, "haze")).toBe("soft");
+    expect(bodyLook(3, false, "thick")).toBe("dot");
+    expect(starsOf(0, "haze")).toBe("few");
+    expect(starsOf(0, "smoke")).toBe("none");
   });
 });

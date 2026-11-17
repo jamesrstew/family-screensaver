@@ -51,6 +51,26 @@ export const KIND_LABEL: Record<NotebookItem["kind"], string> = {
   question: "A question for the table",
 };
 
+/**
+ * The night's one quiet piece (§4): the afternoon's question, an idea, or a
+ * quote, in dim ink, with a quote's author under it.
+ */
+export function NightPiece({ item, className }: { item: NotebookItem; className: string }) {
+  const text = item.kind === "quote" ? `“${item.text}”` : item.text;
+  return (
+    <>
+      <p
+        className={`whitespace-pre-line text-ink-soft ${item.kind === "idea" ? "" : "italic"} ${className}`}
+      >
+        {text}
+      </p>
+      {item.kind === "quote" && item.author ? (
+        <p className="mt-[1rem] text-[1.85rem] text-ink-faint">{item.author}</p>
+      ) : null}
+    </>
+  );
+}
+
 /** Paragraphs, with quotes set in italic and hung punctuation. */
 export function Passage({
   item,

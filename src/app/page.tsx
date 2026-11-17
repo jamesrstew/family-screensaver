@@ -25,7 +25,8 @@ export default function Home({ searchParams }: PageProps<"/">) {
 
 async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
   const params = await searchParams;
-  if (!(await isFamily())) return <Locked next="/" wrong={params.nope === "1"} />;
+  if (!(await isFamily()))
+    return <Locked next="/" wrong={params.nope === "1"} wait={params.wait === "1"} />;
   const asked = String(params.page ?? "");
   const page: Page = PAGES.includes(asked as Page) ? (asked as Page) : "home";
   // Almanac, tentatively chosen; ?design=a|b|c|d still shows the other directions.

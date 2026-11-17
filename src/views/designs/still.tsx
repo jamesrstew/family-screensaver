@@ -2,7 +2,7 @@ import { Ink } from "@/components/Ink";
 import { forecastLine } from "@/lib/forecast";
 import { clockFace, clock } from "@/lib/time";
 import { Engraving } from "../Engraving";
-import type { ViewProps } from "../parts";
+import { NightPiece, type ViewProps } from "../parts";
 import {
   Credit,
   Words,
@@ -30,7 +30,7 @@ const LADDER: Array<[number, string]> = [
 ];
 
 export function Home(props: ViewProps) {
-  const { snapshot, now, mood } = props;
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const hero = heroOf(props);
   const next = nextUp(props);
@@ -46,7 +46,7 @@ export function Home(props: ViewProps) {
       >
         {hero ? (
           <article className="max-w-[82rem] text-center">
-            {question && mood === "evening" ? (
+            {question ? (
               <p className="spaced mb-[2.4rem] text-[1.35rem] text-ink-faint">For the table</p>
             ) : null}
             <Words item={hero} className={`${sized(hero.text, LADDER)} text-ink`} />
@@ -96,7 +96,8 @@ export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf({ ...props, mood: "evening" });
+  // One quiet piece (§4): the question until 6 p.m., then an idea or a quote.
+  const piece = heroOf(props);
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <Ink order={0}>
@@ -104,9 +105,9 @@ export function Night(props: ViewProps) {
           {clockFace(now, tz)}
         </p>
       </Ink>
-      {question?.kind === "question" ? (
+      {piece ? (
         <Ink order={1} className="mt-[3.4rem] max-w-[62rem]">
-          <p className="text-[2.3rem] leading-[1.35] text-ink-soft italic">{question.text}</p>
+          <NightPiece item={piece} className="text-[2.3rem] leading-[1.35]" />
         </Ink>
       ) : null}
       {tomorrow ? (

@@ -1,6 +1,7 @@
 // What the voice can do, answered from the snapshot already on hand.
 // Times are spelled out so the model never does time-zone math.
 
+import { WEATHER_VIEWS, type WeatherView } from "./carousel";
 import { forecastLine } from "./forecast";
 import { freshIndoor } from "./indoor";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
@@ -9,7 +10,7 @@ import { PAGES, type Snapshot, type Page } from "./types";
 export type ToolContext = {
   snapshot: Snapshot;
   now: Date;
-  show: (page: Page) => void | Promise<void>;
+  show: (page: Page, view?: WeatherView) => void | Promise<void>;
   hangUp: () => void;
 };
 
@@ -25,7 +26,8 @@ export async function runTool(
     case "show_page": {
       const page = String(args.page) as Page;
       if (!PAGES.includes(page)) return { ok: false, error: "No such page" };
-      await ctx.show(page);
+      const view = WEATHER_VIEWS.find((v) => v === args.view);
+      await ctx.show(page, page === "weather" ? view : undefined);
       return { ok: true };
     }
     case "read_weather": {
@@ -47,7 +49,7 @@ export async function runTool(
         inside,
         summary: forecastLine(w, now, tz),
         now: `${w.now.temp}°F, ${w.now.label}`,
-        days: w.days.map((d, i) => ({
+        days: w.days.slice(0, 7).map((d, i) => ({
           day: i === 0 ? "today" : weekdayOf(d.date),
           high: d.high,
           low: d.low,

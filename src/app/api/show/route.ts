@@ -14,6 +14,7 @@ export async function GET() {
 
 // The phone, Siri, Alexa, or the voice: show this page.
 //   curl -X POST -H "Authorization: Bearer $FAMILY_KEY" -d '{"page":"weather"}' …/api/show
+// The weather's views have names of their own: {"page":"hourly"}, {"page":"seven-day"}.
 export async function POST(request: Request) {
   if (!(await isFamily())) return new Response(null, { status: 401 });
   const body = ShowBody.safeParse(await request.json().catch(() => null));
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
   const ask: ShowRequest = {
     seq: Date.now(),
     page: body.data.page,
+    ...(body.data.view ? { view: body.data.view } : {}),
     at: new Date().toISOString(),
   };
   await store.set(KEYS.show, ask);

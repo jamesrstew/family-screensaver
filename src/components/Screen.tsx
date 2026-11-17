@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SHOW_TTL_MS } from "@/lib/show";
-import { WEATHER_MS, slideFromKey, slideKey, slideOf } from "@/lib/carousel";
+import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
+import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
@@ -25,8 +25,9 @@ import { useVoice } from "./useVoice";
  * Everything here is quiet: nothing on screen moves unless something changed.
  */
 
-// A page, the night page, or one piece of home's carousel ("home:passage-12").
-type View = Page | "night" | `home:${string}`;
+// A page, the night page, one piece of home's carousel ("home:passage-12"),
+// or one view of the weather ("weather:hours").
+type View = Exclude<Page, "weather"> | "night" | `home:${string}` | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
 const HOLD_MS: Record<Page, number> = {
@@ -58,7 +59,7 @@ function clockNow(): number {
   return Date.now() + clockOffset;
 }
 
-const viewOf = (page: Page, mood: Mood): View =>
+const viewOf = (page: Page, mood: Mood): Page | "night" =>
   page === "home" && mood === "night" ? "night" : page;
 
 export function Screen({
@@ -103,9 +104,15 @@ export function Screen({
     if (base === "home") setHomeSince(now.getTime() - (lastBase === "weather" ? WEATHER_MS : 0));
   }
   const carousel = base === "home" && design === "almanac";
-  const target: View = carousel
-    ? `home:${slideKey(slideOf(now, homeSince, Boolean(snapshot.weather)))}`
-    : base;
+  // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
+  const [view0, setView0] = useState<WeatherView | null>(null);
+  const fromUrl = useAsked();
+  const target = targetOf({
+    base,
+    slide: carousel ? slideKey(slideOf(now, homeSince, Boolean(snapshot.weather))) : null,
+    asked: view0,
+    fromUrl,
+  }) as View;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {
@@ -114,9 +121,10 @@ export function Screen({
     return () => window.clearTimeout(t);
   }, [leaving, target]);
 
-  const show = useCallback((p: Page) => {
+  const show = useCallback((p: Page, v?: WeatherView) => {
     pageSince.current = Date.now();
     setPage(p);
+    setView0(viewAsked(p, v));
   }, []);
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
@@ -186,7 +194,7 @@ export function Screen({
         if (!("page" in ask) || ask.seq === known) return;
         // Only a recent request counts (a TV waking up shouldn't obey
         // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page);
+        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view);
       } catch {
         // Try again next time.
       }
@@ -257,12 +265,11 @@ export function Screen({
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
 
-  const asked = useAsked();
+  const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
   const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn =
-    kit && (view === "home" || slide || view === "night" || view === "weather") ? kit : null;
+  const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
   return (
     <div
       data-surface="tv"
@@ -288,10 +295,7 @@ export function Screen({
             now={now}
             mood={mood}
             arc={view === "home" || view === "night" || slide?.kind === "passage"}
-            quiet={
-              (slide?.kind === "weather" ? slide.view : view === "weather" ? asked : "now") !==
-              "now"
-            }
+            quiet={(slide?.kind === "weather" ? slide.view : (asked ?? "now")) !== "now"}
             seed={seed}
             epoch={epoch}
           />
@@ -303,8 +307,8 @@ export function Screen({
               {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
-              {view === "weather" &&
-                (drawn ? <drawn.Weather {...props} /> : <WeatherPage {...props} />)}
+              {asked &&
+                (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
               {view === "week" && <WeekPage {...props} />}
               {view === "notebook" && <NotebookPage {...props} />}
             </div>

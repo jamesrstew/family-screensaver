@@ -10,7 +10,6 @@ import {
   Credit,
   Words,
   firstTomorrow,
-  heroOf,
   nextUp,
   nextWords,
   fitStyle,
@@ -76,10 +75,12 @@ function SkyWords({
           ? { left: r(p.x + radius), top: r(beside), transform: "translateY(-50%)" }
           : { right: r(120 - p.x + radius), top: r(beside), transform: "translateY(-50%)" };
   const low = p.low > 0 ? "end" : p.y > 12 ? "low" : "high";
-  // The ends of the arc: when the sky began, when it ends (hidden while the body sits on one).
+  // The ends of the arc: when the sky began (until halfway, and not while the
+  // body sits on it), and when it ends, which is always worth knowing: the body
+  // rides above the horizon and the words sit below it.
   const ends: Array<["left" | "right", Date, string, boolean]> = [
-    ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16],
-    ["right", sky.to, sky.body === "sun" ? "sunset" : "sunrise", sky.t < 0.84],
+    ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16 && sky.t < 0.5],
+    ["right", sky.to, sky.body === "sun" ? "sunset" : "sunrise", true],
   ];
   return (
     <div className="relative -mx-[5.5rem] -mt-[3.25rem] h-[31rem] shrink-0">
@@ -115,14 +116,14 @@ function SkyWords({
 }
 
 export function Home(props: ViewProps) {
-  const { snapshot, now, mood } = props;
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const next = nextUp(props);
   const w = snapshot.weather;
   const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
   // The house's temperature, in the corner, when what's next leaves it room.
   const inside = cornerNote(props.inside, nextLine);
-  const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
+  const asks = (item: NotebookItem) => item.kind === "question";
   // The foot is kept whenever the house has been read, note or not, so the
   // reading coming and going never resizes or changes the passage.
   const foot = Boolean(next || snapshot.indoor);
@@ -261,14 +262,16 @@ export function Night(props: ViewProps) {
   const tz = snapshot.timeZone;
   const w = snapshot.weather;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf({ ...props, mood: "evening" });
-  // The question to sleep on, as large as the dark page allows; if it can't
-  // fit at all, the page stays nearly empty, as night should be.
-  const qBox = { w: 100, h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - 3.5 };
-  const qFit =
-    question?.kind === "question"
-      ? fitType(question.text, qBox, { italic: true, max: 9, min: 3.6 })
-      : null;
+  // The night's one piece (the question for the table, if it's still the
+  // afternoon's hours; otherwise an idea or a quote), as large as the dark page
+  // allows; if none fits, the page stays nearly empty, as night should be.
+  const box = (item: NotebookItem) => ({
+    w: 100,
+    h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - (item.author ? 6.3 : 0) - 3.5,
+  });
+  const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 9, min: 3.6 });
+  const piece = heroFitting(props, (i) => fitType(i.text, box(i), style(i)).fits);
+  const fit = piece ? fitType(piece.text, box(piece), style(piece)) : null;
   return (
     <div className="flex h-full flex-col">
       {/* The house's temperature isn't one of night's few things (DOCTRINE §4). */}
@@ -285,15 +288,20 @@ export function Night(props: ViewProps) {
           </p>
         </Ink>
       )}
-      {question && qFit?.fits ? (
-        <Ink order={1} className="flex flex-1 items-center justify-center text-center">
+      {piece && fit?.fits ? (
+        <Ink
+          k={piece.id}
+          order={1}
+          className="flex flex-1 flex-col items-center justify-center text-center"
+        >
           {/* In soft gray ink. */}
           <p
-            className="max-w-[100rem] text-balance text-ink-soft italic"
-            style={{ fontSize: `${qFit.size}rem`, lineHeight: qFit.lh }}
+            className={`max-w-[100rem] text-balance text-ink-soft ${piece.kind === "idea" ? "" : "italic"}`}
+            style={{ fontSize: `${fit.size}rem`, lineHeight: fit.lh }}
           >
-            {question.text}
+            {piece.text}
           </p>
+          <Credit item={piece} className="mt-[2.4rem] text-[2.6rem] text-ink-faint" />
         </Ink>
       ) : (
         <div className="flex-1" />

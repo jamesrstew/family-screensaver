@@ -18,7 +18,11 @@ const res = await fetch(`${site}/api/notebook`, {
 });
 const out = await res.text();
 if (!res.ok) {
-  console.error(`Upload failed (${res.status}): ${out}`);
+  console.error(
+    res.status === 401
+      ? "Upload refused (401): a wrong key, or too many tries from here this hour."
+      : `Upload failed (${res.status}): ${out}`,
+  );
   process.exit(1);
 }
 console.log(`Pushed ${JSON.parse(out).items} notebook items to ${site}.`);

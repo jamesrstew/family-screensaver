@@ -1,6 +1,6 @@
 # Stewart Family App
 
-A quiet screen for the Stewart family's living room. Cream paper where the ink moves, like the enchanted pages in Harry Potter: one idea, quote, or question at a time, with the hour, the sky, and what's next written small in the corners. At dinner it asks the family a question. At night it goes dark. Ask it (by voice, phone, Siri, or the TV remote) and it turns the page, then finds its own way home.
+A quiet screen for the Stewart family's living room. Cream paper where the ink moves, like the enchanted pages in Harry Potter: one idea, quote, or question at a time, with the hour, the sky, and what's next written small in the corners. In the afternoon it asks the family a question for the table. At night it goes dark. Ask it (by voice, phone, Siri, or the TV remote) and it turns the page, then finds its own way home.
 
 It is built to serve the family, never to hold their attention. Read [DOCTRINE.md](DOCTRINE.md) before changing anything, and [ROADMAP.md](ROADMAP.md) for what's next.
 
@@ -15,7 +15,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 ## Set up
 
 1. `pnpm install`, then `cp .env.example .env.local` and fill it in. `pnpm dev` and open http://localhost:3000.
-2. **Family key:** `pnpm key` prints four words and a number. Set `FAMILY_KEY` in Vercel. Pair a device by typing the key on the locked screen, or open `https://<site>/pair?key=<key>&next=/remote` on a phone.
+2. **Family key:** `pnpm key` prints four words and a number. Set `FAMILY_KEY` in Vercel. Pair a device by typing the key on its locked screen (the TV, or `/remote` on a phone). Keys are never put in links.
 3. **Store:** add Upstash Redis from the Vercel Marketplace (Storage → Upstash → connect to this project), then `FAMILY_KEY=… pnpm notebook:push` (uploads through `PUT /api/notebook`; the store's own keys stay inside Vercel).
 4. **Calendar:** in Google Calendar, open the family calendar's settings → _Integrate calendar_ → _Secret address in iCal format_. Put it in `CALENDAR_ICS_URLS` (comma-separate several). Treat it like a password.
 5. **Voice:** set `OPENAI_API_KEY`.
@@ -23,7 +23,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 ### Siri
 
-Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`.
+Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
 
 ### Nest thermostats
 

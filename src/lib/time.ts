@@ -82,6 +82,15 @@ export function moodOf(
   return "evening";
 }
 
+/**
+ * The question for the table is asked from 2 to 6 p.m. by the family's
+ * clock, whatever the light; the rest of the day belongs to ideas and quotes.
+ */
+export function asksQuestion(date: Date, timeZone: string): boolean {
+  const { hour } = parts(date, timeZone);
+  return hour >= 14 && hour < 18;
+}
+
 /** AP style: "7 a.m.", "7:30 p.m.", "noon", "midnight". */
 export function clock(date: Date, timeZone: string): string {
   const { hour, minute } = parts(date, timeZone);

@@ -555,6 +555,54 @@
   }
 }
 
+/* ---- Smoke and haze: the land softened under a veil of paper, long level
+   strokes across the low sky, the sun a dim disc. Painted once; the bands
+   only drift. Thicker smoke, a heavier veil. */
+.sky-smoke-veil {
+  top: 18rem;
+  height: auto;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--paper) 60%, transparent) 8.5rem,
+    color-mix(in srgb, var(--paper) 45%, transparent)
+  );
+}
+.sky-smoke-veil[data-smoke="haze"][data-on="1"] {
+  opacity: 0.7;
+}
+.sky-smoke-veil[data-smoke="smoke"][data-on="1"] {
+  opacity: 0.9;
+}
+.sky-haze-band {
+  left: -10rem;
+}
+.sky-haze {
+  animation: sky-haze ease-in-out infinite alternate;
+  opacity: 0.45;
+}
+.sky-haze-band[data-smoke="haze"] .sky-haze {
+  opacity: 0.3;
+}
+.sky-haze-band[data-smoke="thick"] .sky-haze {
+  opacity: 0.65;
+}
+@keyframes sky-haze {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-18rem);
+  }
+}
+.sky-veiled {
+  opacity: 0.75;
+}
+[data-mood="night"] .sky-veiled {
+  opacity: 0.5;
+}
+
 /* ---- Rain and snow: sheet-wide tiles that only fall. */
 .sky-tile {
   position: absolute;
