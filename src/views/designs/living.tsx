@@ -38,7 +38,19 @@ export type LivingSkyProps = {
   /** The weather pages whose words sit high (hours, days, ribbon): the sky draws back. */
   quiet: boolean;
   seed: number;
+  /**
+   * The wall clock at first paint, in seconds (the same on server and TV).
+   * Every drift's phase is taken from it, so the sky carries on across a
+   * reload instead of starting over from the same place.
+   */
+  epoch: number;
+  /** Week and Ideas draw no sky: it fades out and waits. */
+  hidden?: boolean;
 };
+
+/** Where a cycle of `dur` seconds stands at the wall clock, offset by `phase0` (0..1). */
+const cycleAt = (epoch: number, dur: number, phase0: number) =>
+  (((epoch / dur + phase0) % 1) + 1) % 1;
 
 const rem = (n: number) => `${+n.toFixed(3)}rem`;
 const on = (b: boolean) => (b ? "1" : "0");
@@ -86,7 +98,16 @@ export const bodyLook = (code: number | null) => {
   return cover === "partly" ? ("soft" as const) : ("full" as const);
 };
 
-export function LivingSky({ w, now, mood, arc, quiet, seed }: LivingSkyProps) {
+export function LivingSky({
+  w,
+  now,
+  mood,
+  arc,
+  quiet,
+  seed,
+  epoch,
+  hidden = false,
+}: LivingSkyProps) {
   const sky = skyOf(w ? w.now.code : null);
   const place = w ? placeOf(w, now) : null;
   const look = bodyLook(w ? w.now.code : null);
@@ -107,6 +128,7 @@ export function LivingSky({ w, now, mood, arc, quiet, seed }: LivingSkyProps) {
       aria-hidden
       data-heavy={sky.cover === "over" ? "" : undefined}
       data-quiet={quiet ? "" : undefined}
+      data-hidden={hidden ? "" : undefined}
     >
       {/* What never moves is painted first, into the paper itself. Anything
           static painted above a moving layer would need a layer of its own. */}
@@ -115,29 +137,31 @@ export function LivingSky({ w, now, mood, arc, quiet, seed }: LivingSkyProps) {
       <Arc place={place} show={arc && Boolean(place)} />
       {/* Then everything alive, back to front. */}
       <Still.Land seed={seed} />
-      <Still.Shadows seed={seed} show={day && !sky.fall && sky.cover !== "over"} />
+      <Still.Shadows seed={seed} epoch={epoch} show={day && !sky.fall && sky.cover !== "over"} />
       <Light place={place} show={arc && night && look !== "dot"} />
       <Still.Stars seed={seed} show={night} level={starsLevel} part="twinkle" />
-      <Still.ShootingStar seed={seed} show={night && starsLevel === "all"} />
+      <Still.ShootingStar seed={seed} epoch={epoch} show={night && starsLevel === "all"} />
       <Above>
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
         <Streaks place={place} show={arc && low > 0 && look !== "dot"} />
       </Above>
-      <Still.Wisps seed={seed} count={sky.wisps} />
+      <Still.Wisps seed={seed} epoch={epoch} count={sky.wisps} />
       <Still.Clouds
         seed={seed}
+        epoch={epoch}
         count={sky.cumulus}
         flash={day && sky.fall === "storms"}
         depth="far"
       />
-      <Still.Stratus seed={seed} count={sky.stratus} />
+      <Still.Stratus seed={seed} epoch={epoch} count={sky.stratus} />
       <Still.Clouds
         seed={seed}
+        epoch={epoch}
         count={sky.cumulus}
         flash={day && sky.fall === "storms"}
         depth="near"
       />
-      <Still.Birds seed={seed} show={day && !sky.fall && sky.cover !== "over"} />
+      <Still.Birds seed={seed} epoch={epoch} show={day && !sky.fall && sky.cover !== "over"} />
       <Still.Mist seed={seed} fog={sky.fog} dawn={dawn && !sky.fall} />
       <Still.Fall kind={sky.fall} hard={sky.hard} quiet={quiet} night={night} />
       {/* A quiet clearing of paper behind the words, painted once. */}
@@ -293,7 +317,7 @@ function Land({ seed }: { seed: number }) {
 }
 
 /** The shadows of clouds sliding over the land, squashed by perspective. */
-function Shadows({ seed, show }: { seed: number; show: boolean }) {
+function Shadows({ seed, epoch, show }: { seed: number; epoch: number; show: boolean }) {
   const r = rng(seed ^ 0x3c6ef372);
   const lanes = [
     { y: 31.5, w: 28, h: 5, dur: 900 },
@@ -314,7 +338,7 @@ function Shadows({ seed, show }: { seed: number; show: boolean }) {
               width: rem(l.w),
               height: rem(l.h),
               animationDuration: `${dur.toFixed(0)}s`,
-              animationDelay: `${(-r() * dur).toFixed(0)}s`,
+              animationDelay: `${(-cycleAt(epoch, dur, r()) * dur).toFixed(0)}s`,
             }}
           />
         );
@@ -593,13 +617,16 @@ function cloudShape(r: () => number, W: number, H: number) {
     });
   }
   const top = Math.min(...billows.map((b) => b.y - b.r));
-  const rows: Array<{ y: number; w: number; o: number; dash: string }> = [];
+  const rows: Array<{ y: number; w: number; o: number; dash: string; half: number }> = [];
   let k = 0;
   for (let y = base + H * 0.04; y > top + (base - top) * 0.3; y -= 4.2 + k * 0.55, k++) {
     const up = (base - y) / (base - top);
     const lowest = k < 3;
     rows.push({
       y,
+      // Shorter toward the base, centered under the crown: the shadow tapers
+      // to both ends instead of filling the base edge to edge.
+      half: W * (0.22 + 0.4 * Math.min(up * 1.6, 1)),
       w: Math.max(0.95 - up * 1.1, 0.3),
       o: lowest ? 0.4 : Math.max(0.75 - up * 0.9, 0.12),
       dash: lowest
@@ -626,19 +653,19 @@ type CloudSlot = {
   id: string;
 };
 
-function cloudSlots(seed: number): CloudSlot[] {
+function cloudSlots(seed: number, epoch: number): CloudSlot[] {
   const r = rng(seed ^ 0x9e3779b9);
   // Lanes (the top of each cloud, in rem), dealt out so the first clouds to
   // appear are spread apart. As in a real sky, the near clouds ride high and
   // big, some cut off by the top of the sheet; the far ones sit lower, smaller
   // and slower, toward the horizon. All keep clear of the words.
-  const lanes = [8, -2.5, 10.5, 0.5, 6.5, -1];
+  const lanes = [8, -0.5, 10.5, 2.5, 6.5, 1];
   return Array.from({ length: CUMULUS }, (_, i) => {
     const far = i % 2 === 0;
     const w = far ? 10 + r() * 6 : 20 + r() * 9;
     const h = w * (far ? 0.34 : 0.4);
     const dur = (far ? 11 : 6.5) * PRIMES[12 + Math.floor(r() * 10)] * (0.9 + r() * 0.2);
-    const phase = (i * 0.382 + r() * 0.2) % 1;
+    const phase = cycleAt(epoch, dur, (i * 0.382 + r() * 0.2) % 1);
     return {
       far,
       w,
@@ -655,18 +682,20 @@ function cloudSlots(seed: number): CloudSlot[] {
 
 function Clouds({
   seed,
+  epoch,
   count,
   flash,
   depth,
 }: {
   seed: number;
+  epoch: number;
   count: number;
   flash: boolean;
   depth: "far" | "near";
 }) {
   return (
     <>
-      {cloudSlots(seed).map((c, i) => {
+      {cloudSlots(seed, epoch).map((c, i) => {
         if (c.far !== (depth === "far")) return null;
         const { billows, base, rows, crown } = c.shape;
         const W = c.w * 10;
@@ -742,8 +771,8 @@ function Clouds({
                     {rows.map((row, k) => (
                       <line
                         key={k}
-                        x1={-10}
-                        x2={W + 10}
+                        x1={(crown - row.half).toFixed(1)}
+                        x2={(crown + row.half).toFixed(1)}
                         y1={row.y.toFixed(1)}
                         y2={row.y.toFixed(1)}
                         strokeWidth={row.w.toFixed(2)}
@@ -776,7 +805,7 @@ function Clouds({
 }
 
 /** Long, low banks of stratus for overcast skies: layered horizontal strokes. */
-function Stratus({ seed, count }: { seed: number; count: number }) {
+function Stratus({ seed, epoch, count }: { seed: number; epoch: number; count: number }) {
   const r = rng(seed ^ 0x6a09e667);
   // High enough that the banks never cross the weather pages' headlines.
   const lanes = [2.5, 6, -1.5];
@@ -802,7 +831,7 @@ function Stratus({ seed, count }: { seed: number; count: number }) {
           };
         });
         const dur = 1300 + r() * 600;
-        const phase = (i * 0.41 + r() * 0.2) % 1;
+        const phase = cycleAt(epoch, dur, (i * 0.41 + r() * 0.2) % 1);
         return (
           <Layer key={i} show={i < count} className="sky-cloud sky-stratus" style={{ top: rem(y) }}>
             <div
@@ -839,7 +868,7 @@ function Stratus({ seed, count }: { seed: number; count: number }) {
 }
 
 /** High cirrus wisps: long, thin, broken strokes in the highest, slowest lane. */
-function Wisps({ seed, count }: { seed: number; count: number }) {
+function Wisps({ seed, epoch, count }: { seed: number; epoch: number; count: number }) {
   const r = rng(seed ^ 0x510e527f);
   const lanes = [1, 4.5, 2.5];
   return (
@@ -861,7 +890,7 @@ function Wisps({ seed, count }: { seed: number; count: number }) {
           };
         });
         const dur = 1100 * (0.9 + r() * 0.25);
-        const phase = (i * 0.37 + 0.15 + r() * 0.2) % 1;
+        const phase = cycleAt(epoch, dur, (i * 0.37 + 0.15 + r() * 0.2) % 1);
         return (
           <Layer key={i} show={i < count} className="sky-cloud sky-wisp" style={{ top: rem(y) }}>
             <div
@@ -985,7 +1014,7 @@ function Stars({
   );
 }
 
-function ShootingStar({ seed, show }: { seed: number; show: boolean }) {
+function ShootingStar({ seed, epoch, show }: { seed: number; epoch: number; show: boolean }) {
   const r = rng(seed ^ 0x2545f491);
   const x = 40 + r() * 60;
   const y = 3 + r() * 14;
@@ -994,7 +1023,11 @@ function ShootingStar({ seed, show }: { seed: number; show: boolean }) {
     <Layer show={show} className="sky-fill">
       <div
         className="sky-meteor"
-        style={{ left: rem(x), top: rem(y), animationDelay: `${(-r() * 400).toFixed(0)}s` }}
+        style={{
+          left: rem(x),
+          top: rem(y),
+          animationDelay: `${(-cycleAt(epoch, 431, r()) * 431).toFixed(0)}s`,
+        }}
       >
         <svg
           viewBox="0 0 200 10"
@@ -1022,6 +1055,8 @@ function ShootingStar({ seed, show }: { seed: number; show: boolean }) {
 const FLOCKS = [
   {
     name: "a",
+    // Seconds per cycle; must match .sky-flock-a in living.css.
+    period: 157,
     birds: [
       [0, 0],
       [3.4, 1.2],
@@ -1030,6 +1065,8 @@ const FLOCKS = [
   },
   {
     name: "b",
+    // Seconds per cycle; must match .sky-flock-b in living.css.
+    period: 211,
     birds: [
       [0, 0],
       [2.6, 1.3],
@@ -1040,6 +1077,8 @@ const FLOCKS = [
   },
   {
     name: "c",
+    // Seconds per cycle; must match .sky-flock-c in living.css.
+    period: 283,
     birds: [
       [0, 0],
       [2.4, 0.7],
@@ -1052,7 +1091,7 @@ const FLOCKS = [
   },
 ] as const;
 
-function Birds({ seed, show }: { seed: number; show: boolean }) {
+function Birds({ seed, epoch, show }: { seed: number; epoch: number; show: boolean }) {
   const r = rng(seed ^ 0x27d4eb2f);
   return (
     <Layer show={show} className="sky-fill">
@@ -1060,7 +1099,10 @@ function Birds({ seed, show }: { seed: number; show: boolean }) {
         <div
           key={f.name}
           className={`sky-flock sky-flock-${f.name}`}
-          style={{ top: rem(4 + r() * 11), animationDelay: `${(-r() * 300).toFixed(0)}s` }}
+          style={{
+            top: rem(4 + r() * 11),
+            animationDelay: `${(-cycleAt(epoch, f.period, r()) * f.period).toFixed(0)}s`,
+          }}
         >
           {f.birds.map(([x, y], i) => {
             const s = 0.75 + r() * 0.35;

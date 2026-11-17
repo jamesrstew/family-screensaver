@@ -234,6 +234,9 @@ export function Screen({
 
   // The living sky's shapes and phases, fixed for the session (and the same on
   // the server), so the sky never jumps when the snapshot refreshes.
+  // The wall clock at first paint (the same on server and TV): the sky's
+  // drifts take their phase from it, so a reload carries on, not over.
+  const [epoch] = useState(() => Math.floor(Date.parse(initial.issuedAt) / 1000));
   const [seed] = useState(
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
@@ -260,8 +263,11 @@ export function Screen({
           transition: "transform 180s linear",
         }}
       >
-        {drawn?.Sky ? (
-          <drawn.Sky
+        {/* The sky stays mounted while Week or Ideas is up, faded out, so it
+            fades back in (and carries on) instead of cutting. */}
+        {kit?.Sky ? (
+          <kit.Sky
+            hidden={!drawn}
             w={snapshot.weather}
             now={now}
             mood={mood}
@@ -271,6 +277,7 @@ export function Screen({
               "now"
             }
             seed={seed}
+            epoch={epoch}
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>

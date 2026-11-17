@@ -10,6 +10,14 @@
   pointer-events: none;
   contain: strict;
   z-index: 0;
+  transition:
+    opacity 2.5s ease,
+    visibility 2.5s allow-discrete;
+}
+/* Week and Ideas: the sky fades out and waits, still running, unseen. */
+.sky[data-hidden] {
+  opacity: 0;
+  visibility: hidden;
 }
 .sky-fill {
   position: absolute;
