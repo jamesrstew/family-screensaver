@@ -31,6 +31,7 @@ import {
   hoursHumidityLine,
   humidityDayFigure,
   humidityFigure,
+  HAZE_HOURS,
   hazeOf,
   hourNow,
   lensesFor,
@@ -44,7 +45,7 @@ import {
   type Figure,
   type Lens,
 } from "@/lib/lenses";
-import { AQI_SENSITIVE, smokeOf } from "@/lib/smoke";
+import { AQI_SENSITIVE, airNow, smokeOf } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
@@ -743,14 +744,17 @@ function Days({ w, now, snapshot }: Drawn) {
             <div className="grid" style={gridOf(days.length)}>
               {days.map((d) => {
                 const p = partFromDay(labelOf(d.date), d);
+                // A smoky day's sun is veiled, a hazy day's softened, as the living sky draws them.
+                const hazy = (d.hourly?.pm ?? []).reduce<number>((a, pm) => a + hazeOf(pm), 0);
+                const veil =
+                  (d.aqi ?? 0) > AQI_SENSITIVE ? "smoke" : hazy >= HAZE_HOURS ? "haze" : undefined;
                 return (
                   <div key={d.date} className="flex flex-col items-center text-center">
                     <Engraving
                       code={p.code}
                       isDay
                       date={now}
-                      // A smoky day's sun is veiled, as the living sky draws it.
-                      veil={(d.aqi ?? 0) > AQI_SENSITIVE ? "smoke" : undefined}
+                      veil={veil}
                       className="fine-ink my-[0.8rem] size-[12rem] text-ink"
                     />
                     <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
@@ -855,6 +859,28 @@ function Hours({ w, now, snapshot }: Drawn) {
     snow: sum(slot.map((h) => h.snow)),
     chance: most(slot.map((h) => h.precipChance)),
   }));
+  // Each slot's air: its worst hour, and for the slot under way, the air right
+  // now (the NowCast), so the sentence and the Now column say the same number.
+  const current = slots[0] && Date.parse(slots[0][0].time) <= now.getTime();
+  const nowAir = airNow(w.now);
+  const air = slots.map((slot, i) => {
+    if (i === 0 && current && nowAir != null) return { time: slot[0].time, aqi: nowAir };
+    const known = slot.filter((h) => h.aqi != null);
+    const worst = known.length ? known.reduce((a, b) => (b.aqi! > a.aqi! ? b : a)) : slot[0];
+    return { time: worst.time, aqi: worst.aqi };
+  });
+  // Each slot's feel: its coldest hour (or hottest, when it's the heat that
+  // strays), so the sentence quotes a number the columns show.
+  const chill =
+    Math.max(...span.map((h) => h.temp - (h.feels ?? h.temp))) >=
+    Math.max(...span.map((h) => (h.feels ?? h.temp) - h.temp));
+  const feel = slots.map((slot) =>
+    slot.reduce((a, b) => {
+      const fa = a.feels ?? a.temp;
+      const fb = b.feels ?? b.temp;
+      return chill ? (fb < fa ? b : a) : fb > fa ? b : a;
+    }),
+  );
 
   const line =
     lens === "precip"
@@ -873,10 +899,13 @@ function Hours({ w, now, snapshot }: Drawn) {
         : lens === "uv"
           ? hoursUvLine(span.map(known), now, tz)
           : lens === "air"
-            ? hoursAirLine(span, now, tz)
+            ? hoursAirLine(air, now, tz, {
+                smoky: span.some((h) => hazeOf(h.pm)),
+                current: Boolean(current && nowAir != null),
+              })
             : lens === "feels"
               ? hoursFeelsLine(
-                  span.map((h) => ({ time: h.time, temp: h.temp, feels: h.feels ?? h.temp })),
+                  feel.map((h) => ({ time: h.time, temp: h.temp, feels: h.feels ?? h.temp })),
                   now,
                   tz,
                 )
@@ -911,13 +940,10 @@ function Hours({ w, now, snapshot }: Drawn) {
       );
       return windFigure(hi, hi, most(slot.map((h) => h.gust)), dir);
     }
-    if (lens === "air") {
-      const aqis = slot.flatMap((h) => (h.aqi == null ? [] : [h.aqi]));
-      return airFigure(aqis.length ? Math.max(...aqis) : undefined);
-    }
-    // How it feels and the air's water: as the slot begins, like its temperature.
+    if (lens === "air") return airFigure(air[i].aqi);
+    if (lens === "feels") return feelsFigure(feel[i].feels ?? feel[i].temp, feel[i].temp);
+    // The air's water: as the slot begins, like its temperature.
     const first = slot[0];
-    if (lens === "feels") return feelsFigure(first.feels ?? first.temp, first.temp);
     if (lens === "humidity") return humidityFigure(first.rh ?? 0, first.dew ?? 0);
     return uvFigure(most(slot.map((h) => h.uv)));
   });

@@ -62,3 +62,22 @@ describe("withAir", () => {
     expect(quiet.days[0]).toEqual(bare.days[0]);
   });
 });
+
+describe("shapeAir", () => {
+  it("reads now's fine particles as the NowCast over the last 12 hours", () => {
+    // Clean all night, then smoke arriving over the last three hours.
+    const time = Array.from(
+      { length: 24 },
+      (_, h) => `2026-08-18T${String(h).padStart(2, "0")}:00`,
+    );
+    const pm2_5 = time.map((_, h) => (h >= 11 && h <= 13 ? 60 : 5));
+    const a = shapeAir({
+      current: { time: "2026-08-18T13:15", us_aqi: 40, pm2_5: 60 },
+      hourly: { time, us_aqi: time.map(() => 40), pm2_5 },
+      utc_offset_seconds: -7 * 3600,
+    });
+    // Not the hour's 60 (a spike can't alarm alone), but well past the 24-hour mean.
+    expect(a.now.pm).toBeGreaterThan(45);
+    expect(a.now.pm).toBeLessThan(60);
+  });
+});

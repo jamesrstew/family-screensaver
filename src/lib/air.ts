@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife } from "next/cache";
+import { nowcast } from "./smoke";
 import type { Weather } from "./types";
 
 // Open-Meteo's air-quality forecast: free, no key, its own service. It runs
@@ -10,7 +11,7 @@ const API = "https://air-quality-api.open-meteo.com/v1/air-quality";
 type Num = number | null;
 
 export type OpenMeteoAir = {
-  current?: { us_aqi?: Num; pm2_5?: Num };
+  current?: { time?: string; us_aqi?: Num; pm2_5?: Num };
   hourly: { time: string[]; us_aqi?: Num[]; pm2_5?: Num[] };
   utc_offset_seconds: number;
 };
@@ -31,6 +32,8 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
     timezone: timeZone,
     current: "us_aqi,pm2_5",
     hourly: "us_aqi,pm2_5",
+    // Yesterday too: the NowCast needs the last 12 hours.
+    past_days: "1",
     forecast_days: "7",
   });
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
@@ -40,14 +43,22 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
 
 const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
 
-export function shapeAir(d: OpenMeteoAir): Air {
+export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
   const hours = new Map<string, { aqi: number; pm?: number }>();
   d.hourly.time.forEach((t, i) => {
     const aqi = r0(d.hourly.us_aqi?.[i]);
     if (aqi != null) hours.set(t.slice(0, 13), { aqi, pm: r0(d.hourly.pm2_5?.[i]) });
   });
+  // Now's fine particles: the NowCast over the 12 hours up to this one.
+  const here = d.current?.time?.slice(0, 13) ?? wall(at.toISOString(), d.utc_offset_seconds);
+  const i = d.hourly.time.findIndex((t) => t.startsWith(here));
+  const recent = i < 0 ? [] : (d.hourly.pm2_5 ?? []).slice(Math.max(i - 11, 0), i + 1).reverse();
+  const cast = nowcast(recent);
   return {
-    now: { aqi: r0(d.current?.us_aqi), pm: r0(d.current?.pm2_5) },
+    now: {
+      aqi: r0(d.current?.us_aqi),
+      pm: cast != null ? Math.round(cast) : r0(d.current?.pm2_5),
+    },
     hours,
     offset: d.utc_offset_seconds,
   };

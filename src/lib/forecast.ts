@@ -5,7 +5,7 @@
 // what later days look like (the daily forecast). The daily label is the worst
 // hour of the whole day, past hours included, so it never describes "now".
 
-import { AQI_SENSITIVE, airLine, airNow, smokeOf } from "./smoke";
+import { AQI_SENSITIVE, HAZE_PM, airLine, airNow, smokeOf, type Smoke } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
 import { wearLine, type Facts } from "./wear";
@@ -300,6 +300,24 @@ function hoursIn(w: Weather, now: Date, tz: string, day: string, from: number, t
   });
 }
 
+/**
+ * The sky in words, smoke and haze included: "Smoky" under smoke when the sky
+ * is otherwise fair to overcast, "Hazy" under haze on a sunny or clear one.
+ * No "mostly sunny" under a veiled sun.
+ */
+function skyWithSmoke(code: number, isDay: boolean, smoke: Smoke): string {
+  if ((smoke === "smoke" || smoke === "thick") && code <= 3) return "Smoky";
+  if (smoke === "haze" && code <= 1) return "Hazy";
+  return skyWords(code, isDay);
+}
+
+/** The air over a stretch of hours: its worst AQI and its worst hour of fine particles. */
+const smokeIn = (hours: Hour[]) =>
+  smokeOf({
+    aqi: Math.max(0, ...hours.map((h) => h.aqi ?? 0)),
+    pm: Math.max(0, ...hours.map((h) => h.pm ?? 0)),
+  });
+
 function partFromHours(label: string, hours: Hour[], night: boolean): Part | null {
   if (!hours.length) return null;
   const temps = hours.map((h) => h.temp);
@@ -310,7 +328,7 @@ function partFromHours(label: string, hours: Hour[], night: boolean): Part | nul
     high: !night,
     code,
     isDay: !night,
-    words: fall ? fallWords(fall) : skyWords(code, !night),
+    words: fall ? fallWords(fall) : skyWithSmoke(code, !night, smokeIn(hours)),
     wet: Boolean(fall),
   };
 }
@@ -321,6 +339,9 @@ export function partFromDay(label: string, d: Day): Part {
   const counts = f && f.sure !== "slight";
   // A day whose worst hour is a slight chance of snow is drawn as a gray one.
   const code = counts ? d.code : precipKind(d.code) ? 3 : d.code;
+  // A smoky day (its worst AQI over 100), or a hazy one (three hours of haze).
+  const hazy = (d.hourly?.pm ?? []).filter((pm) => pm != null && pm >= HAZE_PM).length >= 3;
+  const smoke = smokeOf({ aqi: d.aqi, pm: hazy ? HAZE_PM : undefined });
   return {
     label,
     temp: d.high,
@@ -330,8 +351,8 @@ export function partFromDay(label: string, d: Day): Part {
     words: counts
       ? fallWords(f!)
       : f
-        ? `${skyWords(code, true)}, ${fallPhrase(f)}`
-        : skyWords(code, true),
+        ? `${skyWithSmoke(code, true, smoke)}, ${fallPhrase(f)}`
+        : skyWithSmoke(code, true, smoke),
     wet: Boolean(counts),
   };
 }
@@ -384,13 +405,7 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
 
   // One sentence: the sky now, and where the temperature goes from here.
   // Smoke and haze are the sky too: no "Mostly sunny" under a veiled sun.
-  const smoke = smokeOf(w.now);
-  const nowSky =
-    (smoke === "smoke" || smoke === "thick") && w.now.code <= 3
-      ? "Smoky"
-      : smoke === "haze" && w.now.code <= 1
-        ? "Hazy"
-        : skyWords(w.now.code, w.now.isDay);
+  const nowSky = skyWithSmoke(w.now.code, w.now.isDay, smokeOf(w.now));
   let line: string;
   if (focus === "today") {
     const rest = hoursIn(w, now, tz, today, hour, 17);
@@ -589,7 +604,7 @@ function wearFacts(
       Math.min(...night.map((h) => h.temp)) <= 28 &&
       !night.some((h) => h.wet),
     afternoon: d.when === "tomorrow" || hour < 15,
-    airOk: (air?.n ?? 0) <= AQI_SENSITIVE && (day?.aqi ?? 0) <= AQI_SENSITIVE,
+    airOk: (air ?? 0) <= AQI_SENSITIVE && (day?.aqi ?? 0) <= AQI_SENSITIVE,
     warmest: later.length >= 3 && warm > Math.max(...later.map((x) => x.high)),
   };
 }

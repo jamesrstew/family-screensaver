@@ -479,33 +479,32 @@ describe("the air, in words", () => {
     expect(airFigure(130)).toMatchObject({ sub: "sensitive", note: "groups", act: false });
     expect(airFigure(168)).toMatchObject({ sub: "unhealthy", note: undefined, act: true });
   });
-  it("leads with now when the air is already bad", () => {
-    const hour = (t: string, aqi?: number, pm?: number) => ({ time: at(t).toISOString(), aqi, pm });
-    expect(hoursAirLine([hour("10:00", 168, 76), hour("15:00", 160)], at("10:00"), tz)).toBe(
-      "Unhealthy air now, AQI 168: keep time outside short and easy.",
-    );
+  it("leads with now when the air is already bad, in the columns' numbers", () => {
+    const col = (t: string, aqi?: number) => ({ time: at(t).toISOString(), aqi });
+    expect(
+      hoursAirLine([col("10:00", 168), col("13:00", 160)], at("10:30"), tz, { current: true }),
+    ).toBe("Unhealthy air now, AQI 168: keep time outside short and easy.");
     expect(
       hoursAirLine(
-        [hour("10:00", 168, 76), { time: "2026-11-19T17:00:00Z", aqi: 205 }],
-        at("10:00"),
+        [col("10:00", 168), { time: "2026-11-19T17:00:00Z", aqi: 205 }],
+        at("10:30"),
         tz,
+        { current: true },
       ),
     ).toBe("Unhealthy air now, AQI 168; worst tomorrow morning, AQI 205: best to stay inside.");
-    // The index lags arriving smoke; the hour's particles say it first.
-    expect(hoursAirLine([hour("10:00", 70, 60), hour("15:00", 90)], at("10:00"), tz)).toBe(
-      "Unhealthy air now: keep time outside short and easy.",
-    );
   });
   it("names smoke when it's what makes a day moderate", () => {
-    const hour = (t: string, aqi?: number, pm?: number) => ({ time: at(t).toISOString(), aqi, pm });
-    expect(hoursAirLine([hour("10:00", 60, 20), hour("15:00", 92, 30)], at("10:00"), tz)).toBe(
+    const col = (t: string, aqi?: number) => ({ time: at(t).toISOString(), aqi });
+    expect(
+      hoursAirLine([col("10:00", 60), col("15:00", 92)], at("10:00"), tz, { smoky: true }),
+    ).toBe(
       "Smoky, moderate air this afternoon, AQI up to 92. Fine for most; sensitive people may want to take it easy.",
     );
-    expect(hoursAirLine([hour("15:00", 62, 5)], at("10:00"), tz)).toBe(
+    expect(hoursAirLine([col("15:00", 62)], at("10:00"), tz)).toBe(
       "Moderate air this afternoon, AQI up to 62.",
     );
-    expect(hoursAirLine([hour("15:00", 130, 20)], at("10:00"), tz)).toBe(
-      "Air unhealthy for sensitive groups this afternoon, AQI up to 130: sensitive groups should take it easy outside.",
+    expect(hoursAirLine([col("15:00", 130)], at("10:00"), tz)).toBe(
+      "Air unhealthy for sensitive groups this afternoon, AQI up to 130: take it easy outside if you’re sensitive.",
     );
   });
   it("says how far the air forecast reaches", () => {

@@ -9,15 +9,7 @@
 // UV index, the US AQI.
 
 import { CHANCE, periodWord } from "./forecast";
-import {
-  AQI_SENSITIVE,
-  AQI_UNHEALTHY,
-  HAZE_PM,
-  airAdvice,
-  airNow,
-  airPhrase,
-  aqiWord,
-} from "./smoke";
+import { AQI_SENSITIVE, AQI_UNHEALTHY, HAZE_PM, airAdvice, airPhrase, aqiWord } from "./smoke";
 import { addDays, clock, dayKey, parts } from "./time";
 import type { Weather } from "./types";
 
@@ -771,35 +763,32 @@ export function airFigure(aqi: number | undefined): Figure {
 const SMOKY_MODERATE = "Fine for most; sensitive people may want to take it easy.";
 
 /**
- * The next day's air. When it's already bad, now is the news: "Unhealthy air
- * now, AQI 168; worst tomorrow morning, AQI 178: keep time outside short and
- * easy." Otherwise the worst hour ahead, and smoke named when it's what makes
- * a moderate day moderate.
+ * The next day's air, in the columns' own numbers (one per three-hour slot:
+ * its worst hour, and for the first slot the air right now, the NowCast).
+ * When it's already bad, now is the news: "Unhealthy air now, AQI 168; worst
+ * tomorrow morning, AQI 178: keep time outside short and easy." Otherwise the
+ * worst slot ahead, and smoke named when it's what makes a moderate day
+ * moderate.
  */
 export function hoursAirLine(
-  hours: Array<{ time: string; aqi?: number; pm?: number }>,
+  cols: Array<{ time: string; aqi?: number }>,
   now: Date,
   tz: string,
+  o: { smoky?: boolean; current?: boolean } = {},
 ): string {
-  const known = hours.filter((h): h is { time: string; aqi: number; pm?: number } => h.aqi != null);
+  const known = cols.filter((c): c is { time: string; aqi: number } => c.aqi != null);
   if (!known.length) return "";
   const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
   const when = periodWord(new Date(worst.time), now, tz);
-  // Now is the hour already under way, if the list starts with it.
-  const first = Date.parse(hours[0].time) <= now.getTime() ? airNow(hours[0]) : null;
-  if (first && first.n > AQI_SENSITIVE) {
-    const quoted = first.aqi != null ? `, AQI ${first.aqi}` : "";
+  const first = o.current ? cols[0]?.aqi : undefined;
+  if (first != null && first > AQI_SENSITIVE) {
     const later =
-      worst !== known[0] && worst.aqi > (first.aqi ?? first.n)
-        ? `; worst ${when}, AQI ${worst.aqi}`
-        : "";
-    const advice = airAdvice(Math.max(first.n, worst.aqi));
-    return `${airPhrase(first.n)} now${quoted}${later}: ${advice}.`;
+      worst !== known[0] && worst.aqi > first ? `; worst ${when}, AQI ${worst.aqi}` : "";
+    return `${airPhrase(first)} now, AQI ${first}${later}: ${airAdvice(Math.max(first, worst.aqi))}.`;
   }
   if (worst.aqi <= 50) return `Good air, AQI ${worst.aqi} at most.`;
   if (worst.aqi <= AQI_SENSITIVE) {
-    const smoky = hours.some((h) => hazeOf(h.pm));
-    return smoky
+    return o.smoky
       ? `Smoky, moderate air ${when}, AQI up to ${worst.aqi}. ${SMOKY_MODERATE}`
       : `Moderate air ${when}, AQI up to ${worst.aqi}.`;
   }

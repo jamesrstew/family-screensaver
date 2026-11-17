@@ -13,7 +13,7 @@ export type Weather = {
     isDay: boolean;
     /** How far one can see, meters. */
     visibility?: number;
-    /** The air now: the US AQI and fine particles (µg/m³), from the air-quality forecast. */
+    /** The air now: the US AQI, and fine particles (µg/m³) as the EPA's NowCast over 12 hours. */
     aqi?: number;
     pm?: number;
   };

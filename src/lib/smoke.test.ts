@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { airLine, airNow, aqiWord, pmAqi, smokeOf } from "./smoke";
+import { airLine, airNow, aqiWord, nowcast, pmAqi, smokeOf } from "./smoke";
 
 describe("pmAqi", () => {
   it("reads an hour's fine particles on the EPA's 2024 scale", () => {
@@ -25,24 +25,39 @@ describe("aqiWord", () => {
   });
 });
 
+describe("nowcast", () => {
+  it("is steady air's plain average", () => {
+    expect(nowcast(Array(12).fill(20))).toBe(20);
+  });
+  it("leans on the latest hours when smoke arrives, but one hour can't carry it", () => {
+    // Clean air for 11 hours, then one smoky hour: the weight bottoms out at a half.
+    const spike = nowcast([60, ...Array(11).fill(5)])!;
+    expect(spike).toBeGreaterThan(30);
+    expect(spike).toBeLessThan(35.5);
+    // Smoke for three hours running: it shows.
+    expect(nowcast([60, 58, 55, ...Array(9).fill(5)])!).toBeGreaterThan(50);
+  });
+  it("needs two of the three latest hours", () => {
+    expect(nowcast([null, null, 20, 20])).toBeNull();
+    expect(nowcast([20, null, 20])).toBe(20);
+  });
+});
+
 describe("the air now", () => {
-  it("takes the worse of the lagging index and the hour's particles", () => {
-    expect(airNow({ aqi: 75, pm: 43.7 })).toEqual({ n: 121, aqi: undefined });
-    expect(airNow({ aqi: 130, pm: 40 })).toEqual({ n: 130, aqi: 130 });
+  it("takes the worse of the lagging index and the NowCast", () => {
+    expect(airNow({ aqi: 75, pm: 43.7 })).toBe(121);
+    expect(airNow({ aqi: 130, pm: 40 })).toBe(130);
     expect(airNow({})).toBeNull();
   });
-  it("speaks only when the air isn't fine for everyone", () => {
+  it("speaks only when the air isn't fine for everyone, without repeating itself", () => {
     expect(airLine({ aqi: 80, pm: 20 })).toBeNull();
     expect(airLine({ aqi: 130, pm: 40 })).toBe(
-      "Air unhealthy for sensitive groups, AQI 130: sensitive groups should take it easy outside.",
+      "Air unhealthy for sensitive groups, AQI 130: take it easy outside if you’re sensitive.",
     );
     expect(airLine({ aqi: 168, pm: 76 })).toBe(
       "Unhealthy air, AQI 168: keep time outside short and easy.",
     );
     expect(airLine({ aqi: 240 })).toBe("Very unhealthy air, AQI 240: best to stay inside.");
-    expect(airLine({ aqi: 75, pm: 43.7 })).toBe(
-      "Air unhealthy for sensitive groups: sensitive groups should take it easy outside.",
-    );
   });
 });
 

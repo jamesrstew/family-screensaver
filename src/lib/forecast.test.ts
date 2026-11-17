@@ -233,6 +233,11 @@ describe("smoke in the sky's words", () => {
     // The voice says it too.
     expect(forecastLine(w, now, tz)).toContain(o.air!);
   });
+  it("calls the smoky parts of the day smoky, not mostly sunny", () => {
+    const o = outlook(fakeWeather("smoke", now, tz), now, tz);
+    expect(o.parts.map((p) => p.words)).not.toContain("Mostly sunny");
+    expect(o.parts[0].words).toBe("Smoky");
+  });
   it("says nothing of the air on a clear day", () => {
     const w = fakeWeather("fair", now, tz);
     expect(outlook(w, now, tz).air).toBeNull();

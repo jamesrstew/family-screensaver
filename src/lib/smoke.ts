@@ -4,8 +4,11 @@
 //
 // Open-Meteo's us_aqi for fine particles is a trailing 24-hour mean (checked
 // against its hourly pm2_5 and the EPA's breakpoints): it lags arriving smoke
-// by hours. So what the air is like *now* comes from the hourly PM2.5 as
-// well, read on the same EPA scale; the AQI figures stay Open-Meteo's own.
+// by hours. So what the air is like *now* is the EPA's own "now", the NowCast
+// (what AirNow shows): the last 12 hours of PM2.5, the recent ones weighted
+// more when the air is changing. One smoky hour can't set off an alarm, and
+// arriving smoke still shows within the hour or two. Later hours keep
+// Open-Meteo's AQI.
 
 /** The EPA's words for the US AQI. */
 export function aqiWord(aqi: number): string {
@@ -61,17 +64,39 @@ export function airPhrase(aqi: number): string {
 export function airAdvice(aqi: number): string {
   if (aqi >= AQI_VERY) return "best to stay inside";
   if (aqi >= AQI_UNHEALTHY) return "keep time outside short and easy";
-  if (aqi > AQI_SENSITIVE) return "sensitive groups should take it easy outside";
+  if (aqi > AQI_SENSITIVE) return "take it easy outside if you’re sensitive";
   return "";
 }
 
-/** The air right now: the worse of the index and the hour's fine particles. */
-export function airNow(a: { aqi?: number; pm?: number }): { n: number; aqi?: number } | null {
+/**
+ * The EPA's NowCast for fine particles (µg/m³): the last 12 hours, most
+ * recent first, each hour weighted by how steady the air has been (a weight
+ * of at least one half). Null without two of the three latest hours.
+ */
+export function nowcast(recent: Array<number | null | undefined>): number | null {
+  const c = recent.slice(0, 12);
+  if (c.slice(0, 3).filter((x) => x != null).length < 2) return null;
+  const known = c.filter((x): x is number => x != null);
+  const lo = Math.min(...known);
+  const hi = Math.max(...known);
+  const w = hi > 0 ? Math.max(lo / hi, 0.5) : 1;
+  let sum = 0;
+  let weights = 0;
+  c.forEach((x, i) => {
+    if (x == null) return;
+    sum += w ** i * x;
+    weights += w ** i;
+  });
+  return Math.floor((sum / weights) * 10) / 10;
+}
+
+/**
+ * The air right now, as one AQI: the worse of Open-Meteo's index and the
+ * NowCast of fine particles (`pm` is the NowCast; lib/air.ts computes it).
+ */
+export function airNow(a: { aqi?: number; pm?: number }): number | null {
   if (a.aqi == null && a.pm == null) return null;
-  const n = Math.max(a.aqi ?? 0, a.pm == null ? 0 : pmAqi(a.pm));
-  // Quote the index only when it says the same thing the particles do.
-  const same = a.aqi != null && aqiWord(a.aqi) === aqiWord(n);
-  return { n, aqi: same ? a.aqi : undefined };
+  return Math.max(a.aqi ?? 0, a.pm == null ? 0 : pmAqi(a.pm));
 }
 
 /**
@@ -79,10 +104,9 @@ export function airNow(a: { aqi?: number; pm?: number }): { n: number; aqi?: num
  * "Unhealthy air, AQI 168: keep time outside short and easy." Null otherwise.
  */
 export function airLine(a: { aqi?: number; pm?: number }): string | null {
-  const now = airNow(a);
-  if (!now || now.n <= AQI_SENSITIVE) return null;
-  const quoted = now.aqi != null ? `, AQI ${now.aqi}` : "";
-  return `${airPhrase(now.n)}${quoted}: ${airAdvice(now.n)}.`;
+  const n = airNow(a);
+  if (n == null || n <= AQI_SENSITIVE) return null;
+  return `${airPhrase(n)}, AQI ${n}: ${airAdvice(n)}.`;
 }
 
 /**
