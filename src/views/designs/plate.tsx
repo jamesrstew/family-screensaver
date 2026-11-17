@@ -43,12 +43,12 @@ function Print({ className = "" }: { className?: string }) {
 }
 
 export function Home(props: ViewProps) {
-  const { snapshot, now, mood } = props;
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const next = nextUp(props);
   const w = snapshot.weather;
   const hero = heroOf(props);
-  const evening = mood === "evening" && hero?.kind === "question";
+  const evening = hero?.kind === "question";
 
   const facts = (
     <p className="flex items-baseline gap-[1.8rem] text-[1.85rem] text-ink-soft">
@@ -126,7 +126,7 @@ export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf({ ...props, mood: "evening" });
+  const question = heroOf(props);
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <Ink order={0}>

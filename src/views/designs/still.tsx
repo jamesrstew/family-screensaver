@@ -30,7 +30,7 @@ const LADDER: Array<[number, string]> = [
 ];
 
 export function Home(props: ViewProps) {
-  const { snapshot, now, mood } = props;
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const hero = heroOf(props);
   const next = nextUp(props);
@@ -46,7 +46,7 @@ export function Home(props: ViewProps) {
       >
         {hero ? (
           <article className="max-w-[82rem] text-center">
-            {question && mood === "evening" ? (
+            {question ? (
               <p className="spaced mb-[2.4rem] text-[1.35rem] text-ink-faint">For the table</p>
             ) : null}
             <Words item={hero} className={`${sized(hero.text, LADDER)} text-ink`} />
@@ -96,7 +96,7 @@ export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf({ ...props, mood: "evening" });
+  const question = heroOf(props);
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <Ink order={0}>

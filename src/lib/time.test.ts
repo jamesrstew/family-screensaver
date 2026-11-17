@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addDays, clock, dayKey, happeningsOn, moodOf, shortDate, weekdayOf, whenOf } from "./time";
+import {
+  addDays,
+  asksQuestion,
+  clock,
+  dayKey,
+  happeningsOn,
+  moodOf,
+  shortDate,
+  weekdayOf,
+  whenOf,
+} from "./time";
 import type { Happening } from "./types";
 
 const TZ = "America/Los_Angeles";
@@ -67,6 +77,19 @@ describe("moodOf", () => {
     ["2026-06-21T20:48:00-07:00", "night"],
   ])("%s is %s in June", (iso, mood) => {
     expect(moodOf(at(iso), TZ, summer)).toBe(mood);
+  });
+});
+
+describe("asksQuestion", () => {
+  it("asks from 2 to 6 p.m. on the family's clock, and not otherwise", () => {
+    const asks = (iso: string) => asksQuestion(at(iso), TZ);
+    expect(asks("2026-11-16T13:59:00-08:00")).toBe(false);
+    expect(asks("2026-11-16T14:00:00-08:00")).toBe(true);
+    expect(asks("2026-11-16T17:59:00-08:00")).toBe(true);
+    expect(asks("2026-11-16T18:00:00-08:00")).toBe(false);
+    expect(asks("2026-11-16T22:30:00-08:00")).toBe(false);
+    // A server in UTC still asks by the family's clock.
+    expect(asks("2026-11-16T22:30:00Z")).toBe(true);
   });
 });
 

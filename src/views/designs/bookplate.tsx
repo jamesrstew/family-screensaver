@@ -88,7 +88,7 @@ function Name() {
 }
 
 export function Home(props: ViewProps) {
-  const { snapshot, now, mood } = props;
+  const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const hero = heroOf(props);
   const next = nextUp(props);
@@ -124,7 +124,7 @@ export function Home(props: ViewProps) {
       >
         {hero ? (
           <article className="max-w-[80rem] text-center">
-            {hero.kind === "question" && mood === "evening" ? (
+            {hero.kind === "question" ? (
               <p className="mb-[1.6rem] text-[2rem] text-ink-soft italic">
                 A question for the table
               </p>
@@ -151,7 +151,7 @@ export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf({ ...props, mood: "evening" });
+  const question = heroOf(props);
   return (
     <div className="relative h-full">
       <Frame faint />

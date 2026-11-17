@@ -3,6 +3,7 @@ import { Ink } from "@/components/Ink";
 import { questionFor } from "@/lib/pick";
 import {
   addDays,
+  asksQuestion,
   clock,
   clockFace,
   dayKey,
@@ -14,7 +15,7 @@ import {
 import type { ViewProps } from "./parts";
 
 // After the evening: dark paper, faint ink, almost nothing on it.
-// The clock, what tomorrow holds, and the evening's question to sleep on.
+// The clock, what tomorrow holds, and (until 6 p.m.) the afternoon's question.
 
 export function NightPage({ snapshot, now }: ViewProps) {
   const tz = snapshot.timeZone;
@@ -25,7 +26,7 @@ export function NightPage({ snapshot, now }: ViewProps) {
     ? (happeningsOn(snapshot.happenings, nextDay, tz).find((h) => !h.allDay) ??
       happeningsOn(snapshot.happenings, nextDay, tz)[0])
     : undefined;
-  const question = questionFor(snapshot.notebook);
+  const question = asksQuestion(now, tz) ? questionFor(snapshot.notebook) : null;
   const suffix = clock(now, tz).split(" ").at(-1);
 
   return (
