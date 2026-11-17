@@ -14,7 +14,7 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 2. **Less is more.** Home shows one thing at a time: a quote or a question, then the weather, then the next quote, slowly, in turn. Everything else is a small note in a corner or lives one page away. Before adding anything to a screen, try taking something away.
 
-3. **Calm by default.** Motion is slow and rare. Nothing blinks, ticks, bounces, or counts down. The page changes when the hour turns, when home turns to its next piece (every few minutes, never faster), or when someone asks. Never to catch an eye.
+3. **Alive, never busy.** The page is a living picture, like a window. Its sky moves the way a real one does: clouds drift, stars breathe, rain falls, snow settles, and the light warms and cools with the hour. That life is ambient: slow, continuous, organic, never visibly looping, and it never asks to be watched. Nothing blinks, ticks, bounces, or counts down. The piece itself changes when the hour turns, when home turns to its next piece (every few minutes, never faster), or when someone asks. Never to catch an eye.
 
 4. **Dim at night.** Night is the real night: from today's sunset to tomorrow's sunrise where the family lives, the paper goes dark and nearly empty: the time, what's next (tonight's plan, or tomorrow's first), and a question to sleep on. A bright screen in a dark room is a bug.
 
@@ -30,11 +30,11 @@ The one-word test for every decision: **magic.** It should feel magic and effort
 
 9. **One face on the TV.** On trial with the Almanac design (Nov. 16, 2026): Fraunces for every page Almanac draws (home, night, weather). Week and Ideas keep IM Fell English and its small caps until they're redrawn in Fraunces; then Fell goes. UnifrakturMaguntia appears only on the lock screen and the phone. Colors come only from the paper tokens (`--paper`, `--ink`, `--ink-soft`, `--ink-faint`, `--rule`, `--accent`, in `globals.css` and the design's block in `src/views/designs/designs.css`). The accent (oxblood) appears at most once per page. By day the paper is light and milky, never brown; at night it is nearly black, with the ink no brighter than a soft gray.
 
-10. **Ink, never pixels.** Content arrives and leaves by bleeding into the paper (`src/components/Ink.tsx`), in one of a few hands: _seep_ (a slow stain), _write_ (lines appear as if written), _develop_ (a photograph surfacing, for photos only), and the original _blots_. Nothing slides, pops, fades on a timer, or cuts. Every block of type on the TV sits inside an `<Ink>`. When the ink is dry, the filter comes off and a still page costs nothing.
+10. **Ink, never pixels.** Content arrives and leaves by bleeding into the paper (`src/components/Ink.tsx`), in one of a few hands: _seep_ (a slow stain), _write_ (lines appear as if written), _develop_ (a photograph surfacing, for photos only), and the original _blots_. Nothing slides, pops, fades on a timer, or cuts. Every block of type on the TV sits inside an `<Ink>`. When the ink is dry, the filter comes off. The sky's own life (§3) is drawn, not inked, and costs the TV almost nothing: whole layers move and fade (transform and opacity), and nothing repaints frame by frame.
 
-11. **Readable from the couch.** The TV is a fixed 120 × 67.5 rem sheet (1 rem = 16 px at 1080p). Anything meant to be read from across the room is at least 1.85 rem; corner notes at least 1.3 rem. Content stays inside the margins (5.5 rem sides, 3 rem top and bottom), which clears TV overscan.
+11. **Readable from the couch, and generous.** The TV is a fixed 120 × 67.5 rem sheet (1 rem = 16 px at 1080p). Use the whole sheet: the piece and the sky are drawn big, edge to edge, and nothing that matters is small. Anything meant to be read from across the room is at least 2.5 rem; corner notes at least 1.85 rem. Content stays inside the margins (5.5 rem sides, 3 rem top and bottom), which clears TV overscan.
 
-12. **Protect the screen.** Nothing stays pixel-still for hours (OLED burn-in): the sheet drifts imperceptibly, the piece rotates, the night page rearranges everything.
+12. **Protect the screen.** Nothing stays pixel-still for hours (OLED burn-in): the sky lives, the sheet drifts imperceptibly, the piece rotates, the night page rearranges everything.
 
 13. **American English, AP style.** "7:30 a.m.", "noon", "Nov. 16", "Thu.". Copy is short, warm, and plain, like a kind neighbor, never like software ("The TV didn't answer. Try again.", not "Error 502").
 
