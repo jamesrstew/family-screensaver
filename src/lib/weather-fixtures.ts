@@ -1,7 +1,7 @@
 // Made-up skies for tests and design review (?sky=fair|snow|storm|rain|smoke
 // in dev). Built around a given moment, so the hours always start "now".
 
-import { feelOf } from "./feel";
+import { dayFeels, feelOf } from "./feel";
 import { describe } from "./forecast";
 import { addDays, dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
@@ -260,7 +260,6 @@ function lensDay(spec: Spec, day: number): DayHours {
     gust: hours.map((h) => h.gust),
     uv: hours.map((h) => h.uv),
     temp: hours.map((h) => h.temp),
-    feels: hours.map((h) => h.feels),
     rh: hours.map((h) => h.rh),
     dew: hours.map((h) => h.dew),
     aqi: hours.map((h) => h.aqi),
@@ -286,7 +285,9 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
     const s = spec.hour(day, hour);
     const minutes = hour * 60;
     const isDay = minutes >= rise && minutes < set;
+    // The snapshot carries the readings, not the feel (feel.ts figures it).
     const { aqi, ...lens } = lensHour(spec, day, hour);
+    delete (lens as { feels?: number }).feels;
     return {
       time: t.toISOString(),
       precipChance: s.chance,
@@ -312,8 +313,8 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       gust: Math.max(...hourly.gust),
       dir: (spec.wind[2] + i * 20) % 360,
       uv: Math.max(...hourly.uv),
-      feelsHigh: Math.max(...hourly.feels!),
-      feelsLow: Math.min(...hourly.feels!),
+      feelsHigh: Math.max(...dayFeels(hourly)!),
+      feelsLow: Math.min(...dayFeels(hourly)!),
       aqi: spec.aqi[i],
       hourly,
     };

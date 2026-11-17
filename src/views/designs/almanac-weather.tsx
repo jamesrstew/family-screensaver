@@ -44,6 +44,7 @@ import {
   type Figure,
   type Lens,
 } from "@/lib/lenses";
+import { dayFeels, hourFeel } from "@/lib/feel";
 import { airNow, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Condition } from "@/lib/wear";
@@ -677,9 +678,9 @@ function Days({ w, now, snapshot }: Drawn) {
           gust: d.gust,
           uv: d.uv,
           temp: d.high,
-          feels: d.hourly.feels && d.feelsHigh,
+          feels: d.hourly.temp && d.feelsHigh,
           tempLow: d.low,
-          feelsLow: d.hourly.feels && d.feelsLow,
+          feelsLow: d.hourly.temp && d.feelsLow,
           rh: lo(left(d, d.hourly.rh)),
           dew: hi(left(d, d.hourly.dew)),
           aqi: d.aqi,
@@ -812,8 +813,9 @@ function Days({ w, now, snapshot }: Drawn) {
               bin={3}
               // Each day's 24 hours from midnight, by the family's clock (weather.ts
               // places each hour by its real instant); today's past hours are drawn faint.
-              hours={ahead.flatMap((d) =>
-                Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
+              hours={ahead.flatMap((d) => {
+                const feels = d.hourly && dayFeels(d.hourly);
+                return Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
                   const day = d.hourly;
                   if (!day || h >= day.wind.length) return undefined;
                   return plateHour(
@@ -824,15 +826,15 @@ function Days({ w, now, snapshot }: Drawn) {
                       gust: day.gust[h],
                       uv: day.uv[h],
                       temp: day.temp?.[h],
-                      feels: day.feels?.[h],
+                      feels: feels?.[h],
                       rh: day.rh?.[h],
                       aqi: day.aqi?.[h],
                     },
                     d.precipChance >= CHANCE,
                     h < d.from,
                   );
-                }),
-              )}
+                });
+              })}
               figures={ahead.map((d, i) => figureOf(d, samples[i]))}
             />
           )}
@@ -850,7 +852,10 @@ const COLS = 8;
 /** Hours: Days' sibling. The next day every three hours, the night marked. */
 function Hours({ w, now, snapshot }: Drawn) {
   const tz = snapshot.timeZone;
-  const hours = w.hours.filter((h) => Date.parse(h.time) + HOUR > now.getTime());
+  // How each hour feels is figured here from its readings (the snapshot doesn't carry it).
+  const hours = w.hours
+    .filter((h) => Date.parse(h.time) + HOUR > now.getTime())
+    .map((h) => ({ ...h, feels: hourFeel(h) }));
   const slots = Array.from({ length: COLS }, (_, i) =>
     hours.slice(i * STEP, i * STEP + STEP),
   ).filter((s) => s.length > 0);

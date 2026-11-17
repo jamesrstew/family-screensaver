@@ -31,6 +31,14 @@ export function heatIndex(temp: number, rh: number): number {
   return hi;
 }
 
+/** An hour's feel, from the readings the snapshot carries (it carries the readings, not the feel). */
+export const hourFeel = (h: { temp: number; wind?: number; rh?: number }) =>
+  feelOf(h.temp, h.wind ?? 0, h.rh);
+
+/** A day's hours' feels, from its columns. */
+export const dayFeels = (d: { temp?: number[]; wind: number[]; rh?: number[] }) =>
+  d.temp?.map((t, i) => feelOf(t, d.wind[i] ?? 0, d.rh?.[i]));
+
 /**
  * How an hour feels (°F): the wind chill when it's cold and windy, the heat
  * index when it's hot (never below the thermometer: dry heat is still heat),

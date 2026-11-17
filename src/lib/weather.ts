@@ -1,6 +1,6 @@
 import "server-only";
 import { cacheLife } from "next/cache";
-import { feelOf } from "./feel";
+import { dayFeels } from "./feel";
 import { describe } from "./forecast";
 import { dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
@@ -120,7 +120,6 @@ function dayHours(h: OpenMeteo["hourly"], off: number, tz: string): Map<string, 
         gust: blank(),
         uv: blank(),
         temp: blank(),
-        feels: blank(),
       };
       if (h.relative_humidity_2m) d.rh = blank();
       if (h.dew_point_2m) d.dew = blank();
@@ -138,12 +137,6 @@ function dayHours(h: OpenMeteo["hourly"], off: number, tz: string): Map<string, 
     d.gust[hr] = r0(h.wind_gusts_10m![i]) ?? 0;
     d.uv[hr] = r1(h.uv_index![i]) ?? 0;
     d.temp![hr] = Math.round(h.temperature_2m[i]);
-    // How it feels: the NWS wind chill or heat index (feel.ts), from the raw readings.
-    d.feels![hr] = feelOf(
-      h.temperature_2m[i],
-      h.wind_speed_10m![i] ?? 0,
-      h.relative_humidity_2m?.[i] ?? undefined,
-    );
     if (d.rh) d.rh[hr] = r0(h.relative_humidity_2m![i]) ?? 0;
     if (d.dew) d.dew[hr] = r0(h.dew_point_2m![i]) ?? 0;
   });
@@ -155,6 +148,9 @@ function dayHours(h: OpenMeteo["hourly"], off: number, tz: string): Map<string, 
   }
   return out;
 }
+
+const max = (xs?: number[]) => (xs?.length ? Math.max(...xs) : undefined);
+const min = (xs?: number[]) => (xs?.length ? Math.min(...xs) : undefined);
 
 export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
   const off = d.utc_offset_seconds;
@@ -172,8 +168,9 @@ export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
     gust: r0(d.daily.wind_gusts_10m_max?.[i]),
     dir: r0(d.daily.wind_direction_10m_dominant?.[i]),
     uv: r1(d.daily.uv_index_max?.[i]),
-    feelsHigh: strips.get(date)?.feels && Math.max(...strips.get(date)!.feels!),
-    feelsLow: strips.get(date)?.feels && Math.min(...strips.get(date)!.feels!),
+    // How the day feels at its warmest and coldest: the NWS heat index and wind chill.
+    feelsHigh: max(dayFeels(strips.get(date) ?? { wind: [] })),
+    feelsLow: min(dayFeels(strips.get(date) ?? { wind: [] })),
     hourly: strips.get(date),
   }));
   // The family's date now; with past_days, yesterday comes first and is set aside.
@@ -198,14 +195,6 @@ export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
     gust: r0(d.hourly.wind_gusts_10m?.[from + i]),
     dir: r0(d.hourly.wind_direction_10m?.[from + i]),
     uv: r1(d.hourly.uv_index?.[from + i]),
-    feels:
-      d.hourly.wind_speed_10m?.[from + i] != null
-        ? feelOf(
-            d.hourly.temperature_2m[from + i],
-            d.hourly.wind_speed_10m[from + i]!,
-            d.hourly.relative_humidity_2m?.[from + i] ?? undefined,
-          )
-        : undefined,
     rh: r0(d.hourly.relative_humidity_2m?.[from + i]),
     dew: r0(d.hourly.dew_point_2m?.[from + i]),
   }));
@@ -231,6 +220,15 @@ export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
     },
     days,
     hours,
-    yesterday: before?.hourly ? { date: before.date, hourly: before.hourly } : undefined,
+    yesterday: before?.hourly
+      ? {
+          date: before.date,
+          hourly: {
+            temp: before.hourly.temp,
+            snow: before.hourly.snow,
+            precip: before.hourly.precip,
+          },
+        }
+      : undefined,
   };
 }

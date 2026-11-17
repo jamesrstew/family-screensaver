@@ -8,6 +8,7 @@
 import { AQI_SENSITIVE, airAhead, airLine, airNow, smokeOf, smokeOver, type Smoke } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
+import { hourFeel } from "./feel";
 import { heldCondition, holdKey, wearLine, type Condition, type Facts, type Hold } from "./wear";
 
 /** WMO weather code to a short label. */
@@ -543,7 +544,7 @@ function wearFacts(
 ): Facts {
   const day = w.days.find((x) => x.date === d.date);
   const temps = d.waking.map((h) => h.temp);
-  const feels = d.waking.map((h) => h.feels ?? h.temp);
+  const feels = d.waking.map(hourFeel);
   const warm = temps.length ? Math.max(...temps) : (day?.high ?? w.now.temp);
   const likely = d.waking.filter((h) => hourFall(h)?.sure === "likely").length;
 
@@ -571,7 +572,7 @@ function wearFacts(
         w.yesterday?.date === date
           ? w.yesterday.hourly
           : w.days.find((x) => x.date === date)?.hourly;
-      if (past && hr < past.wind.length) {
+      if (past && hr < past.snow.length) {
         night.push({
           temp: past.temp?.[hr] ?? 99,
           snow: past.snow[hr],

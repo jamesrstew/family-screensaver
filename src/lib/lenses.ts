@@ -8,6 +8,7 @@
 // snowfall (Open-Meteo's own), mph for wind, °F, percent humidity, the plain
 // UV index, the US AQI.
 
+import { dayFeels } from "./feel";
 import { CHANCE, periodWord } from "./forecast";
 import { AQI_SENSITIVE, AQI_UNHEALTHY, HAZE_PM, airAdvice, airPhrase, aqiWord } from "./smoke";
 import { addDays, clock, dayKey, parts } from "./time";
@@ -165,8 +166,8 @@ export function restOfDay(d: Day, from: number, chance?: number): LensDay {
     uv: most(left(h.uv)) ?? 0,
     high: most(left(h.temp)) ?? d.high,
     low: least(left(h.temp)) ?? d.low,
-    feelsHigh: most(left(h.feels)) ?? d.feelsHigh,
-    feelsLow: least(left(h.feels)) ?? d.feelsLow,
+    feelsHigh: most(left(dayFeels(h))) ?? d.feelsHigh,
+    feelsLow: least(left(dayFeels(h))) ?? d.feelsLow,
     aqi: most(nums(h.aqi)),
   };
 }

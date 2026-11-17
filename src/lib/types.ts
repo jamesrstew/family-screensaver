@@ -70,8 +70,7 @@ export type Weather = {
     gust?: number;
     dir?: number;
     uv?: number;
-    /** How it feels (°F: the NWS wind chill or heat index), relative humidity (%), dew point (°F). */
-    feels?: number;
+    /** Relative humidity (%) and dew point (°F). (How it feels is figured from these: feel.ts.) */
     rh?: number;
     dew?: number;
     /** US AQI, fine particles (µg/m³), and the ozone AQI. */
@@ -79,8 +78,8 @@ export type Weather = {
     pm?: number;
     ozone?: number;
   }>; // next 24
-  /** Yesterday's hours, for last evening (fresh snow overnight). */
-  yesterday?: { date: string; hourly: DayHours };
+  /** Yesterday's hours, for last evening (fresh snow, a hard freeze): only what's read. */
+  yesterday?: { date: string; hourly: Pick<DayHours, "temp" | "snow" | "precip"> };
 };
 
 /** One day's hours as columns of numbers (they travel to the TV as JSON: kept small). */
@@ -91,7 +90,6 @@ export type DayHours = {
   gust: number[];
   uv: number[];
   temp?: number[];
-  feels?: number[];
   rh?: number[];
   dew?: number[];
   /** US AQI; null past the end of the air-quality forecast. */
