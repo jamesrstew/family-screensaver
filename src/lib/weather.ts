@@ -81,7 +81,9 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
   const w = shape(await res.json(), new Date(), timeZone);
-  w.today.twilight = civilTwilight(lat, new Date(w.today.sunset));
+  // No sunset in the forecast, no twilight: the paper turns at the old hour.
+  const set = Date.parse(w.today.sunset);
+  if (Number.isFinite(set)) w.today.twilight = civilTwilight(lat, new Date(set));
   return w;
 }
 
