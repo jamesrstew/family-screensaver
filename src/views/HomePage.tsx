@@ -1,18 +1,19 @@
 import { family } from "@/config";
 import { Ink } from "@/components/Ink";
 import { leadFor, questionFor } from "@/lib/pick";
-import { clock, clockFace, dayKey, happeningsOn, longDate, whenOf } from "@/lib/time";
+import { asksQuestion, clock, clockFace, dayKey, happeningsOn, longDate, whenOf } from "@/lib/time";
 import { Credit, KIND_LABEL, Passage, Temp, type ViewProps } from "./parts";
 import { Sky } from "./Sky";
 
 // Home: one thing, beautifully set. Everything else is a quiet note in a
 // corner: the hour, the sky, what's next. The rest lives one page away.
 
-export function HomePage({ snapshot, now, mood }: ViewProps) {
+export function HomePage({ snapshot, now }: ViewProps) {
   const tz = snapshot.timeZone;
   const w = snapshot.weather;
   const hero =
-    (mood === "evening" ? questionFor(snapshot.notebook) : null) ?? leadFor(snapshot.notebook, now);
+    (asksQuestion(now, tz) ? questionFor(snapshot.notebook) : null) ??
+    leadFor(snapshot.notebook, now);
   const next = nextUp(snapshot, now);
   const [, suffix] = clock(now, tz).split(" ");
 

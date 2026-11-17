@@ -1,6 +1,6 @@
 // Home turns slowly between pieces: a view of the weather first (home always
 // opens on the weather, never on a quote), then a passage (a quote, or in the
-// evening the question for the table), then the next weather view, and so on.
+// afternoon the question for the table), then the next weather view, and so on.
 // It counts from the moment home appeared; which quote and which view come up
 // follow the clock, so a reload doesn't repeat the same ones.
 

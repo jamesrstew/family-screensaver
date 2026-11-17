@@ -72,36 +72,64 @@ function Ray({
   );
 }
 
+/**
+ * Smoke and haze veil the sun (living.tsx draws the same in the sky): under
+ * haze its rays are faint; under smoke it has none, only a dim disc crossed
+ * by fine level strokes.
+ */
+export type Veil = "haze" | "smoke";
+
 function Sun({
   cx = 50,
   cy = 50,
   r = 15,
   rays = 16,
+  veil,
+  clip,
 }: {
   cx?: number;
   cy?: number;
   r?: number;
   rays?: number;
+  veil?: Veil;
+  clip?: string;
 }) {
+  if (veil === "smoke" && clip) {
+    // As wide as the rays would reach: the sun is dimmed, not shrunk.
+    const R = r * 1.6;
+    return (
+      <g className="text-ink-soft">
+        <defs>
+          <clipPath id={clip}>
+            <circle cx={cx} cy={cy} r={R - 0.8} />
+          </clipPath>
+        </defs>
+        <circle cx={cx} cy={cy} r={R} strokeWidth={1.3} fill="var(--paper)" />
+        <Hatch clip={clip} from={cy - R} to={cy + R} gap={3} w={0.6} />
+      </g>
+    );
+  }
   return (
     <g>
       <circle cx={cx} cy={cy} r={r} strokeWidth={1.9} fill="var(--paper)" />
       <circle cx={cx} cy={cy} r={r * 0.78} strokeWidth={0.55} />
-      {Array.from({ length: rays }, (_, i) => {
-        const a = (i / rays) * Math.PI * 2 - Math.PI / 2;
-        const long = i % 2 === 0;
-        return (
-          <Ray
-            key={i}
-            cx={cx}
-            cy={cy}
-            a={a}
-            r0={r + 4}
-            r1={r + (long ? r * 1.35 : r * 0.8)}
-            w={long ? 1.5 : 0.9}
-          />
-        );
-      })}
+      <g opacity={veil === "haze" ? 0.45 : 1}>
+        {Array.from({ length: rays }, (_, i) => {
+          const a = (i / rays) * Math.PI * 2 - Math.PI / 2;
+          const long = i % 2 === 0;
+          return (
+            <Ray
+              key={i}
+              cx={cx}
+              cy={cy}
+              a={a}
+              r0={r + 4}
+              r1={r + (long ? r * 1.35 : r * 0.8)}
+              w={long ? 1.5 : 0.9}
+            />
+          );
+        })}
+      </g>
     </g>
   );
 }
@@ -236,11 +264,14 @@ export function Engraving({
   code,
   isDay,
   date,
+  veil,
   className,
 }: {
   code: number;
   isDay: boolean;
   date?: Date;
+  /** Smoke or haze in the air: the sun is veiled, the stars hidden. */
+  veil?: Veil;
   className?: string;
 }) {
   const id = `e${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -255,19 +286,23 @@ export function Engraving({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {kind === "sun" && <Sun />}
+      {kind === "sun" && <Sun veil={veil} clip={`${id}v`} />}
       {kind === "moon" && (
         <>
           <Moon age={moonAge(date ?? new Date())} cx={46} cy={52} r={24} />
-          <Star x={82} y={22} s={1.2} />
-          <Star x={14} y={20} s={0.8} />
-          <Star x={84} y={74} s={0.7} />
+          {veil === "smoke" ? null : (
+            <>
+              <Star x={82} y={22} s={1.2} />
+              <Star x={14} y={20} s={0.8} />
+              <Star x={84} y={74} s={0.7} />
+            </>
+          )}
         </>
       )}
       {kind === "partly" &&
         (isDay ? (
           <>
-            <Sun cx={38} cy={38} r={12} rays={14} />
+            <Sun cx={38} cy={38} r={12} rays={14} veil={veil} clip={`${id}v`} />
             <Cloud id={id} dy={8} />
           </>
         ) : (

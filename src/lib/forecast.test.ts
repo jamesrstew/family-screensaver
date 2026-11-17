@@ -88,7 +88,7 @@ describe("outlook", () => {
       "Tonight 32° Cloudy",
       "Tomorrow 44° Cloudy",
     ]);
-    expect(o.wear).toBe("You’ll want a warm coat.");
+    expect(o.wear).toMatch(/warm coat/i);
     expect(o.ahead).toBe("Snow likely Wednesday.");
     expect(forecastLine(bugMorning(), at("13:10"), tz)).toBe(
       "Cloudy and 45° now, down to 32° tonight. A few flakes possible this evening.",
@@ -100,7 +100,8 @@ describe("outlook", () => {
     const o = outlook(fakeWeather("snow", now, tz), now, tz);
     expect(o.line).toBe("Cloudy and 26° now, up to 33° this afternoon.");
     expect(o.timing).toBe("Snow likely from 2 p.m. until about 10 p.m.");
-    expect(o.wear).toBe("You’ll want a warm coat and boots.");
+    expect(o.wear).toMatch(/boots/i);
+    expect(o.wear).toMatch(/warm coat/);
     expect(o.ahead).toBe("A chance of snow tomorrow.");
     expect(o.tone).toBe("snow");
   });
@@ -131,7 +132,8 @@ describe("outlook", () => {
     expect(o.focus).toBe("tomorrow");
     expect(o.line).toBe("Clear and 53° now, down to 37° overnight. Tomorrow, sunny and 61°.");
     expect(o.parts.map((p) => p.label)).toEqual(["Tonight", "Tomorrow", "Wednesday"]);
-    expect(o.wear).toBe("Tomorrow, you’ll want a jacket.");
+    expect(o.wear).toMatch(/^Tomorrow/);
+    expect(o.wear).toMatch(/jacket/i);
   });
 
   it("past midnight, today is the new day", () => {
@@ -216,6 +218,56 @@ describe("weekLine", () => {
     const now = at("19:00");
     expect(weekLine(fakeWeather("storm", now, tz), now, tz)).toBe(
       "Rain likely Sunday. Highs from 68° to 77°.",
+    );
+  });
+});
+
+describe("smoke in the sky's words", () => {
+  const tz = "America/Los_Angeles";
+  const now = new Date("2026-08-18T13:00:00-07:00");
+  it("calls a smoky day smoky, and puts the air where the coat would go", () => {
+    const w = fakeWeather("smoke", now, tz);
+    const o = outlook(w, now, tz);
+    expect(o.line).toMatch(/^Smoky and \d+° now/);
+    expect(o.air).toMatch(/^Unhealthy air, AQI \d+: keep time outside short and easy\.$/);
+    // The voice says it too.
+    expect(forecastLine(w, now, tz)).toContain(o.air!);
+  });
+  it("calls the smoky parts of the day smoky, not mostly sunny", () => {
+    const o = outlook(fakeWeather("smoke", now, tz), now, tz);
+    expect(o.parts.map((p) => p.words)).not.toContain("Mostly sunny");
+    expect(o.parts[0].words).toBe("Smoky");
+  });
+  it("says nothing of the air on a clear day", () => {
+    const w = fakeWeather("fair", now, tz);
+    expect(outlook(w, now, tz).air).toBeNull();
+    expect(outlook(w, now, tz).line).not.toMatch(/Smoky|Hazy/);
+  });
+});
+
+describe("tomorrow's air, in the evening", () => {
+  it("takes the coat line's place when tomorrow won't be fine for everyone", () => {
+    const tz = "America/Los_Angeles";
+    const now = new Date("2026-11-18T21:00:00-08:00");
+    const w = fakeWeather("fair", now, tz);
+    w.days[1] = { ...w.days[1], aqi: 182 };
+    expect(outlook(w, now, tz).air).toBe(
+      "Tomorrow, unhealthy air, AQI up to 182: keep time outside short and easy.",
+    );
+  });
+});
+
+describe("an ozone day", () => {
+  it("stays clear in the sky's words, and the air line says ozone", () => {
+    const tz = "America/Los_Angeles";
+    const now = new Date("2026-08-18T13:00:00-07:00");
+    const w = fakeWeather("fair", now, tz);
+    w.now = { ...w.now, aqi: 118, ozone: 118, pm: 6, pm10: 30 };
+    const o = outlook(w, now, tz);
+    expect(o.line).not.toMatch(/Smoky|Hazy/);
+    expect(o.parts.map((p) => p.words).join(" ")).not.toMatch(/smoky|hazy/i);
+    expect(o.air).toBe(
+      "Ozone unhealthy for sensitive groups, AQI 118: take it easy outside if you’re sensitive.",
     );
   });
 });

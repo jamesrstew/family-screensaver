@@ -1,27 +1,38 @@
 // Shared pieces for the design directions. Pure; no state.
 
 import { leadAt, questionFor, slotOf } from "@/lib/pick";
-import { addDays, clock, clockFace, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
+import {
+  addDays,
+  asksQuestion,
+  clock,
+  clockFace,
+  dayKey,
+  happeningsOn,
+  parts,
+  weekdayOf,
+} from "@/lib/time";
 import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { fitType } from "./fit";
 
 /**
- * Home's one piece: the evening's question, otherwise the idea of the hour.
+ * Home's one piece: from 2 to 6 p.m. the question for the table, otherwise
+ * the idea of the hour.
  * `skip` passes over that many candidates (the question first, then ideas in
  * the day's order), for when one won't fit its space.
  */
-export function heroOf({ snapshot, now, mood, slide }: ViewProps, skip = 0): NotebookItem | null {
+export function heroOf({ snapshot, now, slide }: ViewProps, skip = 0): NotebookItem | null {
   const n = slide?.kind === "passage" ? slide.n : null;
-  // In the evening the question for the table comes around every other passage.
-  const ask = mood === "evening" && (n === null || n % 2 === 0);
+  // In the afternoon the question for the table comes around every other passage.
+  const asking = asksQuestion(now, snapshot.timeZone);
+  const ask = asking && (n === null || n % 2 === 0);
   const question = ask ? questionFor(snapshot.notebook) : null;
   if (question && skip === 0) return question;
   const at =
     n === null
       ? slotOf(now)
-      : // In the evening only every other passage is a quote; count those alone.
-        mood === "evening"
+      : // While asking, only every other passage is a quote; count those alone.
+        asking
         ? Math.floor(n / 2)
         : n;
   return leadAt(snapshot.notebook, at + skip - (question ? 1 : 0));
