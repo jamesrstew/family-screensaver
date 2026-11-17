@@ -8,7 +8,8 @@
 
 export const WEATHER_MS = 30_000;
 export const PASSAGE_MS = 30_000;
-const TURN_MS = WEATHER_MS + PASSAGE_MS;
+/** A weather slide and a passage: a minute. Passage n is about minute n since 1970. */
+export const TURN_MS = WEATHER_MS + PASSAGE_MS;
 
 /** The approved weather views, in the order home shows them. */
 export const WEATHER_VIEWS = ["now", "hours", "days", "ribbon"] as const;
@@ -41,6 +42,12 @@ export const turns = (base: string) => base === "home" || base === "night";
 export function sinceAfter(from: string, to: string, now: number, since: number): number {
   if (!turns(to) || turns(from)) return since;
   return now - (from === "weather" ? WEATHER_MS : 0);
+}
+
+/** Milliseconds until the carousel's next turn (a slide boundary). */
+export function nextTurnIn(now: number, since: number): number {
+  const r = Math.max(now - since, 0) % TURN_MS;
+  return r < WEATHER_MS ? WEATHER_MS - r : TURN_MS - r;
 }
 
 export const slideKey = (s: Slide) =>

@@ -156,7 +156,8 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
   const act = urgent(o);
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="pt-[2rem] text-center">
+      <Ink order={0} className="relative pt-[2rem] text-center">
+        <Clearing />
         <p className="mx-auto max-w-[106rem] text-balance" style={headline(o.line, 106, 15)}>
           {nb(o.line)}
         </p>
@@ -434,7 +435,8 @@ function Now({ o }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-1 flex-col items-center justify-center px-[6rem] text-center">
-        <Ink order={1}>
+        <Ink order={1} className="relative">
+          <Clearing />
           <p
             className="max-w-[104rem] text-balance"
             style={headline(o.line, 104, o.timing ? 30 : 36)}
@@ -489,6 +491,9 @@ function Now({ o }: Drawn) {
 
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
 
+/** A soft clearing of paper behind a sentence, inked with it (the sky isn't dimmed on home's slides). */
+const Clearing = () => <div className="sky-word-clearing text-clearing" aria-hidden />;
+
 /** The advice line: one line across the page, 3.8 rem when it fits, never under 2.8. */
 const ADVICE = { max: 3.8, min: 2.8, italic: true };
 
@@ -506,9 +511,10 @@ const nb = (s: string) =>
 /* ------------------------------------------------------------------ lenses */
 
 /*
- * Days and Hours turn slowly through their lenses (lenses.ts): the sky, then
- * rain and snow, the air, how it feels, wind, humidity, and UV, each for half
- * a minute, skipping any with nothing to say. The row's labels stay put, and
+ * Days and Hours show their lenses (lenses.ts): the sky, then rain and snow,
+ * the air, how it feels, wind, humidity, and UV, skipping any with nothing to
+ * say. Asked for, they turn every half minute; as a slide on home or at night,
+ * each visit shows the next one, held for the visit. The row's labels stay put, and
  * so does the lens's name when it doesn't change. A turn goes in order, so
  * one lens's sentence never sits over another's figures: the plate sinks,
  * leaving the old sentence over a bare row; then the sentence turns; then
@@ -559,7 +565,8 @@ function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: 
           </p>
         ) : null}
       </Ink>
-      <Ink k={lens} lag={SENTENCE_LAG_MS} plain order={0}>
+      <Ink k={lens} lag={SENTENCE_LAG_MS} plain order={0} className="relative">
+        <Clearing />
         <p
           className="max-w-[102rem] text-balance"
           style={headline(line, 102, caption ? 16.5 : 20.5)}

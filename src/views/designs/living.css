@@ -57,6 +57,7 @@
   position: absolute;
   inset: 0;
   opacity: 0.55;
+  transition: opacity 24s ease;
 }
 [data-mood="night"] .sky-land {
   opacity: 0.3;
@@ -199,6 +200,17 @@
     closest-side,
     color-mix(in srgb, var(--paper) 90%, transparent),
     color-mix(in srgb, var(--paper) 75%, transparent) 60%,
+    transparent
+  );
+}
+/* A weather slide's sentence on home or at night: the sky isn't dimmed for
+   it (the carousel's sky holds steady), so it brings its own clearing. */
+.sky-word-clearing.text-clearing {
+  inset: -3rem -6rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 85%, transparent),
+    color-mix(in srgb, var(--paper) 65%, transparent) 60%,
     transparent
   );
 }

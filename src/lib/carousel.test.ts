@@ -3,6 +3,7 @@ import {
   PASSAGE_MS,
   WEATHER_MS,
   WEATHER_VIEWS,
+  nextTurnIn,
   sinceAfter,
   slideFromKey,
   slideKey,
@@ -89,5 +90,19 @@ describe("night turns as day does", () => {
       targetOf({ base: "night", slide: slideKey(s), asked: null, fromUrl: "now" });
     expect(at({ kind: "weather", view: "now" })).toBe("night:weather-now");
     expect(at({ kind: "passage", n: 7 })).toBe("night:passage-7");
+  });
+});
+
+describe("the cadence, pinned", () => {
+  it("turns every half minute, a weather view and then a passage", () => {
+    expect(WEATHER_MS).toBe(30_000);
+    expect(PASSAGE_MS).toBe(30_000);
+  });
+  it("lands each turn on its moment, not on the next tick", () => {
+    const since = 1_000_000;
+    expect(nextTurnIn(since, since)).toBe(WEATHER_MS);
+    expect(nextTurnIn(since + 12_000, since)).toBe(WEATHER_MS - 12_000);
+    expect(nextTurnIn(since + WEATHER_MS + 1_000, since)).toBe(PASSAGE_MS - 1_000);
+    expect(nextTurnIn(since - 5_000, since)).toBe(WEATHER_MS);
   });
 });

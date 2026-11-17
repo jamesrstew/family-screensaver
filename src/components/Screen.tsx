@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import {
+  nextTurnIn,
   sinceAfter,
   slideFromKey,
   slideKey,
@@ -53,8 +54,8 @@ const SNAPSHOT_EVERY_MS = 5 * 60_000;
 const STALE_WEATHER_MS = 3 * 60 * 60_000;
 // Ask often while people are up; rarely in the small hours (by the clock, not the sun).
 const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
-// Often enough that a half-minute turn lands within a few seconds of its time.
-const TICK_MS = 5_000;
+// The clock shows minutes; the carousel's turns get a timer of their own.
+const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 
 // Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
@@ -106,7 +107,7 @@ export function Screen({
   }
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
-  // Home by day is a slow carousel (Almanac only): each piece turns like a page.
+  // Home and night are a carousel (Almanac only), half a minute a piece, each turning like a page.
   // It counts from the moment home appears, so it always opens on the weather.
   const base = viewOf(page, mood);
   const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
@@ -154,6 +155,15 @@ export function Screen({
       window.clearInterval(t);
     };
   }, []);
+
+  // ---- The carousel's next turn lands on its moment, not on the next tick.
+  useEffect(() => {
+    if (!carousel) return;
+    const at = clockNow();
+    const wait = nextTurnIn(at, homeSince);
+    const t = window.setTimeout(() => setNow(new Date(clockNow())), wait + 50);
+    return () => window.clearTimeout(t);
+  }, [carousel, homeSince, now]);
 
   // ---- Everything returns home.
   useEffect(() => {
@@ -309,8 +319,12 @@ export function Screen({
             w={snapshot.weather}
             now={now}
             mood={mood}
-            arc={view === "home" || view === "night" || slide?.kind === "passage"}
-            quiet={(slide?.kind === "weather" ? slide.view : (asked ?? "now")) !== "now"}
+            // The carousel's sky holds steady, slide to slide: the sun or moon
+            // on its arc, nothing dimmed (its fades take longer than a slide,
+            // so following the slides would make the sky pulse). The weather
+            // slides' words carry their own clearing, in their ink.
+            arc={view === "home" || view === "night" || Boolean(slide)}
+            quiet={!slide && (asked ?? "now") !== "now"}
             seed={seed}
             epoch={epoch}
           />
