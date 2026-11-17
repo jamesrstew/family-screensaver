@@ -123,8 +123,11 @@ export function Home(props: ViewProps) {
   // The house's temperature, in the corner, when what's next leaves it room.
   const inside = cornerNote(props.inside, nextLine);
   const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
+  // The foot is kept whenever the house has been read, note or not, so the
+  // reading coming and going never resizes or changes the passage.
+  const foot = Boolean(next || snapshot.indoor);
   const boxFor = (item: NotebookItem) =>
-    heroBox({ sky: Boolean(w), next: Boolean(next || inside), ask: asks(item), item });
+    heroBox({ sky: Boolean(w), next: foot, ask: asks(item), item });
   const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
   // The first of the day's passages that fits its space; a longer one waits
   // for the Ideas page, which has room for anything.
@@ -170,7 +173,7 @@ export function Home(props: ViewProps) {
           </article>
         ) : null}
       </Ink>
-      {next || inside ? (
+      {foot ? (
         // The foot of the page: what's next in the middle, the house in the corner.
         <div className="relative pt-[1rem] text-center">
           <Ink order={2} mode="seep">
@@ -185,18 +188,21 @@ export function Home(props: ViewProps) {
               )}
             </p>
           </Ink>
-          {inside ? (
-            <Ink
-              k={inside.kind}
-              order={3}
-              mode="seep"
-              className="absolute right-0 bottom-[0.7rem] isolate"
-            >
-              {/* Its own small clearing of paper, so no river runs through it. */}
-              <div className="sky-word-clearing corner-clearing" aria-hidden />
-              <Inside inside={inside} />
-            </Ink>
-          ) : null}
+          {/* Always on the page, so the note sinks away rather than vanishing. */}
+          <Ink
+            k={inside?.kind ?? "none"}
+            order={3}
+            mode="seep"
+            className="absolute right-0 bottom-[0.7rem] isolate"
+          >
+            {inside ? (
+              <>
+                {/* Its own small clearing of paper, so no river runs through it. */}
+                <div className="sky-word-clearing corner-clearing" aria-hidden />
+                <Inside inside={inside} />
+              </>
+            ) : null}
+          </Ink>
         </div>
       ) : null}
     </div>
