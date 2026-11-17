@@ -73,6 +73,8 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
       "precipitation_sum,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max",
     // Eight, so the seven days ahead are all there after today drops off at 5 p.m.
     forecast_days: "8",
+    // And yesterday, for last evening's snow (what to wear notices fresh snow).
+    past_days: "1",
   });
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
@@ -127,7 +129,7 @@ function dayHours(h: OpenMeteo["hourly"]): Map<string, DayHours> {
 export function shape(d: OpenMeteo, now = new Date()): Weather {
   const off = d.utc_offset_seconds;
   const strips = dayHours(d.hourly);
-  const days = d.daily.time.map((date, i) => ({
+  const all = d.daily.time.map((date, i) => ({
     date,
     high: Math.round(d.daily.temperature_2m_max[i]),
     low: Math.round(d.daily.temperature_2m_min[i]),
@@ -144,6 +146,11 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     feelsLow: strips.get(date)?.feels && Math.min(...strips.get(date)!.feels!),
     hourly: strips.get(date),
   }));
+  // The family's date now; with past_days, yesterday comes first and is set aside.
+  const today = new Date(now.getTime() + off * 1000).toISOString().slice(0, 10);
+  const t0 = Math.max(d.daily.time.indexOf(today), 0);
+  const days = all.slice(t0);
+  const before = t0 > 0 ? all[t0 - 1] : undefined;
 
   const firstHour = d.hourly.time.findIndex(
     (t) => new Date(instant(t, off)).getTime() > now.getTime() - 3600_000,
@@ -186,11 +193,12 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
       low: days[0].low,
       precipChance: days[0].precipChance,
       label: days[0].label,
-      sunrise: instant(d.daily.sunrise[0], off),
-      sunset: instant(d.daily.sunset[0], off),
-      nextSunrise: d.daily.sunrise[1] ? instant(d.daily.sunrise[1], off) : undefined,
+      sunrise: instant(d.daily.sunrise[t0], off),
+      sunset: instant(d.daily.sunset[t0], off),
+      nextSunrise: d.daily.sunrise[t0 + 1] ? instant(d.daily.sunrise[t0 + 1], off) : undefined,
     },
     days,
     hours,
+    yesterday: before?.hourly ? { date: before.date, hourly: before.hourly } : undefined,
   };
 }

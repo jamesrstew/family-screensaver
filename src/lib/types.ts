@@ -72,6 +72,8 @@ export type Weather = {
     aqi?: number;
     pm?: number;
   }>; // next 24
+  /** Yesterday's hours, for last evening (fresh snow overnight). */
+  yesterday?: { date: string; hourly: DayHours };
 };
 
 /** One day's hours as columns of numbers (they travel to the TV as JSON: kept small). */

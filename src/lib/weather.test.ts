@@ -77,3 +77,44 @@ describe("shape", () => {
     expect(w.days[1].hourly?.wind[0]).toBe(5);
   });
 });
+
+describe("shape, with yesterday", () => {
+  it("sets yesterday's hours aside and starts the days today", () => {
+    const yesterday = Array.from(
+      { length: 24 },
+      (_, i) => `2026-11-17T${String(i).padStart(2, "0")}:00`,
+    );
+    const time = [...yesterday, ...hours];
+    const fill2 = <T>(f: (i: number) => T) => time.map((_, i) => f(i));
+    const w = shape(
+      {
+        ...base,
+        hourly: {
+          time,
+          temperature_2m: fill2(() => 30),
+          precipitation_probability: fill2(() => 10),
+          precipitation: fill2((i) => (i === 20 ? 0.1 : 0)),
+          snowfall: fill2((i) => (i === 20 ? 0.7 : 0)),
+          wind_speed_10m: fill2(() => 5),
+          wind_gusts_10m: fill2(() => 9),
+          uv_index: fill2(() => 0),
+        },
+        daily: {
+          ...base.daily,
+          time: ["2026-11-17", ...base.daily.time],
+          weather_code: [71, ...base.daily.weather_code],
+          temperature_2m_max: [28, ...base.daily.temperature_2m_max],
+          temperature_2m_min: [20, ...base.daily.temperature_2m_min],
+          precipitation_probability_max: [80, ...base.daily.precipitation_probability_max],
+          sunrise: ["2026-11-17T06:51", ...base.daily.sunrise],
+          sunset: ["2026-11-17T16:49", ...base.daily.sunset],
+        },
+      },
+      new Date("2026-11-18T10:20:00Z"),
+    );
+    expect(w.days[0].date).toBe("2026-11-18");
+    expect(w.today.sunrise).toBe("2026-11-18T06:52:00.000Z");
+    expect(w.yesterday?.date).toBe("2026-11-17");
+    expect(w.yesterday?.hourly.snow[20]).toBe(0.7);
+  });
+});
