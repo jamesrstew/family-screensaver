@@ -193,7 +193,7 @@ export function Home(props: ViewProps) {
               className="absolute right-0 bottom-[0.7rem] isolate"
             >
               {/* Its own small clearing of paper, so no river runs through it. */}
-              <div className="sky-word-clearing" aria-hidden />
+              <div className="sky-word-clearing corner-clearing" aria-hidden />
               <Inside inside={inside} />
             </Ink>
           ) : null}
