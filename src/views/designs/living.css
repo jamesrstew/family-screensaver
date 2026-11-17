@@ -35,36 +35,76 @@
   }
 }
 
-/* ---- The land: contour lines in the paper, breathing. */
-.sky-land {
+/* The sky above the horizon: the sun sets behind the land. */
+.sky-above {
   position: absolute;
   left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* ---- The land: rivers and contours, drifting a little, as from a balloon. */
+.sky-land {
+  position: absolute;
+  inset: 0;
   color: var(--ink-faint);
-  opacity: 0.45;
+  opacity: 0.55;
 }
 [data-mood="night"] .sky-land {
   opacity: 0.3;
 }
-.sky-land-sheet {
+.sky[data-quiet] .sky-land {
+  opacity: 0.35;
+}
+.sky-land-band {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: -3rem;
+  width: 126rem;
+  overflow: hidden;
 }
-.sky-land-b {
-  opacity: 0;
-  animation: sky-swap 61s ease-in-out infinite alternate;
+.sky-land-far {
+  animation: sky-sway-far 229s ease-in-out infinite alternate;
 }
-@keyframes sky-swap {
-  0%,
-  12% {
-    opacity: 0;
+.sky-land-near {
+  animation: sky-sway-near 139s ease-in-out infinite alternate;
+}
+@keyframes sky-sway-far {
+  from {
+    transform: translateX(-0.5rem);
   }
-  88%,
-  100% {
-    opacity: 1;
+  to {
+    transform: translateX(0.5rem);
+  }
+}
+@keyframes sky-sway-near {
+  from {
+    transform: translateX(-1.5rem);
+  }
+  to {
+    transform: translateX(1.5rem);
+  }
+}
+
+/* Cloud shadows on the land: soft ink, squashed by perspective. */
+.sky-shadow {
+  position: absolute;
+  left: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ink) 6%, transparent),
+    color-mix(in srgb, var(--ink) 3%, transparent) 60%,
+    transparent
+  );
+  animation: sky-drift-shadow linear infinite;
+}
+@keyframes sky-drift-shadow {
+  from {
+    transform: translateX(-70rem);
+  }
+  to {
+    transform: translateX(125rem);
   }
 }
 
@@ -97,14 +137,6 @@
   border-radius: 50%;
   animation: sky-pulse 23s ease-in-out infinite alternate;
 }
-.sky-glow-warm {
-  background: radial-gradient(
-    closest-side,
-    color-mix(in srgb, var(--accent) 13%, transparent),
-    color-mix(in srgb, var(--accent) 5%, transparent) 45%,
-    transparent
-  );
-}
 .sky-glow-moon {
   background: radial-gradient(
     closest-side,
@@ -113,23 +145,6 @@
     transparent 70%
   );
 }
-.sky-horizon-warm {
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 40rem;
-}
-.sky-horizon-warm > div {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 30%,
-    color-mix(in srgb, var(--accent) 6%, transparent) 66%,
-    transparent
-  );
-  animation: sky-pulse 37s ease-in-out infinite alternate;
-}
 @keyframes sky-pulse {
   from {
     opacity: 0.55;
@@ -137,6 +152,41 @@
   to {
     opacity: 1;
   }
+}
+
+/* The clearing: paper behind the words, painted once, never moving. */
+.sky-clearing {
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 85%, transparent),
+    color-mix(in srgb, var(--paper) 60%, transparent) 55%,
+    transparent
+  );
+}
+.sky-clearing-hero {
+  left: 8rem;
+  top: 29.5rem;
+  width: 104rem;
+  height: 30rem;
+}
+.sky-clearing-notes {
+  left: 25rem;
+  top: 59.5rem;
+  width: 70rem;
+  height: 8rem;
+}
+.sky-clearing-wide {
+  left: 1rem;
+  top: 5rem;
+  width: 118rem;
+  height: 60rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 75%, transparent),
+    color-mix(in srgb, var(--paper) 55%, transparent) 60%,
+    transparent
+  );
 }
 
 /* ---- Sun and moon. */
@@ -148,13 +198,29 @@
     display 24s allow-discrete,
     transform 10s linear;
 }
+.sky-dot {
+  border-radius: 50%;
+  background: var(--ink-soft);
+}
 .sky-halo {
   animation: sky-spin 557s linear infinite;
 }
 .sky-rays {
   animation:
     sky-spin-back 1213s linear infinite,
-    sky-pulse 13s ease-in-out infinite alternate;
+    sky-rays 29s ease-in-out infinite alternate;
+}
+.sky-rays-soft {
+  animation: sky-spin-back 1213s linear infinite;
+  opacity: 0.6;
+}
+@keyframes sky-rays {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .sky-moon-halo {
   animation: sky-pulse 17s ease-in-out infinite alternate;
@@ -169,19 +235,49 @@
     transform: rotate(-360deg);
   }
 }
+/* The day's ends: long strokes along the horizon, drifting a little. */
+.sky-streaks {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  animation: sky-streaks 61s ease-in-out infinite alternate;
+}
+@keyframes sky-streaks {
+  from {
+    transform: translateX(-1rem);
+  }
+  to {
+    transform: translateX(1rem);
+  }
+}
 
-/* ---- Clouds: two depths. Far ones are smaller, paler, slower. */
+/* ---- Clouds: wisps, far and near cumulus, stratus banks. */
 .sky-cloud {
   left: 0;
 }
-.sky-drift {
-  animation-name: sky-drift;
+.sky-drift,
+.sky-drift-wide {
+  position: relative;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
+}
+.sky-drift {
+  animation-name: sky-drift;
+}
+.sky-drift-wide {
+  animation-name: sky-drift-wide;
 }
 @keyframes sky-drift {
   from {
     transform: translateX(-50rem);
+  }
+  to {
+    transform: translateX(125rem);
+  }
+}
+@keyframes sky-drift-wide {
+  from {
+    transform: translateX(-115rem);
   }
   to {
     transform: translateX(125rem);
@@ -194,31 +290,62 @@
 .sky-cloud-near {
   color: var(--ink-faint);
 }
+.sky-wisp {
+  color: var(--ink-faint);
+  opacity: 0.5;
+}
+.sky-stratus {
+  color: var(--ink-faint);
+}
 .sky-cloud-hatch {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 .sky-cloud-far .sky-cloud-hatch {
-  opacity: 0.4;
+  opacity: 0.45;
 }
 /* Behind the weather pages, whose words sit high, the clouds draw back to a veil. */
 .sky[data-quiet] .sky-cloud[data-on="1"] {
   opacity: 0.4;
 }
-[data-heavy] .sky-cloud-near {
+[data-heavy] .sky-cloud-near,
+[data-heavy] .sky-stratus {
   color: var(--ink-soft);
 }
-[data-heavy] .sky-cloud-hatch {
-  opacity: 0.9;
-}
 [data-mood="night"] .sky-cloud-far,
-[data-mood="night"] .sky-cloud-near {
+[data-mood="night"] .sky-cloud-near,
+[data-mood="night"] .sky-stratus {
   color: var(--ink-faint);
   opacity: 0.8;
 }
+/* Sheet lightning: the cloud lit from within, briefly, once in a long while. */
+.sky-flash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  animation: sky-flash 223s linear infinite;
+  animation-delay: -61s;
+}
+@keyframes sky-flash {
+  0%,
+  99.55% {
+    opacity: 0;
+  }
+  99.7% {
+    opacity: 0.7;
+  }
+  99.8% {
+    opacity: 0.2;
+  }
+  99.88% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 
-/* ---- Stars breathe, each to its own slow count. The faint dust between them
-   is painted with the paper and never moves (a moving full-sheet layer
-   would cost the TV a whole screen of drawing every frame). */
+/* ---- Stars: most breathe slowly; a few scintillate now and then. */
 .sky-star {
   position: absolute;
   margin: -0.8rem 0 0 -0.8rem;
@@ -236,6 +363,29 @@
   }
   60% {
     opacity: 0.4;
+  }
+}
+.sky-star-sci {
+  animation-name: sky-scintillate;
+  animation-timing-function: linear;
+}
+/* Steady at 0.85, then a 1.8 s shimmer in the last 5% of each cycle. */
+@keyframes sky-scintillate {
+  0%,
+  95% {
+    opacity: 0.85;
+  }
+  96.2% {
+    opacity: 0.45;
+  }
+  97.4% {
+    opacity: 1;
+  }
+  98.6% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.85;
   }
 }
 .sky-meteor {
@@ -259,34 +409,79 @@
   }
 }
 
-/* ---- Birds: a few cross now and then, gliding. */
+/* ---- Birds: three flocks, each crossing on its own long cycle (about 35 s
+   to cross), each bird beating its wings to its own count. */
 .sky-flock {
   position: absolute;
   left: 0;
-  animation: sky-flock 677s linear infinite;
-  transform: translateX(-12rem);
+  width: 16rem;
+  height: 6rem;
+  transform: translateX(-20rem);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
-@keyframes sky-flock {
+.sky-flock-a {
+  animation-name: sky-flock-a;
+  animation-duration: 157s;
+}
+.sky-flock-b {
+  animation-name: sky-flock-b;
+  animation-duration: 211s;
+}
+.sky-flock-c {
+  animation-name: sky-flock-c;
+  animation-duration: 283s;
+}
+@keyframes sky-flock-a {
   0% {
-    transform: translate(-12rem, 0);
+    transform: translate(-20rem, 0);
   }
-  8% {
-    transform: translate(132rem, -4rem);
+  22% {
+    transform: translate(135rem, -3rem);
   }
   100% {
-    transform: translate(132rem, -4rem);
+    transform: translate(135rem, -3rem);
   }
 }
-.sky-bob {
-  animation: sky-bob 4.3s ease-in-out infinite alternate;
+@keyframes sky-flock-b {
+  0% {
+    transform: translate(-20rem, 0);
+  }
+  17% {
+    transform: translate(135rem, -4rem);
+  }
+  100% {
+    transform: translate(135rem, -4rem);
+  }
 }
-@keyframes sky-bob {
+@keyframes sky-flock-c {
+  0% {
+    transform: translate(-20rem, 0);
+  }
+  14% {
+    transform: translate(135rem, -2rem);
+  }
+  100% {
+    transform: translate(135rem, -2rem);
+  }
+}
+.sky-bird {
+  position: absolute;
+  animation-name: sky-flap;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes sky-flap {
+  from {
+    transform: scaleY(1);
+  }
   to {
-    transform: translateY(0.7rem) scaleY(0.82);
+    transform: scaleY(0.45) translateY(0.15rem);
   }
 }
 
-/* ---- Mist: long engraved strokes drifting on the low air. */
+/* ---- Mist: two long engraved strokes per band, drifting on the low air. */
 .sky-mist-band {
   left: -10rem;
 }
@@ -296,25 +491,25 @@
 @keyframes sky-mist {
   from {
     transform: translateX(0);
-    opacity: 0.45;
+    opacity: 0.2;
   }
   to {
     transform: translateX(-24rem);
-    opacity: 1;
+    opacity: 0.35;
   }
 }
 
-/* ---- Rain and snow. */
+/* ---- Rain and snow: sheet-wide tiles that only fall. */
 .sky-tile {
   position: absolute;
   animation: sky-fall linear infinite;
 }
 @keyframes sky-fall {
   from {
-    transform: translate(0, 0);
+    transform: translateY(0);
   }
   to {
-    transform: translate(var(--tx), var(--ty));
+    transform: translateY(var(--ty));
   }
 }
 .sky-sway {
@@ -331,17 +526,27 @@
 .sky-rain-far,
 .sky-snow-far {
   color: var(--ink-faint);
-  opacity: 0.5;
+  opacity: 0.55;
 }
 .sky-rain-mid,
 .sky-snow-mid {
   color: var(--ink-faint);
-  opacity: 0.75;
+  opacity: 0.8;
 }
 .sky-rain-near,
 .sky-snow-near {
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.6;
+}
+.sky[data-quiet] .sky-rain-far[data-on="1"],
+.sky[data-quiet] .sky-snow-far[data-on="1"] {
+  opacity: 0.35;
+}
+
+/* The weather pages' small engravings, cut in the sky's fine hand: stroke
+   widths read as pixels at any size (about 0.5 to 1.9 px), not scaled up. */
+.fine-ink :is(path, circle, line, ellipse) {
+  vector-effect: non-scaling-stroke;
 }
 
 /* Still, for those who ask for less motion: the sky as a drawing. */

@@ -12,6 +12,7 @@ import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
+import { useAsked } from "@/views/designs/almanac-weather";
 import { DESIGNS, type Design } from "@/views/designs/registry";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
@@ -237,6 +238,7 @@ export function Screen({
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
 
+  const asked = useAsked();
   const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
   const props = { snapshot, now, mood, slide };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
@@ -264,6 +266,10 @@ export function Screen({
             now={now}
             mood={mood}
             arc={view === "home" || view === "night" || slide?.kind === "passage"}
+            quiet={
+              (slide?.kind === "weather" ? slide.view : view === "weather" ? asked : "now") !==
+              "now"
+            }
             seed={seed}
           />
         ) : null}

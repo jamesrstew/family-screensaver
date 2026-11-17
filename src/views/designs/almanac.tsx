@@ -3,7 +3,7 @@ import { Ink } from "@/components/Ink";
 import { clock } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
-import { ARC, bodyAt, skyNow } from "./arc";
+import { ARC, placeOf } from "./arc";
 import {
   ClockFace,
   Credit,
@@ -25,6 +25,8 @@ import {
  * the hour beside the sun, the ends of the day at the horizon, and below, one
  * passage, set large.
  */
+
+import { bodyLook } from "./living";
 
 export { LivingSky as Sky } from "./living";
 
@@ -48,9 +50,11 @@ function SkyWords({
   tz: string;
   children: ReactNode;
 }) {
-  const sky = skyNow(w, now);
-  const p = bodyAt(sky.t);
-  const radius = sky.body === "sun" ? 8.2 : 6.6;
+  const p = placeOf(w, now);
+  const sky = p.body;
+  const look = bodyLook(w.now.code);
+  // Clear of the body as drawn: the sun's rays, the moon, or the dot under cover.
+  const radius = look === "dot" ? 2 : sky.body === "sun" ? p.size * 0.55 : 6.6;
   // High in the sky, the words hang beneath the body; low, they sit beside it,
   // on the side toward the middle of the sheet, clear of the horizon.
   const r = (n: number) => `${n.toFixed(2)}rem`;
@@ -122,10 +126,13 @@ export function Home(props: ViewProps) {
     <div className="flex h-full flex-col">
       {w ? (
         <SkyWords w={w} now={now} tz={tz}>
-          <p className="text-[3.4rem] leading-none text-ink-soft">
+          {/* The most-glanced fact on the screen: the hour in ink, the temperature softer. */}
+          <p className="text-[4.6rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
             <span className="mx-[1rem] text-ink-faint">·</span>
-            <Deg v={w.now.temp} />
+            <span className="text-ink-soft">
+              <Deg v={w.now.temp} />
+            </span>
           </p>
         </SkyWords>
       ) : (
