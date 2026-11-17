@@ -44,7 +44,7 @@ export type Weather = {
     gust?: number;
     dir?: number;
     uv?: number;
-    /** How the day's warmest and coldest feel (the apparent temperature). */
+    /** How the day's warmest and coldest feel: the NWS heat index and wind chill (feel.ts). */
     feelsHigh?: number;
     feelsLow?: number;
     /** The day's worst air (US AQI), when the air-quality forecast reaches it. */
@@ -64,7 +64,7 @@ export type Weather = {
     gust?: number;
     dir?: number;
     uv?: number;
-    /** How it feels (°F), relative humidity (%), dew point (°F). */
+    /** How it feels (°F: the NWS wind chill or heat index), relative humidity (%), dew point (°F). */
     feels?: number;
     rh?: number;
     dew?: number;
@@ -87,6 +87,8 @@ export type DayHours = {
   dew?: number[];
   /** US AQI; null past the end of the air-quality forecast. */
   aqi?: Array<number | null>;
+  /** Fine particles (µg/m³); null past the end of the air-quality forecast. */
+  pm?: Array<number | null>;
 };
 
 export type Happening = {

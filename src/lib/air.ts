@@ -79,16 +79,17 @@ export function withAir(w: Weather, air: Air): Weather {
       return a ? { ...h, aqi: a.aqi, pm: a.pm } : h;
     }),
     days: w.days.map((d) => {
-      const aqi = Array.from({ length: 24 }, (_, h) => {
-        const a = at(`${d.date}T${String(h).padStart(2, "0")}`);
-        return a ? a.aqi : null;
-      });
+      const hours = Array.from({ length: 24 }, (_, h) =>
+        at(`${d.date}T${String(h).padStart(2, "0")}`),
+      );
+      const aqi = hours.map((a) => a?.aqi ?? null);
+      const pm = hours.map((a) => a?.pm ?? null);
       const known = aqi.filter((x): x is number => x != null);
       if (!known.length) return d;
       return {
         ...d,
         aqi: Math.max(...known),
-        hourly: d.hourly ? { ...d.hourly, aqi } : d.hourly,
+        hourly: d.hourly ? { ...d.hourly, aqi, pm } : d.hourly,
       };
     }),
   };

@@ -1,6 +1,7 @@
 // Made-up skies for tests and design review (?sky=fair|snow|storm|rain|smoke
 // in dev). Built around a given moment, so the hours always start "now".
 
+import { feelOf } from "./feel";
 import { describe } from "./forecast";
 import { addDays, dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
@@ -23,6 +24,8 @@ type Spec = {
   aqi: number[];
   /** How far one can see, meters. */
   visibility: number;
+  /** Sunrise and sunset, minutes after midnight (November's unless said). */
+  sun?: [rise: number, set: number];
   /** The sky for a local hour of a day (0: today, 1: tomorrow). */
   hour: (day: number, h: number) => HourSpec;
   days: Array<[code: number, high: number, low: number, chance: number]>;
@@ -75,7 +78,8 @@ const SPECS: Record<FakeSky, Spec> = {
     days: [
       [75, 33, 24, 90],
       [71, 31, 20, 45],
-      [0, 30, 15, 0],
+      // A slim chance, though the model draws some snow: the lenses mustn't promise it.
+      [71, 30, 15, 15],
       [1, 34, 18, 0],
       [3, 37, 25, 10],
       [73, 35, 27, 70],
@@ -143,6 +147,7 @@ const SPECS: Record<FakeSky, Spec> = {
     rh: [9, 38],
     aqi: [168, 182, 143, 96, 72],
     visibility: 3_000,
+    sun: [5 * 60 + 45, 20 * 60 + 15],
     hour: (_, h) => ({ code: h >= 7 && h < 19 ? 1 : 0, chance: 0 }),
     days: [
       [1, 92, 58, 0],
@@ -207,9 +212,11 @@ function dewOf(f: number, rh: number): number {
 /** One made-up hour, everything the lenses draw. */
 function lensHour(spec: Spec, day: number, h: number) {
   const s = hourAt(spec, day, h);
-  const sure = s.chance >= 30;
-  const snow = sure ? snowOf(s.code) : 0;
-  const precip = sure ? Math.round((waterOf(s.code) + snow / 7) * 100) / 100 : 0;
+  // A fair chance falls in full; a slim one, as Open-Meteo's models often
+  // disagree, still draws a little; under 10%, nothing.
+  const share = s.chance >= 30 ? 1 : s.chance >= 10 ? 0.5 : 0;
+  const snow = snowOf(s.code) * share;
+  const precip = Math.round((waterOf(s.code) * share + snow / 7) * 100) / 100;
   // The wind rises through the day and falls at night, a little more each day.
   const [calm, peak, dir] = spec.wind;
   const x = (Math.cos(((h - 15) / 24) * 2 * Math.PI) + 1) / 2;
@@ -222,13 +229,7 @@ function lensHour(spec: Spec, day: number, h: number) {
   // Driest in the afternoon, dampest at dawn.
   const [dry, damp] = spec.rh;
   const rh = Math.round(damp - x * (damp - dry));
-  // Cold and wind: the wind's chill. Hot and humid: the heat's weight.
-  const feels =
-    temp < 50
-      ? temp - Math.round(wind * 0.6)
-      : temp > 80
-        ? temp + Math.round(((rh - 20) / 10) * 2)
-        : temp;
+  const feels = feelOf(temp, wind, rh);
   // The air, worst in the afternoon; nothing known past the fifth day.
   const worst = spec.aqi[day];
   const aqi = worst == null ? null : Math.round(worst * (0.7 + 0.3 * x));
@@ -263,6 +264,7 @@ function lensDay(spec: Spec, day: number): DayHours {
     rh: hours.map((h) => h.rh),
     dew: hours.map((h) => h.dew),
     aqi: hours.map((h) => h.aqi),
+    pm: hours.map((h) => h.pm ?? null),
   };
 }
 
@@ -275,13 +277,15 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
   const p = parts(now, timeZone);
   const midnight = now.getTime() - ((p.hour * 60 + p.minute) * 60_000 + now.getUTCSeconds() * 1000);
   const top = Math.floor(now.getTime() / HOUR) * HOUR;
+  const [rise, set] = spec.sun ?? [6 * 60 + 52, 16 * 60 + 48];
 
   const hours = Array.from({ length: 24 }, (_, i) => {
     const t = new Date(top + i * HOUR);
     const { hour } = parts(t, timeZone);
     const day = dayKey(t, timeZone) === today ? 0 : 1;
     const s = spec.hour(day, hour);
-    const isDay = hour >= 7 && hour < 17;
+    const minutes = hour * 60;
+    const isDay = minutes >= rise && minutes < set;
     const { aqi, ...lens } = lensHour(spec, day, hour);
     return {
       time: t.toISOString(),
@@ -331,9 +335,9 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       low: days[0].low,
       precipChance: days[0].precipChance,
       label: days[0].label,
-      sunrise: new Date(midnight + (6 * 60 + 52) * 60_000).toISOString(),
-      sunset: new Date(midnight + (16 * 60 + 48) * 60_000).toISOString(),
-      nextSunrise: new Date(midnight + (24 * 60 + 6 * 60 + 53) * 60_000).toISOString(),
+      sunrise: new Date(midnight + rise * 60_000).toISOString(),
+      sunset: new Date(midnight + set * 60_000).toISOString(),
+      nextSunrise: new Date(midnight + (24 * 60 + rise + 1) * 60_000).toISOString(),
     },
     days,
     hours,
