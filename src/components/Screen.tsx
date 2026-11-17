@@ -24,6 +24,7 @@ import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
 import { glowsAt } from "@/views/designs/living";
 import { DESIGNS, type Design } from "@/views/designs/registry";
+import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
@@ -142,9 +143,14 @@ export function Screen({
   }) as View;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
+  // Just after a turn the old page has already sunk: the next takes the paper at once.
+  const wasTurning = useRef(false);
   useEffect(() => {
-    if (!leaving || turning) return;
-    const t = window.setTimeout(() => setView(target), leaveMs());
+    const justTurned = wasTurning.current && !turning;
+    wasTurning.current = turning;
+    const wait = swapDelay(leaving, turning, justTurned, leaveMs());
+    if (wait === null) return;
+    const t = window.setTimeout(() => setView(target), wait);
     return () => window.clearTimeout(t);
   }, [leaving, target, turning]);
 
@@ -364,20 +370,19 @@ export function Screen({
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>
-        <Dusk
-          twilight={twilight}
-          paper={paper}
-          turning={turning}
-          on={page === "home"}
-          clear={glowsAt(snapshot.weather)}
-          glow={
-            target === "home" ||
-            target === "night" ||
-            (/^(home|night):/.test(target) &&
-              slideFromKey(target.split(":")[1])?.kind === "passage")
-          }
-        />
-        <VoiceLine state={voice.state} caption={voice.caption} />
+        {design === "almanac" ? (
+          <Dusk
+            twilight={twilight}
+            paper={paper}
+            turning={turning}
+            on={page === "home"}
+            clear={glowsAt(snapshot.weather)}
+          />
+        ) : null}
+        {/* The voice's line sinks at the turn too, and comes back after. */}
+        <InkStage.Provider value={turning}>
+          <VoiceLine state={voice.state} caption={voice.caption} />
+        </InkStage.Provider>
       </main>
       <Fps />
     </div>

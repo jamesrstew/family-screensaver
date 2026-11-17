@@ -1,37 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DUSK_PEAK, veilOf, type Mood, type Twilight } from "@/lib/time";
+import type { Mood, Twilight } from "@/lib/time";
+import { turnTimes, turnsPaper, veilState } from "@/lib/turn";
 import { ARC, bodyAt } from "@/views/designs/arc";
 import { leaveMs } from "./Ink";
 
 /*
  * Dusk and dawn on the screen: when the paper turns, and the veil of the
- * room's light over the day's paper.
+ * room's light over the day's paper (the decisions are in lib/turn.ts).
  */
-
-/** How long the paper takes to turn at dusk or dawn (it's empty meanwhile). */
-export const PAPER_MS = 3000;
 
 /**
  * The paper's mood, held back at the turn so it never changes under words:
  * whatever is up sinks, the paper turns (empty; on home, under the veil), and
- * only then may the page ink in again (`turning` is true until it may). Waking
- * up, the paper takes the mood at once.
+ * only then may the page ink in again (`turning` is true until it may). Only
+ * night and day turn it; waking up, the paper takes the mood at once.
  */
-export function useTurn(mood: Mood, slow: boolean) {
+export function useTurn(mood: Mood, settled: boolean) {
   const [paper, setPaper] = useState(mood);
   const [turning, setTurning] = useState(false);
   const [last, setLast] = useState(mood);
   if (mood !== last) {
     setLast(mood);
-    if (slow) setTurning(true);
-    else setPaper(mood);
+    if (turnsPaper(paper, mood, settled)) setTurning(true);
+    else if (!turning) setPaper(mood);
   }
   useEffect(() => {
     if (!turning) return;
-    const sunk = window.setTimeout(() => setPaper(mood), leaveMs());
-    const turned = window.setTimeout(() => setTurning(false), leaveMs() + PAPER_MS);
+    const at = turnTimes(leaveMs());
+    const sunk = window.setTimeout(() => setPaper(mood), at.sunk);
+    const turned = window.setTimeout(() => setTurning(false), at.turned);
     return () => {
       window.clearTimeout(sunk);
       window.clearTimeout(turned);
@@ -43,9 +42,9 @@ export function useTurn(mood: Mood, slow: boolean) {
 /**
  * The light of dusk and dawn: one veil of the room's dark over the day's
  * paper, words and all, so the light falls without the ink losing the page.
- * Under a clear sky it lies deeper away from the sun, and on home's own piece
- * the sky just above the horizon where the sun went down (or will come up)
- * holds its light longest; under cloud, an even dusk. Never over the night's
+ * Under a clear sky it lies deeper away from the sun, and the sky just above
+ * the horizon where the sun went down (or will come up) holds its light
+ * longest; under cloud, an even dusk. Never over the night's
  * paper, the voice, or a page someone asked for. Its opacity is set once a
  * minute and glides there on the compositor; at the turn it moves quickly,
  * over empty paper. Nothing repaints.
@@ -56,35 +55,33 @@ export function Dusk({
   turning,
   on,
   clear,
-  glow,
 }: {
   twilight: Twilight | null;
   /** The paper's mood (useTurn). */
   paper: Mood;
   turning: boolean;
-  /** Home (by day or night) is up. */
+  /** Home's carousel (by day or night) is up. */
   on: boolean;
   /** No cloud or smoke between the family and the sun's side of the sky. */
   clear: boolean;
-  /** Home's own piece is up, or coming (not a weather view): the horizon may glow. */
-  glow: boolean;
 }) {
   const side = twilight?.side ?? "dusk";
-  const veil = !on || !twilight ? 0 : turning ? DUSK_PEAK[side] : veilOf(twilight);
+  const veil = veilState({ twilight, on, turning, paper });
   const x = bodyAt(side === "dawn" ? 0 : 1).x;
   return (
     <div
       className="dusk"
       aria-hidden
-      data-on={twilight ? "1" : "0"}
+      data-on={veil.shown ? "1" : "0"}
       data-side={side}
       data-sky={clear ? "clear" : "even"}
-      data-quick={turning || paper === "night" ? "" : undefined}
-      style={{ opacity: veil }}
+      data-quick={veil.quick ? "" : undefined}
+      style={{ opacity: veil.opacity }}
     >
+      {/* Steady through the carousel: it goes with the veil, not the slides. */}
       <div
         className="dusk-glow"
-        data-on={clear && glow && paper !== "night" ? "1" : "0"}
+        data-on={clear && paper !== "night" ? "1" : "0"}
         // Half a flat glow, sitting on the sheet's horizon (the veil reaches
         // 3 rem past the sheet, for its drift).
         style={{ left: `${(x - 24 + 3).toFixed(1)}rem`, top: `${ARC.cy - 7 + 3}rem` }}

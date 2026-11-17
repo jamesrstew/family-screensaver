@@ -196,6 +196,12 @@ body {
 .dusk[data-on="0"] {
   display: none;
 }
+/* Drawn again (at the dawn turn, say), it rises from clear, never in one step. */
+@starting-style {
+  [data-settled] .dusk[data-on="1"] {
+    opacity: 0 !important;
+  }
+}
 /* The sky just above the horizon where the sun went down holds its light
    longest: half of a flat glow of the day's paper, inside the veil (so it
    lifts the veil there by a third, and goes with it). */
