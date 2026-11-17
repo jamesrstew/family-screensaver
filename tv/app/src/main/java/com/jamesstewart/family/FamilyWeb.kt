@@ -23,7 +23,8 @@ fun familyUrl(page: String, extraQuery: String? = null): String? {
     val base = BuildConfig.FAMILY_URL
     if (base.isBlank() || base == UNCONFIGURED_URL) return null
     val query = "page=" + Uri.encode(page) + (extraQuery?.let { "&$it" } ?: "")
-    return "$base/?$query"
+    // A fresh address every time, so the WebView never paints a cached page from hours ago.
+    return "$base/?$query&t=${System.currentTimeMillis()}"
 }
 
 fun WebView.loadFamily(page: String, extraQuery: String? = null) {
@@ -36,7 +37,8 @@ private fun notConfiguredUrl(reason: String) =
 /** A full-screen WebView configured for the family web app. Shared by the activity and the dream. */
 @SuppressLint("SetJavaScriptEnabled")
 fun createFamilyWebView(context: Context): WebView = WebView(context).apply {
-    setBackgroundColor(Color.parseColor("#f8f4ea"))
+    // Dark until the page paints: a moment of dark by day is fine; a flash of light at night isn't.
+    setBackgroundColor(Color.parseColor("#0b0a09"))
     isFocusable = true
     isFocusableInTouchMode = true
     settings.apply {

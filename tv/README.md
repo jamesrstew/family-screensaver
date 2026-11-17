@@ -78,7 +78,13 @@ $ADB shell settings get secure screensaver_components                 # verify
 $ADB shell settings put secure screensaver_enabled 1
 $ADB shell am start -n com.android.systemui/.Somnambulator            # start it now (if present)
 $ADB shell dumpsys dreams                                             # shows the active dream
+$ADB shell appops set com.jamesstewart.family APP_AUTO_START allow    # TCL: let the dream start the app
 ```
+
+**TCL:** TCL's own boot manager (`TclAppBoot`) refuses to bind a third-party dream after a reboot
+(`logcat`: `forbid bind service ... callee_does't_have_OP_AUTO_START_permission`), and the screensaver
+silently falls back to nothing. The `APP_AUTO_START` app op above fixes it; an app can't grant it to
+itself. Diagnose with `$ADB logcat -d | grep -E 'DreamController|TclAppBoot'`.
 
 If `Somnambulator` isn't present, set a short timeout (Settings → System → Energy/Ambient mode, or
 `$ADB shell settings put system screen_off_timeout 60000`) and wait. Google TV's own
