@@ -203,17 +203,28 @@ body {
   }
 }
 /* The sky just above the horizon where the sun went down holds its light
-   longest: half of a flat glow of the day's paper, inside the veil (so it
-   lifts the veil there by a third, and goes with it). */
+   longest: a flat glow of the day's paper, inside the veil (so it lifts the
+   veil there by a third, and goes with it). Above the horizon, a half
+   ellipse 7 rem tall; below, the same glow feathered into the land over
+   3 rem, so there's no edge where no horizon rule is drawn. The two halves
+   agree along the horizon itself, so they meet without a seam. */
 .dusk-glow {
   position: absolute;
   width: 48rem;
-  height: 7rem;
-  background: radial-gradient(
-    ellipse 50% 100% at 50% 100%,
-    color-mix(in srgb, var(--paper) 32%, transparent),
-    transparent
-  );
+  height: 10rem;
+  background:
+    radial-gradient(
+        ellipse 50% 100% at 50% 100%,
+        color-mix(in srgb, var(--paper) 32%, transparent),
+        transparent
+      )
+      top / 100% 7rem no-repeat,
+    radial-gradient(
+        ellipse 50% 100% at 50% 0%,
+        color-mix(in srgb, var(--paper) 32%, transparent),
+        transparent
+      )
+      bottom / 100% 3rem no-repeat;
   /* The sky layers' own pace, so it follows the arc rather than pulsing
      with home's turning pieces. */
   transition: opacity 24s ease;

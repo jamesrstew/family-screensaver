@@ -226,8 +226,9 @@ export function LivingSky({
         epoch={epoch}
         show={night && starsLevel === "all" && out === STAR_TIERS}
       />
+      {/* Not clipped at the horizon: it feathers into the land. */}
+      <Afterglow x={edge} twilight={twilight} show={arc && night && glow && twilight !== null} />
       <Above>
-        <Afterglow x={edge} twilight={twilight} show={arc && night && glow && twilight !== null} />
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
         <Streaks
           x={sun && low > 0 ? place!.x : edge}
@@ -383,9 +384,9 @@ function Light({ place, show }: { place: Place | null; show: boolean }) {
 
 /**
  * After the turn, the last of the light on the horizon where the sun went
- * down, fading as the dusk deepens (at dawn, the first, growing). Half of a
- * wide, flat glow, the half above the horizon. Its strength is set once a
- * minute and glides there.
+ * down, fading as the dusk deepens (at dawn, the first, growing): a wide,
+ * flat glow above the horizon, feathered a little into the land below it.
+ * Its strength is set once a minute and glides there.
  */
 function Afterglow({ x, twilight, show }: { x: number; twilight: Twilight | null; show: boolean }) {
   const left = twilight ? 1 - (twilight.depth - TURN) / (1 - TURN) : 0;
