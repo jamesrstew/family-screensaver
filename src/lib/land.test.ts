@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { LAND_INK, LAND_H, LAND_W, landSvg } from "./land";
+import { GET } from "@/app/land/[seed]/route";
+import { LAND_INK, LAND_H, LAND_SEEDS, LAND_W, landOf, landSvg } from "./land";
 import { hashOf } from "./organic";
 
 describe("landSvg", () => {
@@ -46,5 +47,32 @@ describe("landSvg", () => {
     expect(token(almanac, "ink-soft")).toBe(LAND_INK.day.soft);
     expect(token(night, "ink-faint")).toBe(LAND_INK.night.faint);
     expect(token(night, "ink-soft")).toBe(LAND_INK.night.soft);
+  });
+});
+
+describe("the land's bound", () => {
+  it("maps any sky's seed into the small fixed set", () => {
+    for (const seed of [0, 1, 63, 64, 99_999, 12_345]) {
+      const n = landOf(seed);
+      expect(n).toBeGreaterThanOrEqual(0);
+      expect(n).toBeLessThan(LAND_SEEDS);
+    }
+  });
+
+  const get = (seed: string) =>
+    GET(new Request(`http://tv/land/${seed}?tone=day`), {
+      params: Promise.resolve({ seed }),
+    } as never);
+
+  it("draws a land inside the set", async () => {
+    const res = await get(String(LAND_SEEDS - 1));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+  });
+
+  it("draws nothing outside it", async () => {
+    for (const seed of [String(LAND_SEEDS), "12345", "-1", "abc", "1.5"]) {
+      expect((await get(seed)).status).toBe(404);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { LAND_H, LAND_TOP } from "@/lib/land";
+import { LAND_H, LAND_TOP, landOf } from "@/lib/land";
 import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import type { Mood } from "@/lib/time";
@@ -239,7 +239,7 @@ function Land({ seed }: { seed: number }) {
         // eslint-disable-next-line @next/next/no-img-element -- a fixed SVG drawing, no optimizing to do
         <img
           key={tone}
-          src={`/land/${seed}?tone=${tone}`}
+          src={`/land/${landOf(seed)}?tone=${tone}`}
           alt=""
           decoding="async"
           className={`sky-land-img sky-land-${tone}`}
@@ -259,11 +259,13 @@ function Land({ seed }: { seed: number }) {
 /** The shadows of clouds sliding over the land, squashed by perspective. */
 function Shadows({ seed, epoch, show }: { seed: number; epoch: number; show: boolean }) {
   const r = rng(seed ^ 0x3c6ef372);
+  // Centers, sizes in rem. All fall below the clean band of paper under the
+  // horizon (the land's first lines begin about 6 rem below it).
   const lanes = [
-    { y: 31.5, w: 28, h: 5, dur: 900 },
-    { y: 37, w: 40, h: 7, dur: 700 },
-    { y: 46, w: 52, h: 10, dur: 520 },
-    { y: 56, w: 64, h: 13, dur: 410 },
+    { y: 36, w: 28, h: 5, dur: 900 },
+    { y: 41, w: 40, h: 7, dur: 700 },
+    { y: 49, w: 52, h: 10, dur: 520 },
+    { y: 58, w: 64, h: 12, dur: 410 },
   ];
   return (
     <Layer show={show} className="sky-fill">
@@ -640,6 +642,43 @@ function Clouds({
         const { billows, base, rows, crown } = c.shape;
         const W = c.w * 10;
         const H = c.h * 10;
+        // The cloud's true extent (billows can reach past its nominal box),
+        // so nothing is cut off by the edge of its drawing.
+        const x0 = Math.min(...billows.map((b) => b.x - b.r)) - 4;
+        const x1 = Math.max(...billows.map((b) => b.x + b.r)) + 4;
+        const y0 = Math.min(...billows.map((b) => b.y - b.r)) - 4;
+        const bow = H * 0.08;
+        const y1 = base + bow + 4;
+        const vb = `${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`;
+        const box = {
+          width: rem((x1 - x0) / 10),
+          height: rem((y1 - y0) / 10),
+          marginLeft: rem(x0 / 10),
+          marginTop: rem(y0 / 10),
+        };
+        // The bowed base: `bow` lower in the middle, rising to the ends. It's
+        // the same quadratic as the clip below (control point 2 * bow down, so
+        // the curve dips by bow); x runs linearly along it.
+        const baseAt = (x: number) => {
+          const t = (x1 - x) / (x1 - x0);
+          return base + 4 * t * (1 - t) * bow;
+        };
+        // Drawn only where the billows actually reach the base, as a fine
+        // broken stroke, so the cloud is a closed silhouette.
+        const reach = billows
+          .filter((b) => Math.abs(base - b.y) < b.r)
+          .map((b) => {
+            const half = Math.sqrt(b.r * b.r - (base - b.y) ** 2);
+            return [b.x - half, b.x + half];
+          });
+        const bx0 = Math.min(...reach.map((r) => r[0]));
+        const bx1 = Math.max(...reach.map((r) => r[1]));
+        const baseLine = reach.length
+          ? Array.from({ length: 13 }, (_, k) => {
+              const x = bx0 + ((bx1 - bx0) * k) / 12;
+              return `${k ? "L" : "M"}${x.toFixed(1)} ${baseAt(x).toFixed(1)}`;
+            }).join("")
+          : "";
         const circles = (dr: number, fill?: string) =>
           billows.map((b, k) => (
             <circle
@@ -665,18 +704,12 @@ function Clouds({
                 transform: `translateX(${rem(c.rest)})`,
               }}
             >
-              <svg
-                viewBox={`-10 -10 ${W + 20} ${H + 20}`}
-                style={{ width: rem(c.w + 2), height: rem(c.h + 2) }}
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-              >
+              <svg viewBox={vb} style={box} fill="none" stroke="currentColor" strokeLinecap="round">
                 <defs>
                   {/* A slightly bowed base: nothing below it. */}
                   <clipPath id={`${c.id}b`}>
                     <path
-                      d={`M-10 -10H${W + 10}V${base.toFixed(1)}Q${(W / 2).toFixed(1)} ${(base + H * 0.08).toFixed(1)} -10 ${base.toFixed(1)}Z`}
+                      d={`M${x0.toFixed(1)} ${y0.toFixed(1)}H${x1.toFixed(1)}V${base.toFixed(1)}Q${((x0 + x1) / 2).toFixed(1)} ${(base + 2 * bow).toFixed(1)} ${x0.toFixed(1)} ${base.toFixed(1)}Z`}
                     />
                   </clipPath>
                   <clipPath id={c.id}>{circles(0)}</clipPath>
@@ -695,12 +728,12 @@ function Clouds({
                   <mask
                     id={`${c.id}m`}
                     maskUnits="userSpaceOnUse"
-                    x={-10}
-                    y={-10}
-                    width={W + 20}
-                    height={H + 20}
+                    x={x0}
+                    y={y0}
+                    width={x1 - x0}
+                    height={y1 - y0}
                   >
-                    <rect x={-10} y={-10} width={W + 20} height={H + 20} fill={`url(#${c.id}g)`} />
+                    <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={`url(#${c.id}g)`} />
                   </mask>
                 </defs>
                 <g clipPath={`url(#${c.id}b)`}>
@@ -722,15 +755,18 @@ function Clouds({
                     ))}
                   </g>
                 </g>
+                {/* The base, closing the silhouette: a fine broken line. */}
+                <path
+                  d={baseLine}
+                  strokeWidth={c.far ? 0.9 : 1.1}
+                  strokeDasharray="14 7"
+                  opacity={0.4}
+                />
               </svg>
               {/* Sheet lightning, by day in a storm: once in a long while the
                   cloud is lit from within (its shadow briefly paled). */}
               {flash && !c.far && i === 1 ? (
-                <svg
-                  viewBox={`-10 -10 ${W + 20} ${H + 20}`}
-                  className="sky-flash"
-                  style={{ width: rem(c.w + 2), height: rem(c.h + 2) }}
-                >
+                <svg viewBox={vb} className="sky-flash" style={box}>
                   <g clipPath={`url(#${c.id}b)`} stroke="none">
                     {circles(-1.1, "var(--paper)")}
                   </g>

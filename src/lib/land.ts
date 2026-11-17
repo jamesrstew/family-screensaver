@@ -15,6 +15,16 @@ import { contours, drainage, levelsOf, terrain } from "./organic";
 export type Tone = "day" | "night";
 
 /**
+ * How many lands there are. The route is public, and each new land costs the
+ * server about a tenth of a second to draw, so the set is small and fixed:
+ * a day's sky picks one of these, and the cache holds them all (two tones each).
+ */
+export const LAND_SEEDS = 64;
+
+/** The land for a sky's seed. */
+export const landOf = (seed: number) => ((seed % LAND_SEEDS) + LAND_SEEDS) % LAND_SEEDS;
+
+/**
  * The paper tokens the land is drawn in (Almanac's ink-faint and ink-soft,
  * day and night, from src/views/designs/designs.css). An image can't read
  * CSS variables, so they're baked here; a test keeps them in step.

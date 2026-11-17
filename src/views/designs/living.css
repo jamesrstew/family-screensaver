@@ -118,8 +118,8 @@
   border-radius: 50%;
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--ink) 6%, transparent),
-    color-mix(in srgb, var(--ink) 3%, transparent) 60%,
+    color-mix(in srgb, var(--ink) 4%, transparent),
+    color-mix(in srgb, var(--ink) 2%, transparent) 55%,
     transparent
   );
   animation: sky-drift-shadow linear infinite;
