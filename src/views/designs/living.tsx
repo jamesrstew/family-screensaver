@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { contours, drainage, levelsOf, rng, terrain } from "@/lib/organic";
+import { LAND_H, LAND_TOP } from "@/lib/land";
+import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import type { Mood } from "@/lib/time";
 import type { Weather } from "@/lib/types";
@@ -220,115 +221,36 @@ function Above({ children }: { children: ReactNode }) {
 
 /* ---------------------------------------------------------------- the land */
 
-// Below the horizon, the paper is land, sampled straight through a camera
-// (each point of the sheet looks down onto the ground), so it's drawn flat,
-// once, at screen size. The ground's shape leads the eye: it slopes down
-// toward the horizon and toward a main valley up the middle, so the drainage
-// gathers from both sides into a trunk that runs from the foot of the sheet
-// toward the hero. The rivers are the strong lines; the contours sit behind.
-type LandArt = { contours: string[]; rivers: string[] };
-const LAND = new Map<number, LandArt>();
-const STEP = 0.6; // rem per grid step on the sheet
-const TOP = ARC.cy + 0.6; // where the ground begins, just under the horizon
-const NEAR = 40; // the ground's distance at the foot of the sheet (rem)
-const FOCAL = 40;
-const CAMERA = ((67.5 - ARC.cy) * NEAR) / FOCAL;
+// Below the horizon, the paper is land (src/lib/land.ts): rivers branching
+// like veins toward the horizon, contours behind, drawn on the server as one
+// cached image, so the TV computes nothing and its HTML stays small. Two
+// bands of the same image, far and near, drift at their own speeds
+// (parallax); each holds the day and the night drawing, which cross-fade with
+// the paper. If the image can't load, there's simply no land.
 const SPLIT = 45; // rem: the far land above, the near land below
-const LAND_H = Math.round((67.5 - TOP) * 10);
-
-function landOf(seed: number): LandArt {
-  const got = LAND.get(seed);
-  if (got) return got;
-  const cols = Math.ceil(126 / STEP);
-  const rows = Math.ceil((69 - TOP) / STEP);
-  const height = (i: number, j: number) => {
-    const x = -3 + i * STEP;
-    const y = TOP + j * STEP;
-    // From the sheet down onto the ground: depth, then across.
-    const z = (FOCAL * CAMERA) / (y - ARC.cy);
-    const across = ((x - 60) * z) / FOCAL;
-    // Far off, the ground flattens into haze: no lines crowd the horizon.
-    const k = Math.exp(-(z - NEAR) / 120);
-    const ground = terrain(seed, across / 52, z / 52) * 0.75;
-    const valley = 0.55 * Math.min(Math.abs(across) / 70, 1) ** 1.3;
-    const slope = 0.3 * (NEAR / z);
-    return (ground + valley) * k + slope;
-  };
-  const levels = levelsOf(height, cols, rows, 11);
-  const art = {
-    contours: contours(height, cols, rows, levels, STEP * 10, 15),
-    rivers: drainage(height, cols, rows, STEP * 10, 22, 4, seed),
-  };
-  LAND.set(seed, art);
-  return art;
-}
-
-// Rivers taper from trunks to capillaries (in sheet units, 10 per rem).
-const RIVER_W = [0.32, 0.55, 0.9, 1.35];
 
 function Land({ seed }: { seed: number }) {
-  const art = landOf(seed);
-  const id = `land${seed % 997}`;
-  // Two bands of the same drawing, far and near, so they can drift at their
-  // own speeds (parallax). The far ground melts into the haze through a mask
-  // painted with the lines (never a CSS mask over a moving layer).
-  const band = (from: number, to: number, className: string) => {
-    const y0 = Math.round((from - TOP) * 10);
-    const y1 = Math.round((to - TOP) * 10);
-    return (
-      <div
-        className={`sky-land-band ${className}`}
-        style={{ top: rem(from), height: rem(to - from) }}
-      >
-        <svg
-          viewBox={`0 ${y0} 1260 ${y1 - y0}`}
-          preserveAspectRatio="none"
-          className="sky-fill"
-          fill="none"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        >
-          <g mask={`url(#${id}m)`}>
-            <g opacity={0.5} strokeWidth={0.75}>
-              {art.contours.map((d, i) => (
-                <path key={i} d={d} />
-              ))}
-            </g>
-            {/* The rivers, the strong lines: veins from capillaries to trunks. */}
-            <g className="text-ink-soft">
-              {art.rivers.map((d, i) => (
-                <path key={i} d={d} strokeWidth={RIVER_W[i]} />
-              ))}
-            </g>
-          </g>
-        </svg>
-      </div>
-    );
-  };
+  const band = (from: number, to: number, className: string) => (
+    <div
+      className={`sky-land-band ${className}`}
+      style={{ top: rem(from), height: rem(to - from) }}
+    >
+      {(["day", "night"] as const).map((tone) => (
+        // eslint-disable-next-line @next/next/no-img-element -- a fixed SVG drawing, no optimizing to do
+        <img
+          key={tone}
+          src={`/land/${seed}?tone=${tone}`}
+          alt=""
+          decoding="async"
+          className={`sky-land-img sky-land-${tone}`}
+          style={{ top: rem(LAND_TOP - from), height: rem(LAND_H / 10) }}
+        />
+      ))}
+    </div>
+  );
   return (
     <div className="sky-land">
-      {/* The haze mask, shared by both bands (they use the same coordinates). */}
-      <svg width="0" height="0" className="absolute">
-        <defs>
-          <linearGradient
-            id={`${id}g`}
-            x1={0}
-            y1={0}
-            x2={0}
-            y2={LAND_H}
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop offset={0.13} stopColor="#fff" stopOpacity={0} />
-            <stop offset={0.3} stopColor="#fff" stopOpacity={0.35} />
-            <stop offset={0.75} stopColor="#fff" stopOpacity={1} />
-          </linearGradient>
-          <mask id={`${id}m`} maskUnits="userSpaceOnUse" x={0} y={0} width={1260} height={LAND_H}>
-            <rect x={0} y={0} width={1260} height={LAND_H} fill={`url(#${id}g)`} />
-          </mask>
-        </defs>
-      </svg>
-      {band(TOP, SPLIT, "sky-land-far")}
+      {band(LAND_TOP, SPLIT, "sky-land-far")}
       {band(SPLIT, 67.5, "sky-land-near")}
     </div>
   );

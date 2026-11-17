@@ -342,7 +342,7 @@ export function drainage(
     out[cls[k]] += line
       .map(([x0, y0], i) => {
         const [x, y] = bend(x0, y0);
-        return `${i ? "L" : "M"}${(x * scale).toFixed(1)} ${(y * scale).toFixed(1)}`;
+        return `${i ? "L" : "M"}${Math.round(x * scale)} ${Math.round(y * scale)}`;
       })
       .join("");
   }

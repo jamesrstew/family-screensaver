@@ -56,7 +56,6 @@
 .sky-land {
   position: absolute;
   inset: 0;
-  color: var(--ink-faint);
   opacity: 0.55;
 }
 [data-mood="night"] .sky-land {
@@ -70,6 +69,24 @@
   left: -3rem;
   width: 126rem;
   overflow: hidden;
+}
+.sky-land-img {
+  position: absolute;
+  left: 0;
+  width: 126rem;
+  max-width: none;
+  transition: opacity 40s ease;
+}
+/* The day and night drawings cross-fade with the paper. */
+.sky-land-night,
+[data-mood="night"] .sky-land-day {
+  opacity: 0;
+}
+[data-mood="night"] .sky-land-night {
+  opacity: 1;
+}
+.paper:not([data-settled]) .sky-land-img {
+  transition: none;
 }
 .sky-land-far {
   animation: sky-sway-far 229s ease-in-out infinite alternate;
@@ -306,7 +323,6 @@
 }
 .sky-cloud-far {
   color: var(--ink-faint);
-  opacity: 0.85;
 }
 .sky-cloud-near {
   color: var(--ink-faint);

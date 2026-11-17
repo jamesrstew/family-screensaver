@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { contours, drainage, fbm, hashOf, levelsOf, noise, rng, terrain } from "./organic";
 
 describe("rng", () => {
-  it("is deterministic for a seed, and different across seeds", () => {
+  it("gives the same sequence for a seed (pinned), and another for another seed", () => {
+    expect(rng(42)()).toMatchInlineSnapshot(`0.6011037519201636`);
     const a = rng(42);
     const b = rng(42);
     const c = rng(43);
@@ -73,9 +74,10 @@ describe("contours", () => {
     expect(contours(() => 0, 4, 4, [1], 10)).toEqual([""]);
   });
 
-  it("is deterministic", () => {
+  it("draws the same lines for the same field (pinned)", () => {
+    // The server and the TV must agree; if the drawing changes on purpose, update the pin.
     const f = (i: number, j: number) => terrain(9, i / 10, j / 10);
-    expect(contours(f, 30, 20, [0, 0.2], 6)).toEqual(contours(f, 30, 20, [0, 0.2], 6));
+    expect(hashOf(contours(f, 30, 20, [0, 0.2], 6).join("|"))).toMatchInlineSnapshot(`1008343914`);
   });
 });
 
@@ -111,7 +113,9 @@ describe("drainage", () => {
     expect(rivers[3]).not.toBe("");
   });
 
-  it("is deterministic", () => {
-    expect(drainage(valley, 40, 30, 10, 8, 4, 1)).toEqual(drainage(valley, 40, 30, 10, 8, 4, 1));
+  it("routes the same rivers for the same field (pinned)", () => {
+    expect(hashOf(drainage(valley, 40, 30, 10, 8, 4, 1).join("|"))).toMatchInlineSnapshot(
+      `106588292`,
+    );
   });
 });
