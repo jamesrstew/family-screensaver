@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { STALE_MS, freshIndoor, insideOf, insideText } from "./indoor";
 import type { Indoor, Snapshot } from "./types";
 
+const AT = "2026-11-17T18:00:00.000Z";
 const house = (...temps: number[]): Indoor => ({
+  at: AT,
   temp: Math.round(temps.reduce((s, t) => s + t, 0) / temps.length),
   rooms: temps.map((temp, i) => ({ name: `Room ${i}`, temp })),
 });
@@ -14,7 +16,7 @@ describe("insideOf", () => {
   it("says nothing without thermostats", () => {
     expect(insideOf(null, null)).toBeNull();
     expect(insideOf(undefined, null)).toBeNull();
-    expect(insideOf({ temp: 68, rooms: [] }, null)).toBeNull();
+    expect(insideOf({ at: AT, temp: 68, rooms: [] }, null)).toBeNull();
   });
 
   it("gives the house's one number while the rooms are close", () => {
@@ -37,10 +39,10 @@ describe("insideOf", () => {
 });
 
 describe("freshIndoor", () => {
-  const issuedAt = "2026-11-17T18:00:00.000Z";
-  const snapshot = { issuedAt, indoor: house(68) } as Snapshot;
-  const at = (ms: number) => new Date(Date.parse(issuedAt) + ms);
-  it("trusts a reading for half an hour, then lets it go", () => {
+  const at = (ms: number) => new Date(Date.parse(AT) + ms);
+  // The snapshot is new; only the reading's own age counts.
+  const snapshot = { issuedAt: at(STALE_MS * 2).toISOString(), indoor: house(68) } as Snapshot;
+  it("trusts a reading for half an hour after it was taken, then lets it go", () => {
     expect(freshIndoor(snapshot, at(STALE_MS - 1))).toEqual(house(68));
     expect(freshIndoor(snapshot, at(STALE_MS))).toBeNull();
     expect(freshIndoor({ ...snapshot, indoor: undefined }, at(0))).toBeNull();

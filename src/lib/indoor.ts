@@ -17,10 +17,11 @@ export const MERGE_AT = 2;
 export type Inside =
   { kind: "one"; temp: number } | { kind: "range"; low: number; high: number; temp: number };
 
-/** The thermostats' readings, if the snapshot holding them is recent. */
+/** The thermostats' readings, if they were taken recently. */
 export function freshIndoor(snapshot: Snapshot, now: Date): Indoor | null {
-  const age = now.getTime() - Date.parse(snapshot.issuedAt);
-  return age < STALE_MS ? (snapshot.indoor ?? null) : null;
+  const indoor = snapshot.indoor;
+  // The age of the reading itself, not of the snapshot carrying it.
+  return indoor && now.getTime() - Date.parse(indoor.at) < STALE_MS ? indoor : null;
 }
 
 /** The note for these readings, given the one shown before (for the dead band). */

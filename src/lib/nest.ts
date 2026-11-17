@@ -58,7 +58,9 @@ export async function getIndoor(): Promise<Indoor | null> {
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`nest devices ${res.status}`);
-  return indoorOf(((await res.json()) as { devices?: Device[] }).devices ?? []);
+  // Stamped here, inside the cache, so a cached reading keeps its true age.
+  const devices = ((await res.json()) as { devices?: Device[] }).devices ?? [];
+  return indoorOf(devices, new Date().toISOString());
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
@@ -69,7 +71,7 @@ const fahrenheit = (c: number) => Math.round((c * 9) / 5 + 32);
  * that's offline is left out: Google keeps answering with its last reading,
  * which may be hours old.
  */
-export function indoorOf(devices: Device[]): Indoor | null {
+export function indoorOf(devices: Device[], at: string): Indoor | null {
   const rooms = devices
     .filter((d) => d.type === "sdm.devices.types.THERMOSTAT")
     .filter((d) => d.traits["sdm.devices.traits.Connectivity"]?.status !== "OFFLINE")
@@ -90,5 +92,5 @@ export function indoorOf(devices: Device[]): Indoor | null {
     });
   if (!rooms.length) return null;
   const temp = Math.round(rooms.reduce((s, r) => s + r.temp, 0) / rooms.length);
-  return { temp, rooms };
+  return { at, temp, rooms };
 }

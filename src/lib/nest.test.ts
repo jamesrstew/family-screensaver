@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { indoorOf } from "./nest";
+import { indoorOf as read } from "./nest";
+
+const AT = "2026-11-17T18:00:00.000Z";
+const indoorOf = (devices: Parameters<typeof read>[0]) => read(devices, AT);
 
 const thermostat = (traits: Record<string, Record<string, unknown>>, room = "Hall") => ({
   type: "sdm.devices.types.THERMOSTAT",
@@ -25,6 +28,7 @@ describe("indoorOf", () => {
       ),
     ]);
     expect(indoor).toEqual({
+      at: AT,
       temp: 70,
       rooms: [
         { name: "Hall", temp: 68, humidity: 41 },
@@ -50,7 +54,7 @@ describe("indoorOf", () => {
     });
     expect(
       indoorOf([thermostat(reading(20, "ONLINE")), thermostat(reading(26, "OFFLINE"), "Loft")]),
-    ).toEqual({ temp: 68, rooms: [{ name: "Hall", temp: 68 }] });
+    ).toEqual({ at: AT, temp: 68, rooms: [{ name: "Hall", temp: 68 }] });
     expect(indoorOf([thermostat(reading(20, "OFFLINE"))])).toBeNull();
   });
 });

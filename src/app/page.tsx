@@ -41,7 +41,10 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
     if (params.at && !Number.isNaN(+at)) snapshot.issuedAt = at.toISOString();
     if (SKIES.includes(sky)) snapshot.weather = fakeWeather(sky, when, snapshot.timeZone);
     const indoor = String(params.indoor ?? "");
-    if (isFakeIndoor(indoor)) snapshot.indoor = FAKE_INDOORS[indoor];
+    if (isFakeIndoor(indoor)) {
+      const fake = FAKE_INDOORS[indoor];
+      snapshot.indoor = fake && { ...fake, at: snapshot.issuedAt };
+    }
   }
   return <Screen initial={snapshot} initialPage={page} design={design} />;
 }

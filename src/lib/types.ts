@@ -51,6 +51,8 @@ export type NotebookItem = {
 
 /** Inside the house, from the Nest thermostats. °F; `temp` is their average. */
 export type Indoor = {
+  /** When the thermostats were read (ISO): the server may hand out a cached reading. */
+  at: string;
   temp: number;
   rooms: Array<{
     name: string; // the thermostat's room; never shown in the repo or logs
