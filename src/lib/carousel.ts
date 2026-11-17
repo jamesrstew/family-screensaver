@@ -61,22 +61,32 @@ function weathersBefore(c: number, since: number, timeZone: string): number {
 }
 
 /**
- * What home shows at `now`, having appeared at `since`. No weather report:
+ * Where the carousel counts from: when home appeared, and whether it came
+ * back from the Weather page (it then opens on a passage, a cycle in).
+ */
+export type Start = { since: number; back?: boolean };
+
+/**
+ * What home shows at `now`, having appeared at `start`. No weather report:
  * passages only. Passage n is about two per 90 seconds since 1970 (each
  * cycle's first passage is even, its second odd), so it's never the same
  * one twice, and the snapshot's window (passageNear) can find it.
  */
-export function slideOf(now: Date, since: number, hasWeather: boolean, timeZone: string): Slide {
+export function slideOf(now: Date, start: Start, hasWeather: boolean, timeZone: string): Slide {
+  const { since } = start;
   const elapsed = Math.max(now.getTime() - since, 0);
   const slot = Math.floor(elapsed / SLIDE_MS);
   const c = Math.floor(slot / 3);
   const pos = slot % 3;
-  const start = since + c * CYCLE_MS;
-  const w = weathersIn(start, timeZone);
-  const base = 2 * Math.floor(start / CYCLE_MS);
+  const at = since + c * CYCLE_MS;
+  const w = weathersIn(at, timeZone);
+  const base = 2 * Math.floor(at / CYCLE_MS);
   if (!hasWeather) return { kind: "passage", n: base + (pos === 2 ? 1 : 0) };
   if (pos < w) {
-    const i = weathersBefore(c, since, timeZone) + pos;
+    // Back from the Weather page, the first cycle's views were never shown:
+    // the next one is "now" again.
+    const skipped = start.back ? weathersIn(since, timeZone) : 0;
+    const i = Math.max(weathersBefore(c, since, timeZone) - skipped, 0) + pos;
     return { kind: "weather", view: WEATHER_VIEWS[i % WEATHER_VIEWS.length] };
   }
   return { kind: "passage", n: base + (pos - w) };
@@ -95,9 +105,9 @@ export const turns = (base: string) => base === "home" || base === "night";
  * over, on the weather; from the Weather page, the weather's just been seen,
  * so it opens on a passage (a cycle's last slide is always one).
  */
-export function sinceAfter(from: string, to: string, now: number, since: number): number {
-  if (!turns(to) || turns(from)) return since;
-  return now - (from === "weather" ? 2 * SLIDE_MS : 0);
+export function startAfter(from: string, to: string, now: number, start: Start): Start {
+  if (!turns(to) || turns(from)) return start;
+  return from === "weather" ? { since: now - 2 * SLIDE_MS, back: true } : { since: now };
 }
 
 /** Milliseconds until the carousel's next turn (a slide boundary). */

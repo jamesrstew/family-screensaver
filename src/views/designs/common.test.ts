@@ -79,7 +79,7 @@ describe("heroOf on the carousel", () => {
       const since = Date.parse(iso);
       const times: number[] = [];
       for (let t = since; t < since + hours * 3_600_000; t += SLIDE_MS) {
-        const slide = slideOf(new Date(t), since, true, tz);
+        const slide = slideOf(new Date(t), { since }, true, tz);
         if (slide.kind !== "passage") continue;
         const item = heroOf({ snapshot, now: new Date(t), mood: "afternoon", slide });
         if (item?.kind === "question") times.push(t);

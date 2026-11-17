@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import {
   nextTurnIn,
-  sinceAfter,
+  startAfter,
   slideFromKey,
   slideKey,
   slideOf,
   turns,
+  type Start,
   type WeatherView,
 } from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
@@ -130,12 +131,14 @@ export function Screen({
   const base = viewOf(page, mood);
   // At dusk and dawn the paper turns between the two (Dusk.tsx).
   const { paper, turning } = useTurn(mood, settled);
-  const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
+  const [homeStart, setHomeStart] = useState<Start>(() => ({
+    since: Date.parse(initial.issuedAt),
+  }));
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
     setLastBase(base);
     // Day and night are one carousel; back from another page, it starts over.
-    setHomeSince(sinceAfter(lastBase, base, now.getTime(), homeSince));
+    setHomeStart(startAfter(lastBase, base, now.getTime(), homeStart));
   }
   const carousel = turns(base) && design === "almanac";
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
@@ -144,7 +147,7 @@ export function Screen({
   const target = targetOf({
     base,
     slide: carousel
-      ? slideKey(slideOf(now, homeSince, Boolean(snapshot.weather), snapshot.timeZone))
+      ? slideKey(slideOf(now, homeStart, Boolean(snapshot.weather), snapshot.timeZone))
       : null,
     asked: view0,
     fromUrl,
@@ -174,7 +177,7 @@ export function Screen({
     const first = window.setTimeout(() => {
       setNow(new Date(clockNow()));
       // A restored or stale page still opens home on the weather.
-      setHomeSince(clockNow());
+      setHomeStart({ since: clockNow() });
     }, 0);
     const t = window.setInterval(() => setNow(new Date(clockNow())), TICK_MS);
     return () => {
@@ -187,10 +190,10 @@ export function Screen({
   useEffect(() => {
     if (!carousel) return;
     const at = clockNow();
-    const wait = nextTurnIn(at, homeSince);
+    const wait = nextTurnIn(at, homeStart.since);
     const t = window.setTimeout(() => setNow(new Date(clockNow())), wait + 50);
     return () => window.clearTimeout(t);
-  }, [carousel, homeSince, now]);
+  }, [carousel, homeStart, now]);
 
   // ---- Everything returns home.
   useEffect(() => {
