@@ -227,11 +227,7 @@ export function LivingSky({
         show={night && starsLevel === "all" && out === STAR_TIERS}
       />
       <Above>
-        <Afterglow
-          x={edge}
-          twilight={twilight}
-          show={arc && !words && night && glow && twilight !== null}
-        />
+        <Afterglow x={edge} twilight={twilight} show={arc && night && glow && twilight !== null} />
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
         <Streaks
           x={sun && low > 0 ? place!.x : edge}
