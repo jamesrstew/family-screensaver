@@ -73,7 +73,6 @@ type SkyState = {
   wisps: number;
 };
 
-
 export function skyOf(code: number | null): SkyState {
   if (code === null)
     return { cover: "fair", fall: null, hard: false, fog: false, cumulus: 3, stratus: 0, wisps: 3 };
