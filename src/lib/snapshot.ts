@@ -1,10 +1,11 @@
 import "server-only";
 import { connection } from "next/server";
+import { getAir, shapeAir, withAir, type OpenMeteoAir } from "./air";
 import { getHappenings } from "./calendar";
 import { getNotebook } from "./notebook";
 import { forDay } from "./pick";
 import { dayKey } from "./time";
-import type { Snapshot } from "./types";
+import type { Snapshot, Weather } from "./types";
 import { getWeather } from "./weather";
 
 /** Where the family lives. Env, so the repo stays free of it. */
@@ -38,8 +39,9 @@ export async function getSnapshot(): Promise<Snapshot> {
   // Round the window to the hour so the calendar cache can do its job.
   const hour = Math.floor(now.getTime() / HOUR) * HOUR;
 
-  const [weather, happenings, notebook] = await Promise.all([
+  const [forecast, air, happenings, notebook] = await Promise.all([
     h.coords ? quietly("weather", getWeather(h.coords.lat, h.coords.lon, h.timeZone)) : null,
+    h.coords ? quietly("air", getAir(h.coords.lat, h.coords.lon, h.timeZone)) : null,
     h.calendars.length
       ? quietly(
           "calendar",
@@ -48,6 +50,9 @@ export async function getSnapshot(): Promise<Snapshot> {
       : null,
     quietly("notebook", getNotebook()),
   ]);
+
+  // The air is folded into the weather, and only ever adds to it.
+  const weather = forecast && air ? withAirQuietly(forecast, air) : forecast;
 
   return {
     issuedAt: now.toISOString(),
@@ -58,6 +63,15 @@ export async function getSnapshot(): Promise<Snapshot> {
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
+}
+
+function withAirQuietly(w: Weather, air: OpenMeteoAir): Weather {
+  try {
+    return withAir(w, shapeAir(air));
+  } catch (err) {
+    console.error("[snapshot] air unreadable", err);
+    return w;
+  }
 }
 
 async function quietly<T>(what: string, p: Promise<T>): Promise<T | null> {

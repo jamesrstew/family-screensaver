@@ -1,11 +1,11 @@
-// Made-up skies for tests and design review (?sky=fair|snow|storm|rain in
-// dev). Built around a given moment, so the hours always start "now".
+// Made-up skies for tests and design review (?sky=fair|snow|storm|rain|smoke
+// in dev). Built around a given moment, so the hours always start "now".
 
 import { describe } from "./forecast";
 import { addDays, dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
 
-export const SKIES = ["fair", "snow", "storm", "rain"] as const;
+export const SKIES = ["fair", "snow", "storm", "rain", "smoke"] as const;
 export type FakeSky = (typeof SKIES)[number];
 
 const HOUR = 3_600_000;
@@ -17,6 +17,12 @@ type Spec = {
   /** The wind's calm and peak (mph), where it comes from, and the sun's noon UV. */
   wind: [calm: number, peak: number, dir: number];
   uv: number;
+  /** Humidity at the afternoon's driest and the dawn's dampest (%). */
+  rh: [dry: number, damp: number];
+  /** Each day's worst air (US AQI); the air forecast runs five days. */
+  aqi: number[];
+  /** How far one can see, meters. */
+  visibility: number;
   /** The sky for a local hour of a day (0: today, 1: tomorrow). */
   hour: (day: number, h: number) => HourSpec;
   days: Array<[code: number, high: number, low: number, chance: number]>;
@@ -34,6 +40,9 @@ const SPECS: Record<FakeSky, Spec> = {
     high: 58,
     wind: [3, 9, 300],
     uv: 3,
+    rh: [40, 80],
+    aqi: [32, 28, 35, 41, 30],
+    visibility: 40_000,
     hour: (_, h) => fair(h),
     days: [
       [1, 58, 36, 0],
@@ -51,6 +60,9 @@ const SPECS: Record<FakeSky, Spec> = {
     high: 33,
     wind: [6, 16, 330],
     uv: 1.4,
+    rh: [75, 95],
+    aqi: [18, 15, 22, 25, 20],
+    visibility: 2_000,
     hour: (day, h) => {
       if (day === 0 && h >= 14 && h < 22) {
         const peak = [71, 73, 75, 75, 75, 73, 73, 71][h - 14];
@@ -75,6 +87,9 @@ const SPECS: Record<FakeSky, Spec> = {
     high: 74,
     wind: [8, 24, 220],
     uv: 8.6,
+    rh: [55, 90],
+    aqi: [45, 38, 52, 58, 44],
+    visibility: 15_000,
     hour: (day, h) => {
       if (day === 0 && h >= 15 && h < 19) return { code: 95, chance: 85 };
       if (day === 0 && ((h >= 13 && h < 15) || (h >= 19 && h < 21)))
@@ -98,6 +113,9 @@ const SPECS: Record<FakeSky, Spec> = {
     high: 52,
     wind: [5, 14, 200],
     uv: 1.2,
+    rh: [80, 98],
+    aqi: [14, 18, 20, 16, 22],
+    visibility: 6_000,
     hour: (day, h) => {
       if (day === 0 && h >= 4 && h < 11) return { code: h < 8 ? 63 : 61, chance: 85 };
       return { code: day === 1 && h >= 10 ? 2 : 3, chance: 10 };
@@ -110,6 +128,26 @@ const SPECS: Record<FakeSky, Spec> = {
       [3, 49, 40, 25],
       [1, 51, 37, 5],
       [0, 54, 36, 0],
+    ],
+  },
+  // An August week under wildfire smoke: hot, bone dry, the sun a dim disc.
+  smoke: {
+    low: 58,
+    high: 92,
+    wind: [3, 10, 280],
+    uv: 6.2,
+    rh: [9, 38],
+    aqi: [168, 182, 143, 96, 72],
+    visibility: 3_000,
+    hour: (_, h) => ({ code: h >= 7 && h < 19 ? 1 : 0, chance: 0 }),
+    days: [
+      [1, 92, 58, 0],
+      [1, 95, 60, 0],
+      [1, 93, 59, 0],
+      [2, 89, 57, 5],
+      [1, 87, 55, 0],
+      [0, 90, 56, 0],
+      [0, 91, 57, 0],
     ],
   },
 };
@@ -147,6 +185,20 @@ function hourAt(spec: Spec, day: number, h: number): HourSpec {
   return h >= 10 && h < 18 ? { code, chance } : { code: code > 3 ? 3 : code, chance: 10 };
 }
 
+/** The temperature at an hour of any day: the spec's curve for two days, then each day's. */
+function tempOn(spec: Spec, day: number, h: number): number {
+  if (day < 2) return tempAt(spec, h) + day;
+  const [, high, low] = spec.days[day] ?? spec.days.at(-1)!;
+  return tempAt({ ...spec, high, low }, h);
+}
+
+/** The dew point (°F) for a temperature (°F) and humidity, by the Magnus formula. */
+function dewOf(f: number, rh: number): number {
+  const c = ((f - 32) * 5) / 9;
+  const g = Math.log(Math.max(rh, 1) / 100) + (17.62 * c) / (243.12 + c);
+  return Math.round((((243.12 * g) / (17.62 - g)) * 9) / 5 + 32);
+}
+
 /** One made-up hour, everything the lenses draw. */
 function lensHour(spec: Spec, day: number, h: number) {
   const s = hourAt(spec, day, h);
@@ -159,6 +211,20 @@ function lensHour(spec: Spec, day: number, h: number) {
   const wind = Math.round(calm + x * (peak - calm) + ((day * 3) % 5) - 1);
   // The sun from 7 to 5, highest at noon.
   const sun = h > 7 && h < 17 ? Math.sin(((h - 7) / 10) * Math.PI) : 0;
+  const temp = tempOn(spec, day, h);
+  // Driest in the afternoon, dampest at dawn.
+  const [dry, damp] = spec.rh;
+  const rh = Math.round(damp - x * (damp - dry));
+  // Cold and wind: the wind's chill. Hot and humid: the heat's weight.
+  const feels =
+    temp < 50
+      ? temp - Math.round(wind * 0.6)
+      : temp > 80
+        ? temp + Math.round(((rh - 20) / 10) * 2)
+        : temp;
+  // The air, worst in the afternoon; nothing known past the fifth day.
+  const worst = spec.aqi[day];
+  const aqi = worst == null ? null : Math.round(worst * (0.7 + 0.3 * x));
   return {
     precip,
     snow,
@@ -166,6 +232,12 @@ function lensHour(spec: Spec, day: number, h: number) {
     gust: Math.round(wind * 1.6 + 2),
     dir: (dir + h * 3 + day * 20) % 360,
     uv: Math.round(spec.uv * sun * (1 - (day % 3) * 0.08) * 10) / 10,
+    temp,
+    feels,
+    rh,
+    dew: dewOf(temp, rh),
+    aqi,
+    pm: aqi == null ? undefined : Math.round(aqi > 100 ? aqi * 0.45 : aqi * 0.25),
   };
 }
 
@@ -178,6 +250,11 @@ function lensDay(spec: Spec, day: number): DayHours {
     wind: hours.map((h) => h.wind),
     gust: hours.map((h) => h.gust),
     uv: hours.map((h) => h.uv),
+    temp: hours.map((h) => h.temp),
+    feels: hours.map((h) => h.feels),
+    rh: hours.map((h) => h.rh),
+    dew: hours.map((h) => h.dew),
+    aqi: hours.map((h) => h.aqi),
   };
 }
 
@@ -197,13 +274,14 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
     const day = dayKey(t, timeZone) === today ? 0 : 1;
     const s = spec.hour(day, hour);
     const isDay = hour >= 7 && hour < 17;
+    const { aqi, ...lens } = lensHour(spec, day, hour);
     return {
       time: t.toISOString(),
-      temp: tempAt(spec, hour) + (day === 1 ? 1 : 0),
       precipChance: s.chance,
       code: s.code,
       isDay,
-      ...lensHour(spec, day, hour),
+      ...lens,
+      aqi: aqi ?? undefined,
     };
   });
 
@@ -222,6 +300,9 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       gust: Math.max(...hourly.gust),
       dir: (spec.wind[2] + i * 20) % 360,
       uv: Math.max(...hourly.uv),
+      feelsHigh: Math.max(...hourly.feels!),
+      feelsLow: Math.min(...hourly.feels!),
+      aqi: spec.aqi[i],
       hourly,
     };
   });
@@ -233,6 +314,9 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       code: nowHour.code,
       isDay: nowHour.isDay,
       label: describe(nowHour.code, nowHour.isDay),
+      visibility: spec.visibility,
+      aqi: nowHour.aqi,
+      pm: nowHour.pm,
     },
     today: {
       high: days[0].high,

@@ -6,7 +6,17 @@ export const PAGES = ["home", "weather", "week", "notebook"] as const;
 export type Page = (typeof PAGES)[number];
 
 export type Weather = {
-  now: { temp: number; label: string; code: number; isDay: boolean };
+  now: {
+    temp: number;
+    label: string;
+    code: number;
+    isDay: boolean;
+    /** How far one can see, meters. */
+    visibility?: number;
+    /** The air now: the US AQI and fine particles (µg/m³), from the air-quality forecast. */
+    aqi?: number;
+    pm?: number;
+  };
   today: {
     high: number;
     low: number;
@@ -34,6 +44,11 @@ export type Weather = {
     gust?: number;
     dir?: number;
     uv?: number;
+    /** How the day's warmest and coldest feel (the apparent temperature). */
+    feelsHigh?: number;
+    feelsLow?: number;
+    /** The day's worst air (US AQI), when the air-quality forecast reaches it. */
+    aqi?: number;
     /** The day hour by hour, from midnight, for drawing it. */
     hourly?: DayHours;
   }>;
@@ -49,6 +64,13 @@ export type Weather = {
     gust?: number;
     dir?: number;
     uv?: number;
+    /** How it feels (°F), relative humidity (%), dew point (°F). */
+    feels?: number;
+    rh?: number;
+    dew?: number;
+    /** US AQI and fine particles (µg/m³). */
+    aqi?: number;
+    pm?: number;
   }>; // next 24
 };
 
@@ -59,6 +81,12 @@ export type DayHours = {
   wind: number[];
   gust: number[];
   uv: number[];
+  temp?: number[];
+  feels?: number[];
+  rh?: number[];
+  dew?: number[];
+  /** US AQI; null past the end of the air-quality forecast. */
+  aqi?: Array<number | null>;
 };
 
 export type Happening = {
