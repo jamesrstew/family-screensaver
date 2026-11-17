@@ -1,6 +1,7 @@
 // Screenshot the screen the way the TV sees it (1920x1080), for design review.
 //   node scripts/shot.mjs <url> <out.png> [--wait ms] [--frames n,ms] [--key Key]
-// --at sets the clock; --frames takes n shots ms apart (to watch the ink move); --key presses a key first.
+// --at sets the clock; --frames takes n shots ms apart (to watch the ink move); --key presses a key first;
+// --advance ms jumps the clock forward after load (home opens on the weather; 125000 shows a quote).
 import { chromium } from "playwright";
 
 const [url, out, ...rest] = process.argv.slice(2);
@@ -21,6 +22,13 @@ const at = opt("at", null);
 if (at) await page.clock.install({ time: new Date(at) });
 page.on("console", (m) => m.type() === "error" && console.error("[page]", m.text()));
 await page.goto(url, { waitUntil: "load" });
+// Dev's error badge isn't part of the screen.
+await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
+const advance = Number(opt("advance", 0));
+if (advance && at) {
+  await page.waitForTimeout(1500);
+  await page.clock.fastForward(advance);
+}
 if (key) {
   await page.waitForTimeout(wait);
   await page.keyboard.press(key);

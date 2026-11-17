@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf } from "@/lib/carousel";
-import { moodOf, parts, type Mood } from "@/lib/time";
+import { hashOf } from "@/lib/organic";
+import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -11,8 +12,10 @@ import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
+import { useAsked } from "@/views/designs/almanac-weather";
 import { DESIGNS, type Design } from "@/views/designs/registry";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
+import { Fps } from "./Fps";
 import { useVoice } from "./useVoice";
 
 /*
@@ -38,6 +41,21 @@ const STALE_WEATHER_MS = 3 * 60 * 60_000;
 const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
+
+// Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
+// sky), so a day scene can be checked at night. Fixed at the first read.
+let clockOffset: number | null = null;
+function clockNow(): number {
+  if (clockOffset === null) {
+    const at =
+      process.env.NODE_ENV !== "production"
+        ? new URLSearchParams(window.location.search).get("at")
+        : null;
+    const t = at ? Date.parse(at) : NaN;
+    clockOffset = Number.isNaN(t) ? 0 : t - Date.now();
+  }
+  return Date.now() + clockOffset;
+}
 
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
@@ -94,11 +112,11 @@ export function Screen({
   useEffect(() => {
     pageSince.current = Date.now();
     const first = window.setTimeout(() => {
-      setNow(new Date());
+      setNow(new Date(clockNow()));
       // A restored or stale page still opens home on the weather.
-      setHomeSince(Date.now());
+      setHomeSince(clockNow());
     }, 0);
-    const t = window.setInterval(() => setNow(new Date()), TICK_MS);
+    const t = window.setInterval(() => setNow(new Date(clockNow())), TICK_MS);
     return () => {
       window.clearTimeout(first);
       window.clearInterval(t);
@@ -214,6 +232,16 @@ export function Screen({
     return () => window.clearInterval(t);
   }, []);
 
+  // The living sky's shapes and phases, fixed for the session (and the same on
+  // the server), so the sky never jumps when the snapshot refreshes.
+  // The wall clock at first paint (the same on server and TV): the sky's
+  // drifts take their phase from it, so a reload carries on, not over.
+  const [epoch] = useState(() => Math.floor(Date.parse(initial.issuedAt) / 1000));
+  const [seed] = useState(
+    () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
+  );
+
+  const asked = useAsked();
   const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
   const props = { snapshot, now, mood, slide };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
@@ -235,9 +263,26 @@ export function Screen({
           transition: "transform 180s linear",
         }}
       >
+        {/* The sky stays mounted while Week or Ideas is up, faded out, so it
+            fades back in (and carries on) instead of cutting. */}
+        {kit?.Sky ? (
+          <kit.Sky
+            hidden={!drawn}
+            w={snapshot.weather}
+            now={now}
+            mood={mood}
+            arc={view === "home" || view === "night" || slide?.kind === "passage"}
+            quiet={
+              (slide?.kind === "weather" ? slide.view : view === "weather" ? asked : "now") !==
+              "now"
+            }
+            seed={seed}
+            epoch={epoch}
+          />
+        ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
           <InkStage.Provider value={leaving}>
-            <div key={view} className="h-full">
+            <div key={view} className="relative z-[1] h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
               {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
@@ -251,6 +296,7 @@ export function Screen({
         </InkModeContext.Provider>
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
+      <Fps />
     </div>
   );
 }
@@ -267,9 +313,9 @@ function VoiceLine({ state, caption }: { state: string; caption: string }) {
   if (state === "idle") return null;
   const words = state === "speaking" && caption ? caption : VOICE_WORDS[state];
   return (
-    <div className="pointer-events-none absolute inset-x-[5.5rem] bottom-[1.4rem] flex justify-center">
+    <div className="pointer-events-none absolute inset-x-[5.5rem] bottom-[1.4rem] z-[2] flex justify-center">
       <Ink k={state === "speaking" ? "speaking" : state} className="max-w-[90rem] text-center">
-        <p className="bg-paper px-6 text-[2.1rem] leading-snug text-ink italic">{words}</p>
+        <p className="bg-paper px-6 text-[2.8rem] leading-snug text-ink italic">{words}</p>
       </Ink>
     </div>
   );

@@ -1,168 +1,114 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { clock, clockFace } from "@/lib/time";
-import type { Weather as Sky } from "@/lib/types";
-import { Engraving, Moon, Star, moonAge } from "../Engraving";
+import { clock } from "@/lib/time";
+import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
+import { ARC, placeOf } from "./arc";
 import {
+  ClockFace,
   Credit,
   Words,
   firstTomorrow,
   heroOf,
   nextUp,
   nextWords,
-  sized,
-  sunProgress,
+  fitStyle,
+  heroBox,
+  heroFitting,
   Deg,
 } from "./common";
+import { fitType } from "./fit";
 
 /*
- * D. Almanac. Across the head of the page, the day's sky is drawn as one
- * dotted arc from sunrise to sunset, and the sun (an engraving) sits where it
- * really is. You can tell the time of day from across the room without
- * reading a number. After sunset the moon takes the arc, in its true phase.
- * Below the sky, one passage, which writes itself line by line.
+ * D. Almanac. The sheet is a window onto the day's sky (living.tsx): one
+ * dotted arc from sunrise to sunset across the head of the page, and the sun,
+ * an engraving, sits where it really is. You can tell the time of day from
+ * across the room without reading a number. After sunset the moon takes the
+ * arc, in its true phase. The sky is drawn and alive; the words are inked:
+ * the hour beside the sun, the ends of the day at the horizon, and below, one
+ * passage, set large.
  */
 
-const LADDER: Array<[number, string]> = [
-  [70, "text-[5.2rem] leading-[1.14]"],
-  [130, "text-[4.4rem] leading-[1.2]"],
-  [200, "text-[3.8rem] leading-[1.24]"],
-  [260, "text-[3.4rem] leading-[1.28]"],
-  [9999, "text-[3rem] leading-[1.3]"],
-];
+import { lookOf } from "./living";
 
-// The sky plate: 109 x 21 rem at 10 units per rem.
-const W = 1090;
-const H = 210;
-const ARC = { cx: W / 2, cy: 186, rx: 470, ry: 150 };
-const at = (t: number) => {
-  const a = Math.PI * (1 - Math.min(Math.max(t, 0), 1));
-  return { x: ARC.cx + ARC.rx * Math.cos(a), y: ARC.cy - ARC.ry * Math.sin(a) };
-};
-const pct = (p: { x: number; y: number }) => ({
-  left: `${((p.x / W) * 100).toFixed(3)}%`,
-  top: `${((p.y / H) * 100).toFixed(3)}%`,
-});
+export { LivingSky as Sky } from "./living";
 
-/** Where we are on today's arc, and which body is riding it. */
-function skyNow(w: Sky, now: Date): { t: number; body: "sun" | "moon"; from: Date; to: Date } {
-  const rise = Date.parse(w.today.sunrise);
-  const set = Date.parse(w.today.sunset);
-  const t = sunProgress(w, now);
-  const DAY = 86_400_000;
-  if (t >= 0 && t <= 1) return { t, body: "sun", from: new Date(rise), to: new Date(set) };
-  // Night: from last sunset to next sunrise.
-  const [from, to] = t > 1 ? [set, rise + DAY] : [set - DAY, rise];
-  return {
-    t: (now.getTime() - from) / (to - from),
-    body: "moon",
-    from: new Date(from),
-    to: new Date(to),
-  };
-}
+// The page inside its margins (67.5 rem less 3.25 top and 3 bottom), and the
+// band the sky's words take at its head (SkyWords, less the top margin).
+const PAGE_H = 61.25;
+const SKY_H = 27.75;
 
-/** Deterministic stars for the night arc. */
-const STARS = Array.from({ length: 26 }, (_, i) => {
-  const r = (n: number) => {
-    const x = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453;
-    return x - Math.floor(x);
-  };
-  const t = r(1);
-  const p = at(t);
-  const lift = 0.15 + r(2) * 0.8;
-  return { x: p.x, y: ARC.cy - (ARC.cy - p.y) * lift - 4, s: 0.5 + r(3) * 0.8 };
-});
-
-function SkyPlate({
+/**
+ * The words around the arc. They live in sheet coordinates (rem), like the
+ * sky; this band undoes the page margins so the two line up.
+ */
+function SkyWords({
   w,
   now,
   tz,
-  night = false,
   children,
 }: {
   w: Sky;
   now: Date;
   tz: string;
-  night?: boolean;
-  children?: ReactNode;
+  children: ReactNode;
 }) {
-  const sky = skyNow(w, now);
-  // Keep the body clear of the horizon's ends so it never sits on a label.
-  const p = at(Math.min(Math.max(sky.t, 0.07), 0.93));
-  // Low in the sky, the time rides above the body instead of below it.
-  const low = p.y > ARC.cy - 70;
-  const nearStart = sky.t < 0.2;
-  const nearEnd = sky.t > 0.8;
-
+  const p = placeOf(w, now);
+  const sky = p.body;
+  const look = lookOf(w, p, now);
+  // Clear of the body as drawn: the sun's rays, the moon, or the dot under cover.
+  const radius = look === "dot" ? 2 : sky.body === "sun" ? p.size * 0.55 : 6.6;
+  // High in the sky, the words hang beneath the body; low, they sit beside it,
+  // on the side toward the middle of the sheet, clear of the horizon.
+  // At the day's ends, when long strokes run along the horizon from the low
+  // sun, the words ride above it instead, clear of the strokes.
+  const r = (n: number) => `${n.toFixed(2)}rem`;
+  const beside = Math.min(p.y, ARC.cy - 4);
+  const edge =
+    p.x < 60 ? { left: r(Math.max(p.x - 6, 5.5)) } : { right: r(Math.max(120 - p.x - 6, 5.5)) };
+  const at: CSSProperties =
+    p.low > 0 && look !== "dot"
+      ? { ...edge, top: r(p.y - radius), transform: "translateY(-100%)" }
+      : p.y <= 12
+        ? { left: r(p.x), top: r(p.y + radius), transform: "translateX(-50%)" }
+        : p.x < 60
+          ? { left: r(p.x + radius), top: r(beside), transform: "translateY(-50%)" }
+          : { right: r(120 - p.x + radius), top: r(beside), transform: "translateY(-50%)" };
+  const low = p.low > 0 ? "end" : p.y > 12 ? "low" : "high";
+  // The ends of the arc: when the sky began, when it ends (hidden while the body sits on one).
+  const ends: Array<["left" | "right", Date, string, boolean]> = [
+    ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16],
+    ["right", sky.to, sky.body === "sun" ? "sunset" : "sunrise", sky.t < 0.84],
+  ];
   return (
-    <div className="relative h-[21rem] w-full">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="absolute inset-0 h-full w-full text-ink-faint"
-        fill="none"
-        stroke="currentColor"
-        aria-hidden
-      >
-        {/* The horizon: one fine line. */}
-        <line x1={20} y1={ARC.cy} x2={W - 20} y2={ARC.cy} strokeWidth={1.1} />
-        {/* The path of the sky, dotted; the part already traveled a little darker. */}
-        <path
-          d={`M${ARC.cx - ARC.rx} ${ARC.cy} A${ARC.rx} ${ARC.ry} 0 0 1 ${ARC.cx + ARC.rx} ${ARC.cy}`}
-          strokeWidth={1.5}
-          strokeDasharray="0.1 9"
-          strokeLinecap="round"
-        />
-        <path
-          d={`M${ARC.cx - ARC.rx} ${ARC.cy} A${ARC.rx} ${ARC.ry} 0 0 1 ${p.x.toFixed(1)} ${p.y.toFixed(1)}`}
-          strokeWidth={2.2}
-          strokeDasharray="0.1 9"
-          strokeLinecap="round"
-          className="text-ink-soft"
-        />
-        {night
-          ? STARS.map((s, i) => (
-              <g key={i} className="text-ink-soft">
-                <Star x={s.x} y={s.y} s={s.s} />
-              </g>
-            ))
-          : null}
-      </svg>
-      {/* The two ends of the arc: when the sky began, when it ends. */}
-      <p
-        className={`absolute top-[18.9rem] left-[3.2rem] text-[1.5rem] text-ink-faint italic ${nearStart ? "opacity-0" : ""}`}
-      >
-        {sky.body === "sun" ? "sunrise " : "sunset "}
-        {clock(sky.from, tz)}
-      </p>
-      <p
-        className={`absolute top-[18.9rem] right-[3.2rem] text-[1.5rem] text-ink-faint italic ${nearEnd ? "opacity-0" : ""}`}
-      >
-        {sky.body === "sun" ? "sunset " : "sunrise "}
-        {clock(sky.to, tz)}
-      </p>
-      {/* The body itself, where it really is. */}
-      <div className="absolute -translate-x-1/2 -translate-y-1/2" style={pct(p)}>
-        {sky.body === "sun" ? (
-          <Engraving code={w.now.code} isDay date={now} className="size-[8rem] text-ink" />
-        ) : (
-          <svg
-            viewBox="0 0 100 100"
-            className="size-[6.4rem] text-ink"
-            fill="none"
-            stroke="currentColor"
-            aria-hidden
+    <div className="relative -mx-[5.5rem] -mt-[3.25rem] h-[31rem] shrink-0">
+      {ends.map(([side, when, word, show]) =>
+        show ? (
+          <Ink
+            key={side}
+            k={`${side}${sky.body}`}
+            order={0}
+            mode="seep"
+            className="absolute"
+            style={{ [side]: "5.5rem", top: `${ARC.cy + 0.9}rem` }}
           >
-            <Moon age={moonAge(now)} cx={50} cy={50} r={30} />
-          </svg>
-        )}
-      </div>
-      <div
-        className={`absolute -translate-x-1/2 text-center whitespace-nowrap ${low ? "-translate-y-full pb-[4.4rem]" : "pt-[4.2rem]"}`}
-        style={pct(p)}
+            <p className="text-[2rem] whitespace-nowrap text-ink-faint italic">
+              {word} {clock(when, tz)}
+            </p>
+          </Ink>
+        ) : null,
+      )}
+      <Ink
+        k={`${sky.body}${low}`}
+        order={0}
+        mode="seep"
+        className="absolute isolate text-center whitespace-nowrap"
+        style={at}
       >
+        {/* Its own small clearing of paper, so no cloud or stroke crosses the hour. */}
+        <div className="sky-word-clearing" aria-hidden />
         {children}
-      </div>
+      </Ink>
     </div>
   );
 }
@@ -170,46 +116,59 @@ function SkyPlate({
 export function Home(props: ViewProps) {
   const { snapshot, now, mood } = props;
   const tz = snapshot.timeZone;
-  const hero = heroOf(props);
   const next = nextUp(props);
   const w = snapshot.weather;
+  const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
+  const boxFor = (item: NotebookItem) =>
+    heroBox({ sky: Boolean(w), next: Boolean(next), ask: asks(item), item });
+  const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
+  // The first of the day's passages that fits its space; a longer one waits
+  // for the Ideas page, which has room for anything.
+  const hero = heroFitting(props, (i) => fitType(i.text, boxFor(i), style(i)).fits);
+  const ask = hero ? asks(hero) : false;
 
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <Ink k={skyNow(w, now).body} order={0} mode="seep">
-          <SkyPlate w={w} now={now} tz={tz}>
-            <p className="text-[2.2rem] leading-none text-ink-soft">
-              {clockFace(now, tz)}
-              <span className="mx-[0.8rem] text-ink-faint">·</span>
+        <SkyWords w={w} now={now} tz={tz}>
+          {/* The most-glanced fact on the screen: the hour in ink, the temperature softer. */}
+          <p className="text-[4.6rem] leading-none text-ink">
+            <ClockFace now={now} tz={tz} />
+            <span className="mx-[1rem] text-ink-faint">·</span>
+            <span className="text-ink-soft">
               <Deg v={w.now.temp} />
-            </p>
-          </SkyPlate>
-        </Ink>
+            </span>
+          </p>
+        </SkyWords>
       ) : (
         // No sky report: the hour alone, where the sky would be.
-        <Ink order={0} mode="seep" className="pt-[2rem] text-center">
-          <p className="text-[2.2rem] leading-none text-ink-soft">{clockFace(now, tz)}</p>
+        <Ink order={0} mode="seep" className="pt-[6rem] pb-[4rem] text-center">
+          <p className="text-[4.4rem] leading-none text-ink-soft">
+            <ClockFace now={now} tz={tz} />
+          </p>
         </Ink>
       )}
       <Ink
         k={hero?.id ?? "none"}
         order={1}
-        className="flex flex-1 items-center justify-center px-[7rem] pb-[1rem] text-center"
+        className="flex flex-1 items-center justify-center px-[2rem] text-center"
       >
         {hero ? (
-          <article className="max-w-[84rem]">
-            {hero.kind === "question" && mood === "evening" ? (
-              <p className="mb-[1.8rem] text-[2rem] text-accent italic">A question for the table</p>
+          <article className="max-w-[102rem]">
+            {ask ? (
+              <p className="mb-[2rem] text-[2.8rem] text-accent italic">A question for the table</p>
             ) : null}
-            <Words item={hero} className={sized(hero.text, LADDER)} />
-            <Credit item={hero} className="mt-[2.2rem] text-[1.75rem] text-ink-faint" />
+            {/* As large as fits: a short line is set huge, a long one as big as it can go. */}
+            <div style={fitStyle(hero.text, boxFor(hero), style(hero))}>
+              <Words item={hero} className="text-balance" />
+            </div>
+            <Credit item={hero} className="mt-[2.4rem] text-[2.6rem] text-ink-faint" />
           </article>
         ) : null}
       </Ink>
       {next ? (
-        <Ink order={2} mode="seep" className="text-center">
-          <p className="text-[1.9rem] text-ink-soft">
+        <Ink order={2} mode="seep" className="pt-[1rem] text-center">
+          <p className="text-[2.6rem] text-ink-soft">
             <span className="text-ink-faint italic">Next, </span>
             {nextWords(next, tz)}
           </p>
@@ -225,22 +184,35 @@ export function Night(props: ViewProps) {
   const w = snapshot.weather;
   const tomorrow = firstTomorrow(props);
   const question = heroOf({ ...props, mood: "evening" });
+  // The question to sleep on, as large as the dark page allows; if it can't
+  // fit at all, the page stays nearly empty, as night should be.
+  const qBox = { w: 100, h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - 3.5 };
+  const qFit =
+    question?.kind === "question"
+      ? fitType(question.text, qBox, { italic: true, max: 9, min: 3.6 })
+      : null;
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <Ink k={skyNow(w, now).body} order={0} mode="seep">
-          <SkyPlate w={w} now={now} tz={tz} night>
-            <p className="text-[3.2rem] leading-none text-ink">{clockFace(now, tz)}</p>
-          </SkyPlate>
-        </Ink>
+        <SkyWords w={w} now={now} tz={tz}>
+          <p className="text-[5.4rem] leading-none text-ink">
+            <ClockFace now={now} tz={tz} />
+          </p>
+        </SkyWords>
       ) : (
         <Ink order={0} className="pt-[8rem] text-center">
-          <p className="text-[6rem] text-ink">{clockFace(now, tz)}</p>
+          <p className="text-[8rem] text-ink">
+            <ClockFace now={now} tz={tz} />
+          </p>
         </Ink>
       )}
-      {question?.kind === "question" ? (
+      {question && qFit?.fits ? (
         <Ink order={1} className="flex flex-1 items-center justify-center text-center">
-          <p className="max-w-[64rem] text-[2.5rem] leading-[1.35] text-ink-soft italic">
+          {/* In soft gray ink. */}
+          <p
+            className="max-w-[100rem] text-balance text-ink-soft italic"
+            style={{ fontSize: `${qFit.size}rem`, lineHeight: qFit.lh }}
+          >
             {question.text}
           </p>
         </Ink>
@@ -249,7 +221,7 @@ export function Night(props: ViewProps) {
       )}
       {tomorrow ? (
         <Ink k={`${tomorrow.label}${tomorrow.title}`} order={2} mode="seep" className="text-center">
-          <p className="text-[1.85rem] text-ink-faint">
+          <p className="text-[2.6rem] text-ink-faint">
             <span className="italic">{tomorrow.label}, </span>
             {tomorrow.title}
             {tomorrow.when ? `, ${tomorrow.when}` : ""}

@@ -1,0 +1,598 @@
+/*
+ * The living sky (living.tsx). Only transform and opacity ever animate, on
+ * whole layers drawn once. Durations are set inline (prime-ish, seeded).
+ */
+
+.sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  z-index: 0;
+  transition:
+    opacity 2.5s ease,
+    visibility 2.5s allow-discrete;
+}
+/* Week and Ideas: the sky fades out and waits, still running, unseen. */
+.sky[data-hidden] {
+  opacity: 0;
+  visibility: hidden;
+}
+.sky-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A layer that comes and goes with the weather and the hour. */
+.sky-layer {
+  position: absolute;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete;
+}
+.sky-layer[data-on="0"] {
+  opacity: 0;
+  display: none;
+}
+@starting-style {
+  [data-settled] .sky-layer[data-on="1"] {
+    opacity: 0;
+  }
+}
+
+/* The sky above the horizon: the sun sets behind the land. */
+.sky-above {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* ---- The land: rivers and contours, drifting a little, as from a balloon. */
+.sky-land {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+}
+[data-mood="night"] .sky-land {
+  opacity: 0.3;
+}
+.sky[data-quiet] .sky-land {
+  opacity: 0.35;
+}
+.sky-land-band {
+  position: absolute;
+  left: -3rem;
+  width: 126rem;
+  overflow: hidden;
+}
+.sky-land-img {
+  position: absolute;
+  left: 0;
+  width: 126rem;
+  max-width: none;
+  transition: opacity 40s ease;
+}
+/* The day and night drawings cross-fade with the paper. */
+.sky-land-night,
+[data-mood="night"] .sky-land-day {
+  opacity: 0;
+}
+[data-mood="night"] .sky-land-night {
+  opacity: 1;
+}
+.paper:not([data-settled]) .sky-land-img {
+  transition: none;
+}
+.sky-land-far {
+  animation: sky-sway-far 229s ease-in-out infinite alternate;
+}
+.sky-land-near {
+  animation: sky-sway-near 139s ease-in-out infinite alternate;
+}
+@keyframes sky-sway-far {
+  from {
+    transform: translateX(-0.5rem);
+  }
+  to {
+    transform: translateX(0.5rem);
+  }
+}
+@keyframes sky-sway-near {
+  from {
+    transform: translateX(-1.5rem);
+  }
+  to {
+    transform: translateX(1.5rem);
+  }
+}
+
+/* Cloud shadows on the land: soft ink, squashed by perspective. */
+.sky-shadow {
+  position: absolute;
+  left: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ink) 4%, transparent),
+    color-mix(in srgb, var(--ink) 2%, transparent) 55%,
+    transparent
+  );
+  animation: sky-drift-shadow linear infinite;
+}
+@keyframes sky-drift-shadow {
+  from {
+    transform: translateX(-70rem);
+  }
+  to {
+    transform: translateX(125rem);
+  }
+}
+
+/* ---- Light. */
+.sky-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 75% 70% at 50% 46%,
+    transparent 55%,
+    color-mix(in srgb, var(--ink-faint) 13%, transparent) 100%
+  );
+}
+[data-mood="night"] .sky-vignette {
+  display: none;
+}
+.sky-glow-at {
+  left: 0;
+  top: 0;
+  width: 50rem;
+  height: 50rem;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete,
+    transform 10s linear;
+}
+.sky-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: sky-pulse 23s ease-in-out infinite alternate;
+}
+.sky-glow-moon {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ink-faint) 22%, transparent),
+    color-mix(in srgb, var(--ink-faint) 6%, transparent) 30%,
+    transparent 70%
+  );
+}
+@keyframes sky-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The clearing: paper behind the words, painted once, never moving. */
+.sky-clearing {
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 85%, transparent),
+    color-mix(in srgb, var(--paper) 60%, transparent) 55%,
+    transparent
+  );
+}
+/* The hour's own clearing, travelling with it (inside its ink). */
+.sky-word-clearing {
+  position: absolute;
+  inset: -2.5rem;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 90%, transparent),
+    color-mix(in srgb, var(--paper) 75%, transparent) 60%,
+    transparent
+  );
+}
+.sky-clearing-hero {
+  left: 8rem;
+  top: 29.5rem;
+  width: 104rem;
+  height: 30rem;
+}
+.sky-clearing-notes {
+  left: 25rem;
+  top: 59.5rem;
+  width: 70rem;
+  height: 8rem;
+}
+.sky-clearing-wide {
+  left: 1rem;
+  top: 5rem;
+  width: 118rem;
+  height: 60rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 75%, transparent),
+    color-mix(in srgb, var(--paper) 55%, transparent) 60%,
+    transparent
+  );
+}
+
+/* ---- Sun and moon. */
+.sky-body {
+  left: 0;
+  top: 0;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete,
+    transform 10s linear;
+}
+.sky-dot {
+  border-radius: 50%;
+  background: var(--ink-soft);
+}
+.sky-halo {
+  animation: sky-spin 557s linear infinite;
+}
+.sky-rays {
+  animation:
+    sky-spin-back 1213s linear infinite,
+    sky-rays 29s ease-in-out infinite alternate;
+}
+.sky-rays-soft {
+  animation: sky-spin-back 1213s linear infinite;
+  opacity: 0.6;
+}
+@keyframes sky-rays {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sky-moon-halo {
+  animation: sky-pulse 17s ease-in-out infinite alternate;
+}
+@keyframes sky-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sky-spin-back {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+/* The day's ends: long strokes along the horizon, drifting a little. */
+.sky-streaks {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  animation: sky-streaks 61s ease-in-out infinite alternate;
+}
+@keyframes sky-streaks {
+  from {
+    transform: translateX(-1rem);
+  }
+  to {
+    transform: translateX(1rem);
+  }
+}
+
+/* ---- Clouds: wisps, far and near cumulus, stratus banks. */
+.sky-cloud {
+  left: 0;
+}
+.sky-drift,
+.sky-drift-wide {
+  position: relative;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.sky-drift {
+  animation-name: sky-drift;
+}
+.sky-drift-wide {
+  animation-name: sky-drift-wide;
+}
+@keyframes sky-drift {
+  from {
+    transform: translateX(-50rem);
+  }
+  to {
+    transform: translateX(125rem);
+  }
+}
+@keyframes sky-drift-wide {
+  from {
+    transform: translateX(-115rem);
+  }
+  to {
+    transform: translateX(125rem);
+  }
+}
+.sky-cloud-far {
+  color: var(--ink-faint);
+}
+.sky-cloud-near {
+  color: var(--ink-faint);
+}
+.sky-wisp {
+  color: var(--ink-faint);
+  opacity: 0.5;
+}
+.sky-stratus {
+  color: var(--ink-faint);
+}
+.sky-cloud-hatch {
+  opacity: 0.6;
+}
+.sky-cloud-far .sky-cloud-hatch {
+  opacity: 0.45;
+}
+/* Behind the weather pages, whose words sit high, the clouds draw back to a veil. */
+.sky[data-quiet] .sky-cloud[data-on="1"] {
+  opacity: 0.4;
+}
+[data-heavy] .sky-cloud-near,
+[data-heavy] .sky-stratus {
+  color: var(--ink-soft);
+}
+/* Scoped to shown clouds, so a cloud leaving at night still fades out. */
+[data-mood="night"] .sky-cloud-far[data-on="1"],
+[data-mood="night"] .sky-cloud-near[data-on="1"],
+[data-mood="night"] .sky-stratus[data-on="1"] {
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+/* Sheet lightning, by day in storms: once in a long while, one slow glow
+   (about 3 s up and down, peak 0.35) as a cloud is lit from within. Never a
+   flicker, never the whole sheet. */
+.sky-flash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  animation: sky-flash 223s linear infinite;
+  animation-delay: -61s;
+}
+@keyframes sky-flash {
+  0%,
+  98.6% {
+    opacity: 0;
+    animation-timing-function: ease-in-out;
+  }
+  99.3% {
+    opacity: 0.35;
+    animation-timing-function: ease-in-out;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Stars: most breathe slowly; a few scintillate now and then. */
+.sky-star {
+  position: absolute;
+  margin: -0.8rem 0 0 -0.8rem;
+  animation-name: sky-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes sky-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.25;
+  }
+  60% {
+    opacity: 0.4;
+  }
+}
+.sky-star-sci {
+  animation-name: sky-scintillate;
+  animation-timing-function: linear;
+}
+/* Steady at 0.85, then a 1.8 s shimmer in the last 5% of each cycle. */
+@keyframes sky-scintillate {
+  0%,
+  95% {
+    opacity: 0.85;
+  }
+  96.2% {
+    opacity: 0.45;
+  }
+  97.4% {
+    opacity: 1;
+  }
+  98.6% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.85;
+  }
+}
+.sky-meteor {
+  position: absolute;
+  opacity: 0;
+  transform-origin: 100% 50%;
+  animation: sky-meteor 431s linear infinite;
+}
+/* The meteor glides (about 1.4 s, easing out) rather than flashes. */
+@keyframes sky-meteor {
+  0%,
+  99.67% {
+    opacity: 0;
+    transform: rotate(-17deg) translateX(0);
+    animation-timing-function: ease-out;
+  }
+  99.75% {
+    opacity: 0.85;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-17deg) translateX(-26rem);
+  }
+}
+
+/* ---- Birds: three flocks, each crossing on its own long cycle (about 35 s
+   to cross), each bird beating its wings to its own count. */
+.sky-flock {
+  position: absolute;
+  left: 0;
+  width: 16rem;
+  height: 6rem;
+  transform: translateX(-20rem);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.sky-flock-a {
+  animation-name: sky-flock-a;
+  animation-duration: 157s;
+}
+.sky-flock-b {
+  animation-name: sky-flock-b;
+  animation-duration: 211s;
+}
+.sky-flock-c {
+  animation-name: sky-flock-c;
+  animation-duration: 283s;
+}
+@keyframes sky-flock-a {
+  0% {
+    transform: translate(-20rem, 0);
+  }
+  22% {
+    transform: translate(135rem, -3rem);
+  }
+  100% {
+    transform: translate(135rem, -3rem);
+  }
+}
+@keyframes sky-flock-b {
+  0% {
+    transform: translate(-20rem, 0);
+  }
+  17% {
+    transform: translate(135rem, -4rem);
+  }
+  100% {
+    transform: translate(135rem, -4rem);
+  }
+}
+@keyframes sky-flock-c {
+  0% {
+    transform: translate(-20rem, 0);
+  }
+  14% {
+    transform: translate(135rem, -2rem);
+  }
+  100% {
+    transform: translate(135rem, -2rem);
+  }
+}
+.sky-bird {
+  position: absolute;
+  animation-name: sky-flap;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes sky-flap {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(0.45) translateY(0.15rem);
+  }
+}
+
+/* ---- Mist: two long engraved strokes per band, drifting on the low air. */
+.sky-mist-band {
+  left: -10rem;
+}
+.sky-mist {
+  animation: sky-mist ease-in-out infinite alternate;
+}
+@keyframes sky-mist {
+  from {
+    transform: translateX(0);
+    opacity: 0.2;
+  }
+  to {
+    transform: translateX(-24rem);
+    opacity: 0.35;
+  }
+}
+
+/* ---- Rain and snow: sheet-wide tiles that only fall. */
+.sky-tile {
+  position: absolute;
+  animation: sky-fall linear infinite;
+}
+@keyframes sky-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--ty));
+  }
+}
+.sky-sway {
+  animation: sky-sway ease-in-out infinite alternate;
+}
+@keyframes sky-sway {
+  from {
+    transform: translateX(-1.2rem);
+  }
+  to {
+    transform: translateX(1.2rem);
+  }
+}
+.sky-rain-far,
+.sky-snow-far {
+  color: var(--ink-faint);
+  opacity: 0.55;
+}
+.sky-rain-mid,
+.sky-snow-mid {
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+.sky-rain-near,
+.sky-snow-near {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+.sky[data-quiet] .sky-rain-far[data-on="1"],
+.sky[data-quiet] .sky-snow-far[data-on="1"] {
+  opacity: 0.35;
+}
+
+/* The weather pages' small engravings, cut in the sky's fine hand: stroke
+   widths read as pixels at any size (about 0.5 to 1.9 px), not scaled up. */
+.fine-ink :is(path, circle, line, ellipse) {
+  vector-effect: non-scaling-stroke;
+}
+
+/* Still, for those who ask for less motion: the sky as a drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .sky *,
+  .sky-layer {
+    animation: none !important;
+    transition: none !important;
+  }
+}

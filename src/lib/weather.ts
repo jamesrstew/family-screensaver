@@ -94,6 +94,7 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
       label: days[0].label,
       sunrise: instant(d.daily.sunrise[0], off),
       sunset: instant(d.daily.sunset[0], off),
+      nextSunrise: d.daily.sunrise[1] ? instant(d.daily.sunrise[1], off) : undefined,
     },
     days,
     hours,

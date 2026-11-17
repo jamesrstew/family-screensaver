@@ -15,7 +15,7 @@ import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
-import { hourWord } from "./common";
+import { fitStyle, hourWord } from "./common";
 
 /*
  * The weather, four views. Each stands alone: as the Weather page (Now is the
@@ -50,7 +50,8 @@ const STYLES: Record<string, WeatherStyle> = {
 };
 
 const noop = () => () => {};
-function useAsked(): WeatherStyle {
+/** The view the weather page was asked for (?weather=), Now by default. */
+export function useAsked(): WeatherStyle {
   const asked = useSyncExternalStore(
     noop,
     () => new URLSearchParams(window.location.search).get("weather") ?? "",
@@ -99,7 +100,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="pt-[2rem] text-center">
-        <p className="mx-auto max-w-[96rem] text-[4.4rem] leading-[1.18] text-balance">
+        <p className="mx-auto max-w-[106rem] text-balance" style={headline(o.line, 106, 15)}>
           {nb(o.line)}
         </p>
       </Ink>
@@ -111,7 +112,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
         ) : null}
       </div>
       <Ink order={2} className="text-center">
-        <p className="text-[3rem] leading-[1.25] italic">
+        <p className="text-[3.6rem] leading-[1.22] text-balance italic">
           {o.timing ? (
             <span className={act ? "text-accent" : "text-ink-soft"}>{nb(o.timing)} </span>
           ) : null}
@@ -120,7 +121,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
       </Ink>
       {o.ahead ? (
         <Ink order={3} mode="seep" className="mt-[1.4rem] text-center">
-          <p className="text-[1.85rem] text-ink-faint italic">{o.ahead && nb(o.ahead)}</p>
+          <p className="text-[2.6rem] text-ink-faint italic">{o.ahead && nb(o.ahead)}</p>
         </Ink>
       ) : null}
     </div>
@@ -272,7 +273,7 @@ function Band({ w, hours, now, tz }: { w: Sky; hours: Sky["hours"]; now: Date; t
       {kept.map((i) => (
         <p
           key={i}
-          className="absolute -translate-x-1/2 -translate-y-full pb-[1.2rem] text-[2.6rem] leading-none text-ink"
+          className="absolute -translate-x-1/2 -translate-y-full pb-[1.2rem] text-[3.6rem] leading-none text-ink"
           style={{ left: pctX(Math.min(Math.max(pts[i][0], 30), RW - 30)), top: pctY(pts[i][1]) }}
         >
           {temps[i]}°
@@ -285,7 +286,7 @@ function Band({ w, hours, now, tz }: { w: Sky; hours: Sky["hours"]; now: Date; t
         return (
           <p
             key={h.time}
-            className="absolute -translate-x-1/2 pt-[1rem] text-[1.6rem] whitespace-nowrap text-ink-soft italic"
+            className="absolute -translate-x-1/2 pt-[1rem] text-[2.5rem] whitespace-nowrap text-ink-soft italic"
             style={{ left: pctX(Math.max(xc(i), 24)), top: pctY(BAND.bottom) }}
           >
             {label}
@@ -365,56 +366,29 @@ function Fall({
 
 /* ------------------------------------------------------------------ now */
 
-/** The sky worth drawing big: what's coming if it's wet, otherwise the focus. */
-function heroSky(w: Sky, o: Outlook, now: Date): { code: number; isDay: boolean } {
-  if (o.spell) {
-    const from = Date.parse(o.spell.from);
-    const h = w.hours.find((x) => Date.parse(x.time) === from) ?? w.hours[0];
-    const f = hourFall(h);
-    const code =
-      h.code != null && f
-        ? h.code
-        : o.spell.kind === "snow"
-          ? 73
-          : o.spell.kind === "storms"
-            ? 95
-            : 63;
-    return { code, isDay: h.isDay ?? true };
-  }
-  if (o.focus === "tomorrow") {
-    const next = o.parts.find((p) => p.label === "Tomorrow" || p.label === "Today");
-    if (next) return { code: next.code, isDay: true };
-  }
-  void now;
-  return { code: w.now.code, isDay: w.now.isDay };
-}
-
 /**
- * Now: one engraving of the sky that matters, then the answer. The sentence
- * says what it's like and where it's going; the two italic lines say what's
- * coming and what to wear. The rest of the day sits along the foot in words.
+ * Now: the answer, set large under the living sky (which is itself the
+ * weather, so no icon). The sentence says what it's like and where it's
+ * going; the two italic lines say what's coming and what to wear. The rest
+ * of the day sits along the foot in words.
  */
-function Now({ w, o, now }: Drawn) {
+function Now({ o }: Drawn) {
   const act = urgent(o);
-  const sky = heroSky(w, o, now);
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-1 flex-col items-center justify-center px-[6rem] text-center">
-        <Ink order={0} mode="seep" k={`${sky.code}${sky.isDay}`} className="mb-[2.2rem]">
-          <Engraving
-            code={sky.code}
-            isDay={sky.isDay}
-            date={now}
-            className="size-[14rem] text-ink"
-          />
-        </Ink>
         <Ink order={1}>
-          <p className="max-w-[88rem] text-[4.6rem] leading-[1.16] text-balance">{nb(o.line)}</p>
+          <p
+            className="max-w-[104rem] text-balance"
+            style={headline(o.line, 104, o.timing ? 30 : 36)}
+          >
+            {nb(o.line)}
+          </p>
         </Ink>
         {o.timing ? (
           <Ink order={2} className="mt-[2.2rem]">
             <p
-              className={`text-[3.1rem] leading-[1.2] text-balance italic ${act ? "text-accent" : "text-ink-soft"}`}
+              className={`text-[3.8rem] leading-[1.2] text-balance italic ${act ? "text-accent" : "text-ink-soft"}`}
             >
               {nb(o.timing)}
             </p>
@@ -422,7 +396,7 @@ function Now({ w, o, now }: Drawn) {
         ) : null}
         <Ink order={3} className={o.timing ? "mt-[1.2rem]" : "mt-[2.2rem]"}>
           <p
-            className={`text-[3.1rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
+            className={`text-[3.8rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
           >
             {o.wear}
           </p>
@@ -430,19 +404,23 @@ function Now({ w, o, now }: Drawn) {
       </div>
       {/* The rest of the day, in words, under one fine rule. */}
       <Ink order={4} mode="seep" className="grid grid-cols-3 border-t border-rule pt-[1.8rem]">
+        {/* Set like an almanac's table: when, then what, two short lines each. */}
         {o.parts.map((p, i) => (
-          <p
+          <div
             key={p.label}
-            className={`text-[2rem] text-ink-soft ${i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right"}`}
+            className={`text-[2.6rem] leading-[1.25] whitespace-nowrap text-ink-soft ${i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right"}`}
           >
-            <span className="text-ink-faint italic">{p.label}, </span>
-            <span className="text-ink">{p.temp}°</span> {p.high ? "high" : "low"}, {lower(p.words)}
-          </p>
+            <p className="text-ink-faint italic">{p.label}</p>
+            <p>
+              <span className="text-ink">{p.temp}°</span> {p.high ? "high" : "low"},{" "}
+              {lower(p.words)}
+            </p>
+          </div>
         ))}
       </Ink>
       {o.ahead ? (
         <Ink order={5} mode="seep" className="mt-[1rem] text-center">
-          <p className="text-[1.85rem] text-ink-faint italic">{nb(o.ahead)}</p>
+          <p className="text-[2.5rem] text-ink-faint italic">{nb(o.ahead)}</p>
         </Ink>
       ) : null}
     </div>
@@ -450,6 +428,13 @@ function Now({ w, o, now }: Drawn) {
 }
 
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
+
+/**
+ * Each view's sentence, as large as its space allows (fit.ts): a short answer
+ * is set big, a long one still fits. `w` and `h` are the room it has, in rem.
+ */
+const headline = (text: string, w: number, h: number) =>
+  fitStyle(nb(text), { w, h }, { max: 8, min: 4.4 });
 
 /** Keep "10 p.m." and "about 7" together on one line. */
 const nb = (s: string) =>
@@ -469,8 +454,8 @@ function Days({ w, now, snapshot }: Drawn) {
   };
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[88rem] text-[4.4rem] leading-[1.18] text-balance">
+      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
+        <p className="max-w-[102rem] text-balance" style={headline(weekLine(w, now, tz), 102, 23)}>
           {nb(weekLine(w, now, tz))}
         </p>
       </Ink>
@@ -487,17 +472,19 @@ function Days({ w, now, snapshot }: Drawn) {
           return (
             <div key={d.date} className="relative flex flex-col items-center text-center">
               {/* The weekend: one fine rule over Saturday and Sunday. */}
-              {end ? <div className="absolute inset-x-0 -top-[2.2rem] h-px bg-rule" /> : null}
-              <p className={`text-[2rem] italic ${end ? "text-ink" : "text-ink-soft"}`}>{label}</p>
+              {end ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+              <p className={`text-[2.7rem] italic ${end ? "text-ink" : "text-ink-soft"}`}>
+                {label}
+              </p>
               <Engraving
                 code={p.code}
                 isDay
                 date={now}
-                className="my-[0.6rem] size-[9rem] text-ink"
+                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
               />
-              <p className="text-[3.4rem] leading-none text-ink">{d.high}°</p>
-              <p className="mt-[0.5rem] text-[2rem] leading-none text-ink-faint">{d.low}°</p>
-              <p className="mt-[1rem] h-[2.4rem] text-[1.85rem] text-ink-soft">
+              <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
+              <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-soft">{d.low}°</p>
+              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
                 {p.wet ? p.words : ""}
               </p>
             </div>
@@ -522,8 +509,8 @@ function Hours({ w, now, snapshot }: Drawn) {
   ).filter((s) => s.length > 0);
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[88rem] text-[4.4rem] leading-[1.18] text-balance">
+      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
+        <p className="max-w-[102rem] text-balance" style={headline(hoursLine(w, now, tz), 102, 23)}>
           {nb(hoursLine(w, now, tz))}
         </p>
       </Ink>
@@ -542,18 +529,20 @@ function Hours({ w, now, snapshot }: Drawn) {
           return (
             <div key={first.time} className="relative flex flex-col items-center text-center">
               {/* The night: one fine rule over its hours, as the weekend has in Days. */}
-              {night ? <div className="absolute inset-x-0 -top-[2.2rem] h-px bg-rule" /> : null}
-              <p className={`text-[2rem] italic ${night ? "text-ink" : "text-ink-soft"}`}>
+              {night ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+              <p
+                className={`text-[2.6rem] whitespace-nowrap italic ${night ? "text-ink" : "text-ink-soft"}`}
+              >
                 {i === 0 ? "Now" : nb(hourWord(first.time, tz))}
               </p>
               <Engraving
                 code={code}
                 isDay={isDay}
                 date={now}
-                className="my-[0.6rem] size-[9rem] text-ink"
+                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
               />
-              <p className="text-[3.4rem] leading-none text-ink">{temp}°</p>
-              <p className="mt-[1rem] h-[2.4rem] text-[1.85rem] text-ink-soft">
+              <p className="text-[5rem] leading-none text-ink">{temp}°</p>
+              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
                 {kind ? `${cap(kind === "storms" ? "storms" : kind)} ${chance}%` : ""}
               </p>
             </div>
