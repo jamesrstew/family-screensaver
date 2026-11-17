@@ -533,7 +533,7 @@ type Billow = { x: number; y: number; r: number };
  * A cumulus as an engraver cuts it: a heap of billows on a slightly bowed
  * base, the silhouette in one fine line, and the shadow laid in with
  * horizontal strokes, darkest under the crown, thinning upward and toward the
- * ends, the lowest broken into dashes. Units: 10 per rem.
+ * ends. Units: 10 per rem.
  */
 function cloudShape(r: () => number, W: number, H: number) {
   const base = H * 0.93;
@@ -561,23 +561,17 @@ function cloudShape(r: () => number, W: number, H: number) {
     });
   }
   const top = Math.min(...billows.map((b) => b.y - b.r));
-  const rows: Array<{ y: number; w: number; o: number; dash: string; half: number }> = [];
+  const rows: Array<{ y: number; w: number; o: number; half: number }> = [];
   let k = 0;
   for (let y = base + H * 0.04; y > top + (base - top) * 0.3; y -= 4.2 + k * 0.55, k++) {
     const up = (base - y) / (base - top);
-    const lowest = k < 3;
     rows.push({
       y,
       // Shorter toward the base, centered under the crown: the shadow tapers
       // to both ends instead of filling the base edge to edge.
       half: W * (0.22 + 0.4 * Math.min(up * 1.6, 1)),
       w: Math.max(0.95 - up * 1.1, 0.3),
-      o: lowest ? 0.4 : Math.max(0.75 - up * 0.9, 0.12),
-      dash: lowest
-        ? `${(14 + r() * 26).toFixed(0)} ${(6 + r() * 10).toFixed(0)}`
-        : up < 0.18
-          ? ""
-          : `${(20 + r() * 60).toFixed(0)} ${(4 + up * 30 * r()).toFixed(0)}`,
+      o: Math.max(0.75 - up * 0.9, 0.12),
     });
   }
   return { billows, base, rows, crown: W * lean };
@@ -753,18 +747,12 @@ function Clouds({
                         y2={row.y.toFixed(1)}
                         strokeWidth={row.w.toFixed(2)}
                         opacity={row.o.toFixed(2)}
-                        strokeDasharray={row.dash || undefined}
                       />
                     ))}
                   </g>
                 </g>
-                {/* The base, closing the silhouette: a fine broken line. */}
-                <path
-                  d={baseLine}
-                  strokeWidth={c.far ? 0.9 : 1.1}
-                  strokeDasharray="14 7"
-                  opacity={0.4}
-                />
+                {/* The base, closing the silhouette in the same line as the billows. */}
+                <path d={baseLine} strokeWidth={c.far ? 1.1 : 1.4} />
               </svg>
               {/* Sheet lightning, by day in a storm: once in a long while the
                   cloud is lit from within (its shadow briefly paled). */}
