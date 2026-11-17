@@ -2,6 +2,7 @@
 
 import { clock, longDate, type Mood } from "@/lib/time";
 import type { Slide } from "@/lib/carousel";
+import type { Inside } from "@/lib/indoor";
 import type { Snapshot, NotebookItem } from "@/lib/types";
 
 export type ViewProps = {
@@ -10,6 +11,8 @@ export type ViewProps = {
   mood: Mood;
   /** Home only: which piece of the carousel is up. */
   slide?: Slide;
+  /** Home only: the note about inside the house, when it's fresh. */
+  inside?: Inside | null;
 };
 
 /** The quiet header on every page but home: date, title, time. */
