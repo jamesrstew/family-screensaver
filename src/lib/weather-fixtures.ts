@@ -52,6 +52,7 @@ const SPECS: Record<FakeSky, Spec> = {
       [61, 52, 43, 40],
       [1, 55, 39, 5],
       [0, 58, 37, 0],
+      [2, 56, 38, 10],
     ],
   },
   // Snow this afternoon into the evening; a chance of more tomorrow morning.
@@ -79,6 +80,7 @@ const SPECS: Record<FakeSky, Spec> = {
       [3, 37, 25, 10],
       [73, 35, 27, 70],
       [2, 36, 22, 10],
+      [3, 35, 24, 20],
     ],
   },
   // A warm, heavy afternoon: thunderstorms from 3 to 7 p.m.
@@ -105,6 +107,7 @@ const SPECS: Record<FakeSky, Spec> = {
       [0, 77, 59, 0],
       [2, 74, 60, 10],
       [61, 68, 57, 60],
+      [2, 73, 58, 10],
     ],
   },
   // Raining this morning, gray the rest of the day.
@@ -128,6 +131,7 @@ const SPECS: Record<FakeSky, Spec> = {
       [3, 49, 40, 25],
       [1, 51, 37, 5],
       [0, 54, 36, 0],
+      [2, 53, 38, 10],
     ],
   },
   // An August week under wildfire smoke: hot, bone dry, the sun a dim disc.
@@ -148,6 +152,7 @@ const SPECS: Record<FakeSky, Spec> = {
       [1, 87, 55, 0],
       [0, 90, 56, 0],
       [0, 91, 57, 0],
+      [1, 90, 56, 0],
     ],
   },
 };
@@ -208,7 +213,9 @@ function lensHour(spec: Spec, day: number, h: number) {
   // The wind rises through the day and falls at night, a little more each day.
   const [calm, peak, dir] = spec.wind;
   const x = (Math.cos(((h - 15) / 24) * 2 * Math.PI) + 1) / 2;
-  const wind = Math.round(calm + x * (peak - calm) + ((day * 3) % 5) - 1);
+  // Each day its own peak, so a week doesn't repeat one shape.
+  const gusty = [1, 0.7, 1.25, 0.85, 1.45, 0.6, 1.1, 0.9][day % 8];
+  const wind = Math.round(calm + x * (peak - calm) * gusty);
   // The sun from 7 to 5, highest at noon.
   const sun = h > 7 && h < 17 ? Math.sin(((h - 7) / 10) * Math.PI) : 0;
   const temp = tempOn(spec, day, h);
@@ -231,7 +238,8 @@ function lensHour(spec: Spec, day: number, h: number) {
     wind,
     gust: Math.round(wind * 1.6 + 2),
     dir: (dir + h * 3 + day * 20) % 360,
-    uv: Math.round(spec.uv * sun * (1 - (day % 3) * 0.08) * 10) / 10,
+    // Clouds and rain dim the sun.
+    uv: Math.round(spec.uv * sun * (s.code >= 61 ? 0.25 : s.code >= 3 ? 0.4 : 1) * 10) / 10,
     temp,
     feels,
     rh,
