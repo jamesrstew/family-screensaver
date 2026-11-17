@@ -550,15 +550,20 @@ function wearFacts(
 
   // The night before: last evening from 6 p.m. to 8 a.m. Hours already past
   // come from the day's own record; hours ahead count only when likely.
+  // The hours ahead, by local day and hour, found once (the TV's clock math is slow).
+  const byHour = new Map(
+    w.hours.map((h) => {
+      const t = new Date(h.time);
+      return [`${dayKey(t, tz)}:${parts(t, tz).hour}`, h] as const;
+    }),
+  );
   const night: Array<{ temp: number; snow: number; wet: boolean }> = [];
   for (const [date, from, to] of [
     [addDays(d.date, -1), 18, 24],
     [d.date, 0, 8],
   ] as const) {
     for (let hr = from; hr < to; hr++) {
-      const ahead = w.hours.find(
-        (h) => dayKey(new Date(h.time), tz) === date && parts(new Date(h.time), tz).hour === hr,
-      );
+      const ahead = byHour.get(`${date}:${hr}`);
       if (ahead && Date.parse(ahead.time) + HOUR > now.getTime()) {
         const f = hourFall(ahead);
         night.push({
