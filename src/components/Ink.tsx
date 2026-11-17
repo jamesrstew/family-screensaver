@@ -24,6 +24,8 @@ import {
  *
  * `k` is the content's identity: change it and the block re-inks (out with
  * the old, in with the new). `order` staggers blocks on a page, top to bottom.
+ * `lag` holds the old ink a while before it sinks, so blocks that change
+ * together turn one after another and the page is never blank.
  * Inside a leaving <InkStage>, every block bleeds out.
  */
 
@@ -100,6 +102,8 @@ type Props = {
   k?: string | number;
   order?: number;
   mode?: InkMode;
+  /** Milliseconds to hold the old ink before it sinks, when `k` changes. */
+  lag?: number;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -137,7 +141,15 @@ function prefersStill() {
   );
 }
 
-export function Ink({ k = "", order = 0, mode: asked, className, style, children }: Props) {
+export function Ink({
+  k = "",
+  order = 0,
+  mode: asked,
+  lag = 0,
+  className,
+  style,
+  children,
+}: Props) {
   const leaving = useContext(InkStage);
   const designMode = useContext(InkModeContext);
   const mode = asked ?? designMode;
@@ -339,7 +351,7 @@ export function Ink({ k = "", order = 0, mode: asked, className, style, children
       return;
     }
     settledK.current = false;
-    play("out", 0, () => setShown((s) => ({ k, children: s.children })));
+    play("out", lag, () => setShown((s) => ({ k, children: s.children })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [k]);
 
