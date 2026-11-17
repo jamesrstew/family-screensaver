@@ -8,7 +8,7 @@ const thermostat = (traits: Record<string, Record<string, unknown>>, room = "Hal
 });
 
 describe("indoorOf", () => {
-  it("reads each thermostat in °F, with humidity, what it's doing, and its setpoints", () => {
+  it("reads each thermostat in °F, with humidity", () => {
     const indoor = indoorOf([
       thermostat({
         "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: 20 },
@@ -27,8 +27,8 @@ describe("indoorOf", () => {
     expect(indoor).toEqual({
       temp: 70,
       rooms: [
-        { name: "Hall", temp: 68, humidity: 41, hvac: "heating", heatTo: 70 },
-        { name: "Upstairs", temp: 72, hvac: "off" },
+        { name: "Hall", temp: 68, humidity: 41 },
+        { name: "Upstairs", temp: 72 },
       ],
     });
   });
@@ -41,5 +41,16 @@ describe("indoorOf", () => {
       ]),
     ).toBeNull();
     expect(indoorOf([])).toBeNull();
+  });
+
+  it("leaves out a thermostat that's offline, whose reading is stale", () => {
+    const reading = (c: number, status: string) => ({
+      "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: c },
+      "sdm.devices.traits.Connectivity": { status },
+    });
+    expect(
+      indoorOf([thermostat(reading(20, "ONLINE")), thermostat(reading(26, "OFFLINE"), "Loft")]),
+    ).toEqual({ temp: 68, rooms: [{ name: "Hall", temp: 68 }] });
+    expect(indoorOf([thermostat(reading(20, "OFFLINE"))])).toBeNull();
   });
 });

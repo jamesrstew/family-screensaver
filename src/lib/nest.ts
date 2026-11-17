@@ -64,18 +64,19 @@ export async function getIndoor(): Promise<Indoor | null> {
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const fahrenheit = (c: number) => Math.round((c * 9) / 5 + 32);
 
-/** Each thermostat's room, temperature (°F), humidity, and what it's doing. Pure. */
+/**
+ * Each thermostat's room, temperature (°F), and humidity. Pure. A thermostat
+ * that's offline is left out: Google keeps answering with its last reading,
+ * which may be hours old.
+ */
 export function indoorOf(devices: Device[]): Indoor | null {
   const rooms = devices
     .filter((d) => d.type === "sdm.devices.types.THERMOSTAT")
+    .filter((d) => d.traits["sdm.devices.traits.Connectivity"]?.status !== "OFFLINE")
     .flatMap((d) => {
       const celsius = num(d.traits["sdm.devices.traits.Temperature"]?.ambientTemperatureCelsius);
       if (celsius === undefined) return [];
       const humidity = num(d.traits["sdm.devices.traits.Humidity"]?.ambientHumidityPercent);
-      const status = d.traits["sdm.devices.traits.ThermostatHvac"]?.status;
-      const set = d.traits["sdm.devices.traits.ThermostatTemperatureSetpoint"];
-      const heat = num(set?.heatCelsius);
-      const cool = num(set?.coolCelsius);
       return [
         {
           name:
@@ -84,9 +85,6 @@ export function indoorOf(devices: Device[]): Indoor | null {
             "",
           temp: fahrenheit(celsius),
           ...(humidity !== undefined ? { humidity: Math.round(humidity) } : {}),
-          hvac: status === "HEATING" ? "heating" : status === "COOLING" ? "cooling" : "off",
-          ...(heat !== undefined ? { heatTo: fahrenheit(heat) } : {}),
-          ...(cool !== undefined ? { coolTo: fahrenheit(cool) } : {}),
         } satisfies Indoor["rooms"][number],
       ];
     });

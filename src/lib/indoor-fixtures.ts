@@ -8,7 +8,6 @@ const room = (name: string, temp: number, humidity = 42): Room => ({
   name,
   temp,
   humidity,
-  hvac: "off",
 });
 const house = (...rooms: Room[]): Indoor => ({
   temp: Math.round(rooms.reduce((s, r) => s + r.temp, 0) / rooms.length),

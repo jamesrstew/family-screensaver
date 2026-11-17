@@ -56,9 +56,6 @@ export type Indoor = {
     name: string; // the thermostat's room; never shown in the repo or logs
     temp: number;
     humidity?: number;
-    hvac: "heating" | "cooling" | "off";
-    heatTo?: number;
-    coolTo?: number;
   }>;
 };
 
