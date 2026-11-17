@@ -201,7 +201,7 @@ export type Outlook = {
 const HOUR = 3_600_000;
 
 /** Morning 5 to noon, afternoon noon to 5 p.m., evening 5 to 9 p.m., then night. */
-function periodWord(t: Date, now: Date, tz: string): string {
+export function periodWord(t: Date, now: Date, tz: string): string {
   const { hour } = parts(t, tz);
   const today = dayKey(now, tz);
   const day = dayKey(t, tz);
