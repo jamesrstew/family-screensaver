@@ -35,4 +35,12 @@ describe("corners", () => {
     expect(corners(50, 68, caps)).toEqual({ outside: null, inside: null });
     expect(corners(50, 68, caps.toLowerCase())).toEqual({ outside: 50, inside: 68 });
   });
+
+  it("keeps zero and below, which are temperatures, not nothing", () => {
+    expect(corners(0, 68, usual)).toEqual({ outside: 0, inside: 68 });
+    expect(corners(-5, 68, usual)).toEqual({ outside: -5, inside: 68 });
+    expect(corners(-5, 0, usual)).toEqual({ outside: -5, inside: 0 });
+    expect(corners(0, null, usual)).toEqual({ outside: 0, inside: null });
+    expect(corners(undefined, 68, usual)).toEqual({ outside: null, inside: 68 });
+  });
 });

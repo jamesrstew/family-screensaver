@@ -6,6 +6,8 @@ export const PAGES = ["home", "weather", "week", "notebook"] as const;
 export type Page = (typeof PAGES)[number];
 
 export type Weather = {
+  /** When the report was fetched (ISO), stamped inside the cache: its true age. */
+  at?: string;
   now: {
     temp: number;
     label: string;

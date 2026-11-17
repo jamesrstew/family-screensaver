@@ -81,6 +81,8 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
   const w = shape(await res.json(), new Date(), timeZone);
+  // Stamped here, inside the cache, so a cached report keeps its true age.
+  w.at = new Date().toISOString();
   // No sunset in the forecast, no twilight: the paper turns at the old hour.
   const set = Date.parse(w.today.sunset);
   if (Number.isFinite(set)) w.today.twilight = civilTwilight(lat, new Date(set));
@@ -204,9 +206,16 @@ export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
     dew: r0(d.hourly.dew_point_2m?.[from + i]),
   }));
 
+  // The temperature now, never a made-up 0°: the report's current reading,
+  // else this hour's forecast; with neither, the report is left out (§15).
+  const current = [d.current?.temperature_2m, d.hourly.temperature_2m[from]].find(
+    (t): t is number => typeof t === "number" && Number.isFinite(t),
+  );
+  if (current === undefined) throw new Error("open-meteo: no temperature now");
+
   return {
     now: {
-      temp: Math.round(d.current.temperature_2m),
+      temp: Math.round(current),
       label: describe(d.current.weather_code, d.current.is_day === 1),
       code: d.current.weather_code,
       isDay: d.current.is_day === 1,

@@ -16,6 +16,3 @@ export function freshIndoor(snapshot: Snapshot, now: Date): Indoor | null {
   // The age of the reading itself, not of the snapshot carrying it.
   return indoor && now.getTime() - Date.parse(indoor.at) < STALE_MS ? indoor : null;
 }
-
-/** The words as written: "68° inside". */
-export const insideText = (temp: number) => `${temp}° inside`;

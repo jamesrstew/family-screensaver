@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STALE_MS, freshIndoor, insideText } from "./indoor";
+import { STALE_MS, freshIndoor } from "./indoor";
 import type { Indoor, Snapshot } from "./types";
 
 const AT = "2026-11-17T18:00:00.000Z";
@@ -13,11 +13,5 @@ describe("freshIndoor", () => {
     expect(freshIndoor(snapshot, at(STALE_MS - 1))).toEqual(house(68));
     expect(freshIndoor(snapshot, at(STALE_MS))).toBeNull();
     expect(freshIndoor({ ...snapshot, indoor: undefined }, at(0))).toBeNull();
-  });
-});
-
-describe("insideText", () => {
-  it("writes one number, never a range", () => {
-    expect(insideText(68)).toBe("68° inside");
   });
 });

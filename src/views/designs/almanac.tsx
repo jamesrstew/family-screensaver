@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { insideText } from "@/lib/indoor";
+import { nowIsFresh } from "@/lib/forecast";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -16,6 +16,7 @@ import {
   heroBox,
   heroFitting,
   Deg,
+  degrees,
 } from "./common";
 import { fitType, widthEm } from "./fit";
 
@@ -123,7 +124,9 @@ export function Home(props: ViewProps) {
   const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
   // The two temperatures in the bottom corners, outside on the left and the
   // house on the right, when what's next leaves them room.
-  const { outside, inside } = corners(w ? w.now.temp : null, props.inside, nextLine);
+  // Outside only while the report is from the last hour, as honest as inside.
+  const fresh = w && nowIsFresh(w, now) ? w.now.temp : null;
+  const { outside, inside } = corners(fresh, props.inside, nextLine);
   const asks = (item: NotebookItem) => item.kind === "question";
   // The foot is kept whenever there's a sky or the house has been read, note
   // or not, so a reading coming and going never resizes or changes the passage.
@@ -189,12 +192,12 @@ export function Home(props: ViewProps) {
           </Ink>
           {/* Always on the page, so the notes sink away rather than vanish. */}
           <Ink
-            k={outside === null ? "none" : "outside"}
+            k={outside == null ? "none" : "outside"}
             order={3}
             mode="seep"
             className="absolute bottom-[0.7rem] left-0 isolate"
           >
-            {outside !== null ? (
+            {outside != null ? (
               <>
                 {/* Its own small clearing of paper, so no river runs through it. */}
                 <div className="sky-word-clearing corner-clearing" aria-hidden />
@@ -205,12 +208,12 @@ export function Home(props: ViewProps) {
             ) : null}
           </Ink>
           <Ink
-            k={inside === null ? "none" : "inside"}
+            k={inside == null ? "none" : "inside"}
             order={3}
             mode="seep"
             className="absolute right-0 bottom-[0.7rem] isolate"
           >
-            {inside !== null ? (
+            {inside != null ? (
               <>
                 <div className="sky-word-clearing corner-clearing" aria-hidden />
                 <Corner word="inside">
@@ -232,8 +235,9 @@ const NEXT = 2.6;
 const CORNER = 2;
 const AIR = 3;
 
-/** "50° outside": the words as written, for measuring. */
-const outsideText = (t: number) => `${t}° outside`;
+/** "50° outside", "68° inside": the words as written, for measuring. */
+const outsideText = (t: number) => `${degrees(t)} outside`;
+const insideText = (t: number) => `${degrees(t)} inside`;
 
 /**
  * The corner notes, if they have room beside what's next (centered on the
@@ -244,16 +248,16 @@ const outsideText = (t: number) => `${t}° outside`;
  * alone; with no sky, inside does.
  */
 export function corners(
-  outside: number | null,
+  outside: number | null | undefined,
   inside: number | null | undefined,
   nextLine: string,
 ): { outside: number | null; inside: number | null } {
   const room = FOOT_W / 2 - (widthEm(nextLine) * NEXT) / 2 - AIR;
   const fits = (words: string) => widthEm(words) * CORNER <= room;
   const house = inside != null && fits(insideText(inside)) ? inside : null;
-  const sky = outside !== null && fits(outsideText(outside)) ? outside : null;
+  const sky = outside != null && fits(outsideText(outside)) ? outside : null;
   // Both, or neither, when both have something to say.
-  if (inside != null && outside !== null && (house === null || sky === null)) {
+  if (inside != null && outside != null && (house === null || sky === null)) {
     return { outside: null, inside: null };
   }
   return { outside: sky, inside: house };
