@@ -14,7 +14,7 @@ const base: Facts = {
   fall: null,
   wetHours: 0,
   wakingHours: 10,
-  wetNow: false,
+  wetFirst: false,
   freshSnow: 0,
   clear: false,
   frost: false,
@@ -26,14 +26,17 @@ const day = (f: Partial<Facts>): Facts => ({ ...base, ...f });
 
 describe("conditionOf: each line has a real trigger", () => {
   const cases: Array<[Partial<Facts>, Condition]> = [
-    [{ freshSnow: 3, clear: true, cold: 22 }, "powder"],
-    [{ freshSnow: 3, clear: false, cold: 22 }, "fresh-snow"],
+    [{ freshSnow: 5, clear: true, cold: 22 }, "powder"],
+    [{ freshSnow: 2, clear: true, cold: 22 }, "fresh-snow"],
+    [{ freshSnow: 5, clear: false, cold: 22 }, "fresh-snow"],
     [{ freshSnow: 3, clear: true, fall: "snow", wetHours: 4 }, "snowing"],
-    [{ fall: "rain", wetHours: 8 }, "rain-all-day"],
+    [{ fall: "rain", wetHours: 8, wetFirst: true }, "rain-all-day"],
+    [{ fall: "rain", wetHours: 8 }, "rain"],
     [{ fall: "rain", wetHours: 1 }, "shower"],
-    [{ fall: "rain", wetHours: 2, wetNow: true }, "rain"],
+    [{ fall: "rain", wetHours: 2, wetFirst: true }, "rain"],
     [{ fall: "rain", wetHours: 8, wakingHours: 13 }, "rain"],
-    [{ fall: "storms", wetHours: 4 }, "rain"],
+    [{ fall: "storms", wetHours: 4 }, "storms"],
+    [{ fall: "storms", wetHours: 2 }, "storms"],
     [{ cold: 30, coldFeel: 19 }, "wind-chill"],
     [{ cold: 36, coldFeel: 30, frost: true }, "frost"],
     [{ cold: 75, warm: 92, coldFeel: 75, hotFeel: 92 }, "heat"],
@@ -81,16 +84,44 @@ describe("wearLine", () => {
   it("keeps the practical part in every line", () => {
     for (const line of allDays({ fall: "snow", wetHours: 5 })) expect(line).toMatch(/boots/i);
     for (const line of allDays({ cold: 12, coldFeel: 10 })) expect(line).toMatch(/heavy coat/);
-    for (const line of allDays({ freshSnow: 3, clear: true, cold: 12, coldFeel: 12 }))
+    for (const line of allDays({ freshSnow: 5, clear: true, cold: 12, coldFeel: 12 }))
       expect(line).toMatch(/boots and heavy layers/i);
-    for (const line of allDays({ fall: "rain", wetHours: 8 })) expect(line).toMatch(/umbrella/);
-    for (const line of allDays({ freshSnow: 3, clear: true, cold: 22 }))
+    for (const line of allDays({ fall: "rain", wetHours: 8, wetFirst: true }))
+      expect(line).toMatch(/umbrella/);
+    for (const line of allDays({ fall: "storms", wetHours: 3 })) {
+      expect(line).toMatch(/umbrella/);
+      expect(line).toMatch(/thunders/);
+    }
+    for (const line of allDays({ freshSnow: 5, clear: true, cold: 22 }))
       expect(line).toMatch(/warm coat/);
     for (const line of allDays({ cold: 36, frost: true })) expect(line).toMatch(/scraper/);
     for (const line of allDays({ cold: 30, coldFeel: 19 })) expect(line).toMatch(/19°/);
   });
-  it("speaks of tomorrow as tomorrow", () => {
+  it("speaks of tomorrow as tomorrow, even with no coat to name", () => {
     for (const line of allDays({ when: "tomorrow" })) expect(line).toMatch(/^Tomorrow[,:]/);
+    const warm = { when: "tomorrow" as const, cold: 70, coldFeel: 70, warm: 82, afternoon: false };
+    for (const line of allDays(warm)) expect(line).toMatch(/^Tomorrow, /);
+    expect(allDays(warm)).toContain("Tomorrow, no coat needed.");
+  });
+  it("gives the commonest days four ways to say it", () => {
+    for (const f of [
+      { cold: 52, warm: 68, coldFeel: 52 },
+      { cold: 34 },
+      { cold: 48, coldFeel: 48, warm: 54 },
+      { cold: 60, coldFeel: 60, warm: 64, afternoon: false },
+    ])
+      expect(new Set(allDays(f, 8)).size).toBe(4);
+  });
+  it("holds the day's circumstance through a forecast hovering at a line", () => {
+    const hold = new Map();
+    const walk = day({ cold: 52, warm: 68, coldFeel: 52, wind: 11 });
+    const breezy = day({ cold: 52, warm: 68, coldFeel: 52, wind: 12 });
+    const first = wearLine(walk, hold);
+    expect(wearLine(breezy, hold)).toBe(first);
+    // A change in what falls shows at once.
+    expect(wearLine(day({ fall: "rain", wetHours: 3 }), hold)).toMatch(/umbrella/i);
+    // Without a hold, each forecast speaks for itself.
+    expect(wearLine(breezy)).not.toBe(first);
   });
   it("fits where the coat line always has: one line under the sentence", () => {
     const conditions: Array<Partial<Facts>> = [

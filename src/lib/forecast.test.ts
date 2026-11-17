@@ -244,3 +244,15 @@ describe("smoke in the sky's words", () => {
     expect(outlook(w, now, tz).line).not.toMatch(/Smoky|Hazy/);
   });
 });
+
+describe("tomorrow's air, in the evening", () => {
+  it("takes the coat line's place when tomorrow won't be fine for everyone", () => {
+    const tz = "America/Los_Angeles";
+    const now = new Date("2026-11-18T21:00:00-08:00");
+    const w = fakeWeather("fair", now, tz);
+    w.days[1] = { ...w.days[1], aqi: 182 };
+    expect(outlook(w, now, tz).air).toBe(
+      "Tomorrow, unhealthy air, AQI up to 182: keep time outside short and easy.",
+    );
+  });
+});

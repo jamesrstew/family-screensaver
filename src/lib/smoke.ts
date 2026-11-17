@@ -109,6 +109,13 @@ export function airLine(a: { aqi?: number; pm?: number }): string | null {
   return `${airPhrase(n)}, AQI ${n}: ${airAdvice(n)}.`;
 }
 
+/** A day ahead's air, when it won't be fine for everyone: "Tomorrow, unhealthy air, AQI up to 182: …" */
+export function airAhead(label: string, aqi?: number): string | null {
+  if (aqi == null || aqi <= AQI_SENSITIVE) return null;
+  const phrase = airPhrase(aqi);
+  return `${label}, ${phrase[0].toLowerCase()}${phrase.slice(1)}, AQI up to ${aqi}: ${airAdvice(aqi)}.`;
+}
+
 /**
  * Smoke and haze, from the air itself: the hour's fine particles (µg/m³)
  * and the US AQI, or, with no word from the air, a short view on a dry day.

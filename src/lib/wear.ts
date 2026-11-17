@@ -26,14 +26,14 @@ export type Facts = {
   /** The strongest sustained wind (mph) and the muggiest dew point (°F). */
   wind: number;
   dew: number;
-  /** What's likely to fall while they're out, for how many of how many waking hours, and whether it's falling already. */
+  /** What's likely to fall while they're out, for how many of how many waking hours, and whether from the first of them. */
   fall: Fall | null;
   wetHours: number;
   wakingHours: number;
-  wetNow: boolean;
+  wetFirst: boolean;
   /** Inches of snow on the ground since last evening (fallen, or likely before morning). */
   freshSnow: number;
-  /** A mostly clear sky for the day. */
+  /** A mostly clear sky over the waking hours (most of them fair to partly cloudy). */
   clear: boolean;
   /** A hard freeze before morning, with nothing falling: frost on the windshield. */
   frost: boolean;
@@ -41,7 +41,7 @@ export type Facts = {
   afternoon: boolean;
   /** The air is fine for everyone (AQI 100 or under). */
   airOk: boolean;
-  /** Warmer than any other day of the week ahead, and mild enough to notice. */
+  /** The day's high is 50° or more and above every day of the week ahead. */
   warmest: boolean;
 };
 
@@ -59,6 +59,7 @@ export type Condition =
   | "powder"
   | "fresh-snow"
   | "snowing"
+  | "storms"
   | "rain-all-day"
   | "shower"
   | "rain"
@@ -76,30 +77,37 @@ export type Condition =
 
 /** Rain likely for this many waking hours is a wet day, not a shower. */
 export const ALL_DAY = 6;
+/** Snow enough for the hill (inches); less is just fresh snow on the ground. */
+export const POWDER = 4;
 
 /**
  * Which circumstance the day is, by its triggers:
- *  powder:       an inch or more of fresh snow, then a clear, dry, cold day.
+ *  powder:       4 inches or more of fresh snow, then a clear, dry, cold day.
  *  fresh-snow:   an inch or more of fresh snow, nothing falling while out.
  *  snowing:      snow likely while out.
- *  rain-all-day: rain likely 6 or more waking hours, and most of them.
- *  shower:       rain likely for an hour or two, not already falling.
+ *  storms:       thunderstorms likely while out (lightning, not wet clothes).
+ *  rain-all-day: rain likely from the first waking hour, for 6 or more of
+ *                them, and most of them.
+ *  shower:       rain likely for an hour or two, not from the first hour.
  *  rain:         rain likely, in between.
  *  wind-chill:   the wind makes it feel 8° colder, below freezing.
  *  frost:        a hard freeze (28° or colder) before morning, dry.
  *  heat:         the heat index reaches 95°, or the air 90°.
  *  muggy:        a dew point of 65° or more.
  *  walk:         a mild (60° to 78°), dry, calm afternoon ahead, the air fine.
- *  warmest:      50° or more and the warmest day of the week ahead.
+ *  warmest:      a high of 50° or more, above every day of the week ahead.
  *  then by the coldest hour: bitter (under 20°), cold, cool, sweater, warm.
  */
 export function conditionOf(f: Facts): Condition {
   const dry = !f.fall;
-  if (f.freshSnow >= 1 && dry && f.cold < 40) return f.clear ? "powder" : "fresh-snow";
+  if (f.freshSnow >= 1 && dry && f.cold < 40)
+    return f.freshSnow >= POWDER && f.clear ? "powder" : "fresh-snow";
   if (f.fall === "snow") return "snowing";
+  if (f.fall === "storms") return "storms";
   if (f.fall) {
-    if (f.wetHours >= ALL_DAY && f.wetHours >= f.wakingHours * 0.75) return "rain-all-day";
-    if (f.wetHours <= 2 && !f.wetNow) return "shower";
+    const most = f.wetHours >= ALL_DAY && f.wetHours >= f.wakingHours * 0.75;
+    if (most && f.wetFirst) return "rain-all-day";
+    if (f.wetHours <= 2 && !f.wetFirst) return "shower";
     return "rain";
   }
   if (f.coldFeel <= f.cold - 8 && f.coldFeel < 32) return "wind-chill";
@@ -107,7 +115,7 @@ export function conditionOf(f: Facts): Condition {
   if (f.hotFeel >= 95 || f.warm >= 90) return "heat";
   if (f.dew >= 65) return "muggy";
   if (f.afternoon && f.airOk && f.warm >= 60 && f.warm <= 78 && f.wind < 12) return "walk";
-  if (f.warmest && f.warm >= 50) return "warmest";
+  if (f.warmest) return "warmest";
   if (f.cold < 20) return "bitter";
   if (f.cold < 40) return "cold";
   if (f.cold < 55) return "cool";
@@ -134,8 +142,8 @@ const want = (s: Say, also?: string) =>
   s.coat
     ? `${s.you} want ${also ? `${s.wrap} and ${also}` : s.coat}.`
     : also
-      ? `No coat needed, but bring ${also}.`
-      : "No coat needed.";
+      ? `${s.t}no coat needed, but bring ${also}.`
+      : `${s.t}no coat needed.`;
 
 /**
  * The lines, a few for each circumstance. Each keeps the practical part;
@@ -155,6 +163,11 @@ const LINES: Record<Condition, Array<(s: Say) => string>> = {
     (s) => want(s, "boots"),
     (s) => `${s.t}boots by the door, and ${s.wrap}.`,
     (s) => `${s.t}a snowy one: ${s.wrap} and boots.`,
+  ],
+  storms: [
+    (s) => `${s.t}storms on the way: an umbrella, and indoors when it thunders.`,
+    (s) =>
+      `${s.t}thunderstorms: ${s.coat ? `${s.wrap} and ` : ""}the umbrella, and head in when it thunders.`,
   ],
   "rain-all-day": [
     (s) => want(s, "an umbrella, all day long"),
@@ -189,14 +202,19 @@ const LINES: Record<Condition, Array<(s: Say) => string>> = {
     (s) => `${s.t}it’ll be sticky: light clothes, and water.`,
   ],
   walk: [
-    (s) => `${s.t}${s.coat ?? "no coat needed"}, and a fine afternoon for a walk.`,
+    (s) =>
+      `${s.t}a fine afternoon for a walk; ${s.coat ? `${s.coat} for the cool hours` : "no coat needed"}.`,
     (s) => `${s.t}mild and calm: a good afternoon to be outside${s.coat ? `, in ${s.coat}` : ""}.`,
+    (s) =>
+      `${s.t}a gentle afternoon. ${s.coat ? `${cap(s.coat)} for the morning, and maybe a walk later.` : "No coat needed, and maybe a walk later."}`,
+    (s) =>
+      `${s.t}${s.coat ? `${s.coat} early, then` : "no coat needed, and"} an afternoon made for a stroll.`,
   ],
   warmest: [
     (s) =>
-      `${s.t}the warmest day of the week. ${s.coat ? `${cap(s.coat)} should do.` : "No coat needed."}`,
+      `${s.t}the warmest day of the week ahead. ${s.coat ? `${cap(s.coat)} should do.` : "No coat needed."}`,
     (s) =>
-      `${s.t}the week’s warmest day${s.coat ? `; ${s.coat} for the cool hours` : ", and no coat needed"}.`,
+      `${s.t}the warmest day for a while${s.coat ? `; ${s.coat} for the cool hours` : ", and no coat needed"}.`,
   ],
   bitter: [
     (s) => want(s),
@@ -207,9 +225,20 @@ const LINES: Record<Condition, Array<(s: Say) => string>> = {
     (s) => want(s),
     (s) => `${s.t}warm coat weather.`,
     (s) => `${s.t}a warm coat, and gloves wouldn’t hurt.`,
+    (s) => `${s.t}bundle up in a warm coat.`,
   ],
-  cool: [(s) => want(s), (s) => `${s.t}jacket weather.`, (s) => `${s.t}a jacket should do it.`],
-  sweater: [(s) => want(s), (s) => `${s.t}sweater weather.`, (s) => `${s.t}a sweater should do.`],
+  cool: [
+    (s) => want(s),
+    (s) => `${s.t}jacket weather.`,
+    (s) => `${s.t}a jacket should do it.`,
+    (s) => `${s.t}bring a jacket along.`,
+  ],
+  sweater: [
+    (s) => want(s),
+    (s) => `${s.t}sweater weather.`,
+    (s) => `${s.t}a sweater should do.`,
+    (s) => `${s.t}bring a sweater along.`,
+  ],
   warm: [(s) => want(s), (s) => `${s.t}no coat needed; short sleeves will do.`],
 };
 
@@ -221,8 +250,40 @@ const dayNumber = (date: string) => Math.floor(Date.parse(`${date}T12:00:00Z`) /
  * reload; the next day takes the next line, so the same circumstance never
  * says the same thing two days running when it has another way to say it.
  */
-export function wearLine(f: Facts): string {
-  const condition = conditionOf(f);
+/** Circumstances that turn on what falls: a change among these always shows at once. */
+const FALLING: Condition[] = [
+  "powder",
+  "fresh-snow",
+  "snowing",
+  "storms",
+  "rain-all-day",
+  "shower",
+  "rain",
+];
+
+/**
+ * The circumstance a day has been given, held for the day: a forecast that
+ * hovers at a line (wind at 11 or 12 mph, a feel a degree off the chill)
+ * mustn't flip the line back and forth on every refresh. Only a change in
+ * what falls replaces it. Keyed by the day and whether it's spoken of as
+ * today or tomorrow.
+ */
+export type Hold = Map<string, Condition>;
+
+function held(f: Facts, hold?: Hold): Condition {
+  const now = conditionOf(f);
+  if (!hold) return now;
+  const key = `${f.date}:${f.when}`;
+  const before = hold.get(key);
+  if (before && before !== now && !FALLING.includes(now) && !FALLING.includes(before)) {
+    return before;
+  }
+  hold.set(key, now);
+  return now;
+}
+
+export function wearLine(f: Facts, hold?: Hold): string {
+  const condition = held(f, hold);
   const lines = LINES[condition];
   const pick = lines[dayNumber(f.date) % lines.length];
   const coat = coatOf(f.cold);
