@@ -41,6 +41,21 @@ const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 
+// Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
+// sky), so a day scene can be checked at night. Fixed at the first read.
+let clockOffset: number | null = null;
+function clockNow(): number {
+  if (clockOffset === null) {
+    const at =
+      process.env.NODE_ENV !== "production"
+        ? new URLSearchParams(window.location.search).get("at")
+        : null;
+    const t = at ? Date.parse(at) : NaN;
+    clockOffset = Number.isNaN(t) ? 0 : t - Date.now();
+  }
+  return Date.now() + clockOffset;
+}
+
 const viewOf = (page: Page, mood: Mood): View =>
   page === "home" && mood === "night" ? "night" : page;
 
@@ -96,11 +111,11 @@ export function Screen({
   useEffect(() => {
     pageSince.current = Date.now();
     const first = window.setTimeout(() => {
-      setNow(new Date());
+      setNow(new Date(clockNow()));
       // A restored or stale page still opens home on the weather.
-      setHomeSince(Date.now());
+      setHomeSince(clockNow());
     }, 0);
-    const t = window.setInterval(() => setNow(new Date()), TICK_MS);
+    const t = window.setInterval(() => setNow(new Date(clockNow())), TICK_MS);
     return () => {
       window.clearTimeout(first);
       window.clearInterval(t);
