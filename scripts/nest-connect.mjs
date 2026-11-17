@@ -4,11 +4,32 @@
 // sensitive). Nothing secret is printed.
 //   pnpm nest:connect        (run it from the repo folder, in your own terminal)
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
+import { exit, stdin, stdout } from "node:process";
 
 const REDIRECT = "https://www.google.com";
 const SCOPE = "https://www.googleapis.com/auth/sdm.service";
+
+/** Stop with a plain sentence (never a stack trace, which could echo what was pasted). */
+function fail(words) {
+  console.error(`\n${words}`);
+  exit(1);
+}
+
+// Only from the folder linked to the Vercel project, and only with the CLI at hand.
+let linked = "";
+try {
+  linked = JSON.parse(readFileSync(".vercel/project.json", "utf8")).projectName ?? "";
+} catch {
+  // Not linked.
+}
+if (linked !== "family-screensaver") {
+  fail("Run this from the family-screensaver folder that's linked to Vercel (it has .vercel/).");
+}
+if (spawnSync("vercel", ["--version"], { stdio: "ignore" }).error) {
+  fail("The Vercel CLI isn't installed here. Install it, sign in, and run this again.");
+}
 
 const rl = createInterface({ input: stdin, output: stdout });
 const ask = async (q) => (await rl.question(q)).trim();
@@ -16,6 +37,7 @@ const ask = async (q) => (await rl.question(q)).trim();
 /** Ask without echoing (for the client secret and the consent link). */
 async function secret(q) {
   stdout.write(q);
+  // readline's private hook for echoing; there's no public way to hide input.
   const write = rl._writeToOutput;
   rl._writeToOutput = () => {};
   const answer = await rl.question("");
@@ -47,8 +69,13 @@ console.log(
     "\n\nYou'll land on google.com. Copy that whole address from the address bar.\n",
 );
 const landed = await secret("Paste the google.com address (hidden): ");
-const code = new URL(landed).searchParams.get("code");
-if (!code) throw new Error("That address has no code in it. Run this again.");
+let code = null;
+try {
+  code = new URL(landed).searchParams.get("code");
+} catch {
+  // Not an address at all.
+}
+if (!code) fail("That address has no code in it. Run this again.");
 
 const res = await fetch("https://oauth2.googleapis.com/token", {
   method: "POST",
@@ -63,7 +90,7 @@ const res = await fetch("https://oauth2.googleapis.com/token", {
 });
 const token = await res.json();
 if (!res.ok || !token.refresh_token) {
-  throw new Error(`Google said no: ${token.error ?? res.status} ${token.error_description ?? ""}`);
+  fail(`Google said no: ${token.error ?? res.status} ${token.error_description ?? ""}`);
 }
 
 // Check it works: how many thermostats can we see? (Counts only, no names.)
@@ -79,18 +106,28 @@ console.log(
     : `\nThe token works, but listing devices failed (${list.status}). Storing it anyway.`,
 );
 
+// Each value replaces the old one in place (--force), so a failure never
+// leaves production without it.
+const failed = [];
 for (const [name, value] of [
   ["NEST_PROJECT_ID", project],
   ["NEST_CLIENT_ID", clientId],
   ["NEST_CLIENT_SECRET", clientSecret],
   ["NEST_REFRESH_TOKEN", token.refresh_token],
 ]) {
-  spawnSync("vercel", ["env", "rm", name, "production", "--yes"], { stdio: "ignore" });
-  const add = spawnSync("vercel", ["env", "add", name, "production", "--sensitive"], {
-    input: value,
-    stdio: ["pipe", "ignore", "inherit"],
-  });
-  console.log(add.status === 0 ? `Stored ${name}.` : `Couldn't store ${name}; try again.`);
+  const add = spawnSync(
+    "vercel",
+    ["env", "add", name, "production", "--sensitive", "--force", "--yes"],
+    { input: value, stdio: ["pipe", "ignore", "inherit"] },
+  );
+  if (!add.error && add.status === 0) console.log(`Stored ${name}.`);
+  else failed.push(name);
 }
 rl.close();
-console.log("\nDone. Tell Claude, and it will take it from here.");
+if (failed.length) {
+  fail(
+    `Couldn't store ${failed.join(", ")}. Store each by hand (it asks for the value):\n` +
+      failed.map((n) => `  vercel env add ${n} production --sensitive --force`).join("\n"),
+  );
+}
+console.log("\nDone. Redeploy to start reading the thermostats.");
