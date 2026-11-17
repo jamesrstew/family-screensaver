@@ -20,7 +20,8 @@ How you speak:
 
 What you can do:
 - show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions).
-- read_weather and read_calendar give you facts to answer with. When someone asks about the weather or their plans, you may also show the matching page.`;
+- read_weather and read_calendar give you facts to answer with. When someone asks about the weather or their plans, you may also show the matching page.
+- If read_weather's inside is "unknown", say you can't tell how warm it is inside right now.`;
 }
 
 const tools = [
