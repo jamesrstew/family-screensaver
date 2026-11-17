@@ -1,56 +1,118 @@
 import { describe, expect, it } from "vitest";
 import {
-  PASSAGE_MS,
-  WEATHER_MS,
+  CYCLE_MS,
+  SLIDE_MS,
   WEATHER_VIEWS,
   nextTurnIn,
-  sinceAfter,
+  passageNear,
+  startAfter,
   slideFromKey,
   slideKey,
   slideOf,
   turns,
+  weatherFirst,
   type Slide,
+  type Start,
 } from "./carousel";
+import { passageAt, passagesFrom } from "./pick";
 import { targetOf } from "./show";
 
-const turn = WEATHER_MS + PASSAGE_MS;
-const since = 1_000 * turn + 12_345; // home appeared at an odd moment
-const at = (ms: number) => new Date(since + ms);
+const tz = "America/Los_Angeles";
+const morning = Date.parse("2026-11-18T09:00:07-08:00");
+const afternoon = Date.parse("2026-11-18T15:00:07-08:00");
+const kinds = (since: number, slides: number, weather = true, start: Start = { since }) =>
+  Array.from({ length: slides }, (_, i) =>
+    slideOf(new Date(since + i * SLIDE_MS), start, weather, tz),
+  );
+const letters = (s: Slide[]) => s.map((x) => (x.kind === "weather" ? "W" : "P")).join("");
 
 describe("home's carousel", () => {
-  it("always opens on the weather, never a quote", () => {
-    for (const s of [0, 7_777, 99_999_999]) {
-      expect(slideOf(new Date(s), s, true).kind).toBe("weather");
+  it("always opens on the weather's now, never a quote", () => {
+    for (const s of [morning, afternoon, 7_777, 99_999_999]) {
+      expect(slideOf(new Date(s), { since: s }, true, tz)).toEqual({
+        kind: "weather",
+        view: "now",
+      });
     }
   });
 
-  it("then a passage, then the next weather view", () => {
-    expect(slideOf(at(WEATHER_MS - 1), since, true).kind).toBe("weather");
-    expect(slideOf(at(WEATHER_MS), since, true).kind).toBe("passage");
-    expect(slideOf(at(turn - 1), since, true).kind).toBe("passage");
-    expect(slideOf(at(turn), since, true).kind).toBe("weather");
+  it("puts the weather first from midnight to noon: two views, then a passage", () => {
+    expect(letters(kinds(morning, 9))).toBe("WWPWWPWWP");
+    expect(weatherFirst(Date.parse("2026-11-18T00:00:00-08:00"), tz)).toBe(true);
+    expect(weatherFirst(Date.parse("2026-11-18T11:59:59-08:00"), tz)).toBe(true);
+    expect(weatherFirst(Date.parse("2026-11-18T12:00:00-08:00"), tz)).toBe(false);
   });
 
-  it("each passage is a new one", () => {
-    const a = slideOf(at(WEATHER_MS), since, true);
-    const b = slideOf(at(turn + WEATHER_MS), since, true);
-    expect(slideKey(a)).not.toBe(slideKey(b));
+  it("puts the passages first from noon to midnight: one view, then two passages", () => {
+    expect(letters(kinds(afternoon, 9))).toBe("WPPWPPWPP");
+    expect(letters(kinds(Date.parse("2026-11-18T22:00:00-08:00"), 6))).toBe("WPPWPP");
   });
 
-  it('opens on "now"', () => {
-    expect(slideOf(at(0), since, true)).toEqual({ kind: "weather", view: "now" });
-  });
-
-  it("goes through every weather view in order, whenever home appeared", () => {
-    for (let r = 0; r < 4; r++) {
-      const s = r * turn + 4_321;
-      const views = WEATHER_VIEWS.map((_, i) => slideOf(new Date(s + i * turn), s, true));
-      expect(views.map((v) => (v.kind === "weather" ? v.view : null))).toEqual([...WEATHER_VIEWS]);
+  it("changes over smoothly at noon and at midnight: no double slide, no view skipped", () => {
+    for (const at of ["2026-11-18T12:00:00-08:00", "2026-11-19T00:00:00-08:00"]) {
+      const since = Date.parse(at) - 10 * 60_000 + 13_000;
+      const all = kinds(since, 60);
+      // Each cycle opens on the weather and closes on a passage, either side of the change.
+      expect(letters(all)).toMatch(/^(WWP|WPP)+$/);
+      expect(letters(all)).toContain(at.includes("T12") ? "WWPWPP" : "WPPWWP");
+      // The views go round in order, straight through it.
+      const views = all.flatMap((x) => (x.kind === "weather" ? [x.view] : []));
+      views.forEach((v, i) => expect(v).toBe(WEATHER_VIEWS[i % WEATHER_VIEWS.length]));
+      // And every passage is a new one.
+      const ns = all.flatMap((x) => (x.kind === "passage" ? [x.n] : []));
+      expect(new Set(ns).size).toBe(ns.length);
+      ns.slice(1).forEach((n, i) => expect(n).toBeGreaterThan(ns[i]));
     }
   });
 
-  it("without a weather report, stays on passages", () => {
-    expect(slideOf(at(0), since, false).kind).toBe("passage");
+  it("keeps the views in order across a whole day, and across the clocks changing", () => {
+    for (const at of [
+      "2026-11-18T05:00:00-08:00",
+      "2026-11-01T00:30:00-07:00",
+      "2026-03-08T00:30:00-08:00",
+    ]) {
+      const since = Date.parse(at);
+      const day = Array.from({ length: 24 * 40 }, (_, i) => since + i * CYCLE_MS);
+      let seen = 0;
+      for (const t of day) {
+        for (let pos = 0; pos < 3; pos++) {
+          const s = slideOf(new Date(t + pos * SLIDE_MS), { since }, true, tz);
+          if (s.kind === "weather") expect(s.view).toBe(WEATHER_VIEWS[seen++ % 4]);
+        }
+      }
+      // Two views a cycle for half the day, one for the other half.
+      expect(Math.abs(seen - 24 * 40 * 1.5)).toBeLessThanOrEqual(41);
+    }
+  });
+
+  it("brings a new passage every time, never one the deck has shown", () => {
+    const ns = kinds(afternoon, 30).flatMap((x) => (x.kind === "passage" ? [x.n] : []));
+    expect(ns.slice(1).every((n, i) => n === ns[i] + 1)).toBe(true);
+  });
+
+  it("reads passages the snapshot's window holds, for its first 40 minutes", () => {
+    const deck = Array.from({ length: 500 }, (_, i) => ({
+      id: `q${i}`,
+      kind: "quote" as const,
+      text: "x",
+    }));
+    for (const at of [morning, afternoon]) {
+      const w = passagesFrom(deck, passageNear(at) - 4);
+      for (const s of kinds(at, 80))
+        if (s.kind === "passage") expect(passageAt(w, s.n)).not.toBeNull();
+    }
+  });
+
+  it("without a weather report, stays on passages, each up 45 seconds", () => {
+    const at = (ms: number) => slideOf(new Date(afternoon + ms), { since: afternoon }, false, tz);
+    const keys = [0, 44_999, 45_000, 89_999, 90_000].map((ms) => slideKey(at(ms)));
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[1]);
+    expect(keys[3]).toBe(keys[2]);
+    expect(keys[4]).not.toBe(keys[3]);
+    expect(new Set(keys).size).toBe(3);
+    expect(nextTurnIn(afternoon + 10_000, afternoon, false)).toBe(35_000);
+    expect(nextTurnIn(afternoon + 50_000, afternoon, false)).toBe(40_000);
   });
 });
 
@@ -68,20 +130,29 @@ describe("slide keys", () => {
 describe("night turns as day does", () => {
   const now = Date.parse("2026-11-18T17:00:00-08:00");
   it("carries on across sunset and sunrise: day and night are one carousel", () => {
-    const since = now - 95_000;
-    expect(sinceAfter("home", "night", now, since)).toBe(since);
-    expect(sinceAfter("night", "home", now, since)).toBe(since);
+    const start = { since: now - 95_000 };
+    expect(startAfter("home", "night", now, start)).toBe(start);
+    expect(startAfter("night", "home", now, start)).toBe(start);
   });
   it("starts over, on the weather, coming back from another page", () => {
-    expect(sinceAfter("week", "night", now, 0)).toBe(now);
-    expect(sinceAfter("notebook", "home", now, 0)).toBe(now);
+    expect(startAfter("week", "night", now, { since: 0 })).toEqual({ since: now });
+    expect(startAfter("notebook", "home", now, { since: 0 })).toEqual({ since: now });
   });
-  it("opens on a passage after the Weather page (the weather's just been seen)", () => {
-    const since = sinceAfter("weather", "night", now, 0);
-    expect(slideOf(new Date(now), since, true).kind).toBe("passage");
+  it('opens on a passage after the Weather page, and the next view is "now" again', () => {
+    for (const t of [morning, now, Date.parse("2026-11-18T23:59:30-08:00")]) {
+      const start = startAfter("weather", "night", t, { since: 0 });
+      expect(slideOf(new Date(t), start, true, tz).kind).toBe("passage");
+      const next = slideOf(new Date(t + SLIDE_MS), start, true, tz);
+      expect(next).toEqual({ kind: "weather", view: "now" });
+      // And on in order from there.
+      const later = kinds(start.since, 14, true, start)
+        .slice(2)
+        .flatMap((x) => (x.kind === "weather" ? [x.view] : []));
+      later.forEach((v, i) => expect(v).toBe(WEATHER_VIEWS[i % 4]));
+    }
   });
   it("leaves other pages alone", () => {
-    expect(sinceAfter("home", "week", now, 123)).toBe(123);
+    expect(startAfter("home", "week", now, { since: 123 })).toEqual({ since: 123 });
     expect(turns("night")).toBe(true);
     expect(turns("weather")).toBe(false);
   });
@@ -97,15 +168,15 @@ describe("night turns as day does", () => {
 });
 
 describe("the cadence, pinned", () => {
-  it("turns every half minute, a weather view and then a passage", () => {
-    expect(WEATHER_MS).toBe(30_000);
-    expect(PASSAGE_MS).toBe(30_000);
+  it("turns every half minute, in cycles of three", () => {
+    expect(SLIDE_MS).toBe(30_000);
+    expect(CYCLE_MS).toBe(90_000);
   });
   it("lands each turn on its moment, not on the next tick", () => {
     const since = 1_000_000;
-    expect(nextTurnIn(since, since)).toBe(WEATHER_MS);
-    expect(nextTurnIn(since + 12_000, since)).toBe(WEATHER_MS - 12_000);
-    expect(nextTurnIn(since + WEATHER_MS + 1_000, since)).toBe(PASSAGE_MS - 1_000);
-    expect(nextTurnIn(since - 5_000, since)).toBe(WEATHER_MS);
+    expect(nextTurnIn(since, since)).toBe(SLIDE_MS);
+    expect(nextTurnIn(since + 12_000, since)).toBe(SLIDE_MS - 12_000);
+    expect(nextTurnIn(since + SLIDE_MS + 1_000, since)).toBe(SLIDE_MS - 1_000);
+    expect(nextTurnIn(since - 5_000, since)).toBe(SLIDE_MS);
   });
 });

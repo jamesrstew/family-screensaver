@@ -86,14 +86,13 @@ function useForced(): Lens | null {
   return LENSES.find((l) => l === asked) ?? null;
 }
 
-/** The lens's name, set small over its sentence. The sky needs none. */
+/** The lens's name, set small over its sentence. The sky needs none, nor how it feels ("Feels like 12° tonight." says it). */
 export function captionOf(lens: Lens, kinds: { rain: boolean; snow: boolean }): string | null {
   if (lens === "precip") {
     return kinds.rain && kinds.snow ? "Rain and snow" : kinds.snow ? "Snow" : "Rain";
   }
   if (lens === "wind") return "Wind, mph";
   if (lens === "uv") return "UV index";
-  if (lens === "feels") return "Feels like";
   if (lens === "humidity") return "Humidity and dew point";
   if (lens === "air") return "Air quality, US AQI";
   return null;
@@ -210,6 +209,7 @@ type PlateProps = {
 /** One lens's chart across the whole row. */
 export function Plate({ lens, hours, cols, scale, bin = 1 }: PlateProps) {
   const id = `plate-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  if (!hours.length || !cols) return null;
   const past = hours.some((h) => h?.past);
   const ahead = past ? hours.map((h) => (h?.past ? undefined : h)) : hours;
   const values = (pick: (h: PlateHour) => number | null | undefined, gone = false) =>
@@ -470,7 +470,13 @@ export function Figures({ f, act }: { f: Figure; act: boolean }) {
       </p>
       <p
         className={`mt-[0.6rem] h-[3rem] leading-none whitespace-nowrap ${f.small ? "text-[2.6rem]" : "text-[3rem]"} ${
-          act ? "text-accent" : f.quiet ? "text-ink-faint italic" : "text-ink-soft"
+          act
+            ? "text-accent"
+            : f.quiet
+              ? "text-ink-faint italic"
+              : f.aside
+                ? "text-ink-faint"
+                : "text-ink-soft"
         }`}
       >
         {f.sub}

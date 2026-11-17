@@ -68,16 +68,20 @@ export function leadAt(today: NotebookItem[], n: number): NotebookItem | null {
 }
 
 /*
- * Home's and night's carousel turns a passage a minute, far more than a
- * day's run of entries. So the carousel reads its own deck: every short idea
- * and quote in the notebook, shuffled once in a fixed order, passage n
- * reading the nth (round and round), so nothing repeats until all have
- * shown. The snapshot carries only a window of it, the next hour or so.
+ * Home's and night's carousel shows a passage or two every 90 seconds, far
+ * more than a day's run of entries. So the carousel reads its own deck: every
+ * short idea and quote in the notebook, shuffled once in a fixed order,
+ * passage n reading the nth, round and round. The numbers run by the clock,
+ * two to a 90-second cycle (carousel.ts), so nothing repeats until the deck
+ * comes round: about nine hours for 700 passages. It isn't a day's promise:
+ * the afternoon reads every number, and the morning, with one passage a
+ * cycle, every other one, so what the morning passes over waits for a later
+ * round. The snapshot carries only a window of it, the next 40 minutes or so.
  */
 
-/** Passages the snapshot carries: an hour's worth, refreshed every few minutes. */
+/** Passages the snapshot carries: the next 40 minutes or more, refreshed every few minutes. */
 export const PASSAGE_WINDOW = 60;
-/** The afternoon's question comes round once in this many passages (about minutes). */
+/** The afternoon's question comes round once in this many passages: every nine minutes. */
 export const QUESTION_EVERY = 12;
 
 /** The carousel's deck: every short idea and quote (that `fits` its rooms), in a fixed shuffled order. */

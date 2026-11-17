@@ -18,7 +18,7 @@ import { fitType } from "./fit";
 /**
  * Home's one piece: a carousel passage reads the deck's passage n (pick.ts);
  * from 2 to 6 p.m. the question for the table takes about one passage in
- * twelve. Without a carousel, the idea of the quarter hour.
+ * twelve (every nine minutes). Without a carousel, the idea of the quarter hour.
  * `skip` passes over that many candidates, for when one won't fit its space.
  * The deck holds only passages that fit everywhere (fitsEverywhere), so that
  * is rare; then it borrows from the day's own run, never from the deck's

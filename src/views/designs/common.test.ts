@@ -1,3 +1,4 @@
+import { SLIDE_MS, slideOf } from "@/lib/carousel";
 import { describe, expect, it } from "vitest";
 import type { Happening, Snapshot } from "@/lib/types";
 import { leadDeck, passagesFrom } from "@/lib/pick";
@@ -71,21 +72,26 @@ describe("heroOf on the carousel", () => {
     passages: passagesFrom(leadDeck(notes), n0, 400),
     timeZone: TZ,
   } as unknown as Snapshot;
-  const afternoon = new Date("2026-11-18T15:00:00-08:00");
 
-  it("asks the question about once in twelve passages, 2 to 6 p.m.", () => {
-    let asked = 0;
-    for (let n = n0; n < n0 + 240; n++) {
-      const item = heroOf({
-        snapshot,
-        now: afternoon,
-        mood: "afternoon",
-        slide: { kind: "passage", n },
-      });
-      if (item?.kind === "question") asked++;
-    }
-    // Four hours of a passage a minute: twenty times, not a hundred and twenty.
-    expect(asked).toBe(20);
+  it("asks the question every nine minutes, 2 to 6 p.m., and never after", () => {
+    const tz = snapshot.timeZone;
+    const at = (iso: string, hours: number) => {
+      const since = Date.parse(iso);
+      const times: number[] = [];
+      for (let t = since; t < since + hours * 3_600_000; t += SLIDE_MS) {
+        const slide = slideOf(new Date(t), { since }, true, tz);
+        if (slide.kind !== "passage") continue;
+        const item = heroOf({ snapshot, now: new Date(t), mood: "afternoon", slide });
+        if (item?.kind === "question") times.push(t);
+      }
+      return times;
+    };
+    const asked = at("2026-11-18T14:00:00-08:00", 4);
+    // Four hours of two passages every 90 seconds: about 27 times.
+    expect(asked.length).toBeGreaterThanOrEqual(26);
+    expect(asked.length).toBeLessThanOrEqual(27);
+    asked.slice(1).forEach((t, i) => expect(t - asked[i]).toBe(540_000));
+    expect(at("2026-11-18T18:00:00-08:00", 2)).toEqual([]);
   });
   it("reads the deck's passage n, and borrows from the day's run when one won't fit", () => {
     const morning = new Date("2026-11-18T09:00:00-08:00");
