@@ -7,14 +7,32 @@ import {
   hoursLine,
   outlook,
   partFromDay,
+  precipKind,
   skyOf,
   weekLine,
   type Outlook,
 } from "@/lib/forecast";
+import {
+  daysPrecipLine,
+  daysUvLine,
+  daysWindLine,
+  hoursPrecipLine,
+  hoursUvLine,
+  hoursWindLine,
+  lensesFor,
+  meanDir,
+  precipFigure,
+  kindsIn,
+  uvFigure,
+  windFigure,
+  type Figure,
+  type Lens,
+} from "@/lib/lenses";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
+import { Figures, Plate, captionOf, useLens, uvBands } from "./almanac-lenses";
 import { fitStyle, hourWord } from "./common";
 
 /*
@@ -436,9 +454,109 @@ const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
 const headline = (text: string, w: number, h: number) =>
   fitStyle(nb(text), { w, h }, { max: 8, min: 4.4 });
 
-/** Keep "10 p.m." and "about 7" together on one line. */
+/** Keep "10 p.m.", "17 mph", and "about 7" together on one line. */
 const nb = (s: string) =>
-  s.replace(/(\d) (a\.m\.|p\.m\.)/g, "$1\u00a0$2").replace(/about (\d)/g, "about\u00a0$1");
+  s.replace(/(\d) (a\.m\.|p\.m\.|mph)/g, "$1\u00a0$2").replace(/about (\d)/g, "about\u00a0$1");
+
+/* ------------------------------------------------------------------ lenses */
+
+/*
+ * Days and Hours turn slowly through their lenses (lenses.ts): the sky, then
+ * rain and snow, wind, and UV, each for half a minute, skipping one with
+ * nothing to say. The row's labels stay put; the sentence, the plate, and the
+ * figures re-ink with each turn.
+ */
+
+type Column = { key: string; label: string; rule: boolean; strong: boolean };
+
+/** The row's labels, which stay still while the lenses turn under them. */
+function Labels({ cols, grid }: { cols: Column[]; grid: string }) {
+  return (
+    <Ink order={1} mode="seep" className={`grid ${grid}`}>
+      {cols.map((c) => (
+        <div key={c.key} className="relative text-center">
+          {/* The weekend, or the night: one fine rule over its columns. */}
+          {c.rule ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+          <p
+            className={`text-[2.7rem] whitespace-nowrap italic ${c.strong ? "text-ink" : "text-ink-soft"}`}
+          >
+            {c.label}
+          </p>
+        </div>
+      ))}
+    </Ink>
+  );
+}
+
+/**
+ * The sentence over the row, with the lens's name above it (the sky goes
+ * unnamed). Its box leaves the row's fine rule room to breathe.
+ */
+function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: string | null }) {
+  return (
+    <Ink
+      k={lens}
+      order={0}
+      className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center"
+    >
+      {caption ? (
+        <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic">{caption}</p>
+      ) : null}
+      <p className="max-w-[102rem] text-balance" style={headline(line, 102, caption ? 16.5 : 20.5)}>
+        {nb(line)}
+      </p>
+    </Ink>
+  );
+}
+
+/**
+ * A lens's plate and its columns of figures. The plate keeps to the row's
+ * columns even when the forecast runs short (the missing hours are blank),
+ * and the accent goes to the strongest column that needs it.
+ */
+function LensBody({
+  lens,
+  hours,
+  figures,
+  cols,
+  scale,
+}: {
+  lens: Exclude<Lens, "sky">;
+  /** Hour by hour: `per` for each column, in order. */
+  hours: Parameters<typeof Plate>[0]["hours"];
+  figures: Figure[];
+  cols: number;
+  scale: number;
+}) {
+  const per = Math.max(Math.round(hours.length / Math.max(figures.length, 1)), 1);
+  const plate = Array.from({ length: cols * per }, (_, i) => hours[i]);
+  const acted = figures.reduce(
+    (best, f, i) => (f.act && (best < 0 || (f.score ?? 0) > (figures[best].score ?? 0)) ? i : best),
+    -1,
+  );
+  const peak = Math.max(0, ...hours.map((h) => h?.uv ?? 0));
+  return (
+    <>
+      <Plate lens={lens} hours={plate} cols={cols} scale={scale} />
+      {lens === "uv"
+        ? uvBands(peak).map((b) => (
+            <p
+              key={b.word}
+              className="absolute right-0 -translate-y-1/2 bg-paper px-[0.6rem] text-[1.85rem] leading-none text-ink-faint italic"
+              style={{ top: b.top }}
+            >
+              {b.word}
+            </p>
+          ))
+        : null}
+      <div className={`grid ${cols === 7 ? "grid-cols-7" : "grid-cols-8"} pt-[13.6rem]`}>
+        {figures.map((f, i) => (
+          <Figures key={i} f={f} act={i === acted} />
+        ))}
+      </div>
+    </>
+  );
+}
 
 /* ------------------------------------------------------------------ d */
 
@@ -452,45 +570,118 @@ function Days({ w, now, snapshot }: Drawn) {
     const wd = new Date(`${k}T12:00:00Z`).getUTCDay();
     return wd === 0 || wd === 6;
   };
+  const labelOf = (k: string) =>
+    k === today ? "Today" : k === addDays(today, 1) ? "Tomorrow" : weekdayOf(k);
+  const nameOf = (k: string) =>
+    k === today || k === addDays(today, 1) ? lower(labelOf(k)) : labelOf(k);
+
+  // The lenses need every day's hours; an older report has none, and shows the sky alone.
+  const samples = days.map((d) =>
+    d.hourly
+      ? {
+          precip: d.precip,
+          snow: d.snow,
+          chance: d.precipChance,
+          wind: d.wind,
+          gust: d.gust,
+          uv: d.uv,
+        }
+      : {},
+  );
+  const lens = useLens(now, lensesFor(samples));
+  const cols: Column[] = days.map((d) => ({
+    key: d.date,
+    label: labelOf(d.date),
+    rule: weekend(d.date),
+    strong: weekend(d.date),
+  }));
+
+  const line =
+    lens === "precip"
+      ? daysPrecipLine(
+          days.map((d) => ({
+            name: nameOf(d.date),
+            precip: d.precip ?? 0,
+            snow: d.snow ?? 0,
+            chance: d.precipChance,
+            guess: precipKind(d.code),
+          })),
+        )
+      : lens === "wind"
+        ? daysWindLine(
+            days.map((d) => ({
+              name: nameOf(d.date),
+              lo: Math.min(...(d.hourly?.wind ?? [0])),
+              hi: d.wind ?? 0,
+              gust: d.gust ?? 0,
+            })),
+          )
+        : lens === "uv"
+          ? daysUvLine(days.map((d) => ({ name: nameOf(d.date), uv: d.uv ?? 0 })))
+          : weekLine(w, now, tz);
+
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
-        <p className="max-w-[102rem] text-balance" style={headline(weekLine(w, now, tz), 102, 23)}>
-          {nb(weekLine(w, now, tz))}
-        </p>
-      </Ink>
-      <Ink order={1} mode="seep" className="grid grid-cols-7 pb-[3rem]">
-        {days.map((d) => {
-          const label =
-            d.date === today
-              ? "Today"
-              : d.date === addDays(today, 1)
-                ? "Tomorrow"
-                : weekdayOf(d.date);
-          const p = partFromDay(label, d);
-          const end = weekend(d.date);
-          return (
-            <div key={d.date} className="relative flex flex-col items-center text-center">
-              {/* The weekend: one fine rule over Saturday and Sunday. */}
-              {end ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
-              <p className={`text-[2.7rem] italic ${end ? "text-ink" : "text-ink-soft"}`}>
-                {label}
-              </p>
-              <Engraving
-                code={p.code}
-                isDay
-                date={now}
-                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
-              />
-              <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
-              <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-soft">{d.low}°</p>
-              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
-                {p.wet ? p.words : ""}
-              </p>
+      <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(days))} />
+      <div className="pb-[3rem]">
+        <Labels cols={cols} grid="grid-cols-7" />
+        <Ink k={lens} order={2} mode="seep" className="relative h-[26.4rem]">
+          {lens === "sky" ? (
+            <div className="grid grid-cols-7">
+              {days.map((d) => {
+                const p = partFromDay(labelOf(d.date), d);
+                return (
+                  <div key={d.date} className="flex flex-col items-center text-center">
+                    <Engraving
+                      code={p.code}
+                      isDay
+                      date={now}
+                      className="fine-ink my-[0.8rem] size-[12rem] text-ink"
+                    />
+                    <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
+                    <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-soft">{d.low}°</p>
+                    <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
+                      {p.wet ? p.words : ""}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </Ink>
+          ) : (
+            <LensBody
+              lens={lens}
+              cols={7}
+              scale={1}
+              // Each day's 24 hours from midnight (a clock-change day's 23 or 25 kept to 24).
+              hours={days.flatMap((d) =>
+                Array.from({ length: 24 }, (_, h) => {
+                  const day = d.hourly;
+                  if (!day || h >= day.wind.length) return undefined;
+                  return {
+                    precip: day.precip[h],
+                    snow: day.snow[h],
+                    wind: day.wind[h],
+                    gust: day.gust[h],
+                    uv: day.uv[h],
+                  };
+                }),
+              )}
+              figures={days.map((d) =>
+                lens === "precip"
+                  ? precipFigure(d.precip ?? 0, d.snow ?? 0, d.precipChance, precipKind(d.code))
+                  : lens === "wind"
+                    ? windFigure(
+                        Math.min(...(d.hourly?.wind ?? [d.wind ?? 0])),
+                        d.wind ?? 0,
+                        d.gust ?? 0,
+                        d.dir,
+                      )
+                    : uvFigure(d.uv ?? 0),
+              )}
+            />
+          )}
+        </Ink>
+      </div>
     </div>
   );
 }
@@ -501,54 +692,127 @@ const STEP = 3;
 const COLS = 8;
 
 /** Hours: Days' sibling. The next day every three hours, the night marked. */
-function Hours({ w, now, snapshot }: Drawn) {
+function Hours({ w, o, now, snapshot }: Drawn) {
   const tz = snapshot.timeZone;
   const hours = w.hours.filter((h) => Date.parse(h.time) + HOUR > now.getTime());
   const slots = Array.from({ length: COLS }, (_, i) =>
     hours.slice(i * STEP, i * STEP + STEP),
   ).filter((s) => s.length > 0);
+  const span = slots.flat();
+
+  const samples = span.map((h) => ({
+    precip: h.precip,
+    snow: h.snow,
+    chance: h.precipChance,
+    wind: h.wind,
+    gust: h.gust,
+    uv: h.uv,
+  }));
+  const lens = useLens(now, lensesFor(samples));
+  const cols: Column[] = slots.map((slot, i) => {
+    const night = !(i === 0 ? w.now.isDay : (slot[0].isDay ?? true));
+    return {
+      key: slot[0].time,
+      label: i === 0 ? "Now" : nb(hourWord(slot[0].time, tz)),
+      rule: night,
+      strong: night,
+    };
+  });
+  const known = (h: Sky["hours"][number]) => ({
+    time: h.time,
+    wind: h.wind ?? 0,
+    gust: h.gust ?? 0,
+    dir: h.dir,
+    uv: h.uv ?? 0,
+  });
+
+  const line =
+    lens === "precip"
+      ? hoursPrecipLine(o.timing, samples)
+      : lens === "wind"
+        ? hoursWindLine(span.map(known), now, tz)
+        : lens === "uv"
+          ? hoursUvLine(span.map(known), now, tz)
+          : hoursLine(w, now, tz);
+
+  const sum = (xs: Array<number | undefined>) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
+  const most = (xs: Array<number | undefined>) => Math.max(...xs.map((x) => x ?? 0));
+
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
-        <p className="max-w-[102rem] text-balance" style={headline(hoursLine(w, now, tz), 102, 23)}>
-          {nb(hoursLine(w, now, tz))}
-        </p>
-      </Ink>
-      <Ink order={1} mode="seep" className="grid grid-cols-8 pb-[3rem]">
-        {slots.map((slot, i) => {
-          const first = slot[0];
-          // The first slot is now: the sky and temperature as they are.
-          const code = i === 0 ? w.now.code : skyOf(slot);
-          const isDay = i === 0 ? w.now.isDay : (first.isDay ?? true);
-          const temp = i === 0 ? w.now.temp : first.temp;
-          // Rain or snow only where it counts, with its chance.
-          const falls = slot.map(hourFall).filter((f) => f && f.sure !== "slight");
-          const chance = falls.length ? Math.max(...slot.map((h) => h.precipChance)) : 0;
-          const kind = falls[0]?.kind;
-          const night = !isDay;
-          return (
-            <div key={first.time} className="relative flex flex-col items-center text-center">
-              {/* The night: one fine rule over its hours, as the weekend has in Days. */}
-              {night ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
-              <p
-                className={`text-[2.6rem] whitespace-nowrap italic ${night ? "text-ink" : "text-ink-soft"}`}
-              >
-                {i === 0 ? "Now" : nb(hourWord(first.time, tz))}
-              </p>
-              <Engraving
-                code={code}
-                isDay={isDay}
-                date={now}
-                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
-              />
-              <p className="text-[5rem] leading-none text-ink">{temp}°</p>
-              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
-                {kind ? `${cap(kind === "storms" ? "storms" : kind)} ${chance}%` : ""}
-              </p>
+      <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(span))} />
+      <div className="pb-[3rem]">
+        <Labels cols={cols} grid="grid-cols-8" />
+        <Ink k={lens} order={2} mode="seep" className="relative h-[26.4rem]">
+          {lens === "sky" ? (
+            <div className="grid grid-cols-8">
+              {slots.map((slot, i) => {
+                const first = slot[0];
+                // The first slot is now: the sky and temperature as they are.
+                const code = i === 0 ? w.now.code : skyOf(slot);
+                const isDay = i === 0 ? w.now.isDay : (first.isDay ?? true);
+                const temp = i === 0 ? w.now.temp : first.temp;
+                // Rain or snow only where it counts, with its chance.
+                const falls = slot.map(hourFall).filter((f) => f && f.sure !== "slight");
+                const chance = falls.length ? Math.max(...slot.map((h) => h.precipChance)) : 0;
+                const kind = falls[0]?.kind;
+                return (
+                  <div key={first.time} className="flex flex-col items-center text-center">
+                    <Engraving
+                      code={code}
+                      isDay={isDay}
+                      date={now}
+                      className="fine-ink my-[0.8rem] size-[12rem] text-ink"
+                    />
+                    <p className="text-[5rem] leading-none text-ink">{temp}°</p>
+                    <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
+                      {kind ? `${cap(kind === "storms" ? "storms" : kind)} ${chance}%` : ""}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </Ink>
+          ) : (
+            <LensBody
+              lens={lens}
+              cols={COLS}
+              scale={1.7}
+              hours={Array.from({ length: COLS * STEP }, (_, i) => {
+                const h = span[i];
+                return h
+                  ? {
+                      precip: h.precip ?? 0,
+                      snow: h.snow ?? 0,
+                      wind: h.wind ?? 0,
+                      gust: h.gust ?? 0,
+                      uv: h.uv ?? 0,
+                    }
+                  : undefined;
+              })}
+              figures={slots.map((slot) => {
+                if (lens === "precip") {
+                  const wet = slot.find((h) => h.code != null && precipKind(h.code));
+                  return precipFigure(
+                    sum(slot.map((h) => h.precip)),
+                    sum(slot.map((h) => h.snow)),
+                    most(slot.map((h) => h.precipChance)),
+                    wet?.code != null ? precipKind(wet.code) : null,
+                  );
+                }
+                if (lens === "wind") {
+                  const hi = most(slot.map((h) => h.wind));
+                  const dir = meanDir(
+                    slot.map((h) => h.dir ?? 0),
+                    slot.map((h) => (h.dir == null ? 0 : (h.wind ?? 0))),
+                  );
+                  return windFigure(hi, hi, most(slot.map((h) => h.gust)), dir);
+                }
+                return uvFigure(most(slot.map((h) => h.uv)));
+              })}
+            />
+          )}
+        </Ink>
+      </div>
     </div>
   );
 }
