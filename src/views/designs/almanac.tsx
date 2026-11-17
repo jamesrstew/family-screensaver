@@ -1,10 +1,20 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { clock, clockFace } from "@/lib/time";
+import { clock } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { ARC, bodyAt, skyNow } from "./arc";
-import { Credit, Words, firstTomorrow, heroOf, nextUp, nextWords, sized, Deg } from "./common";
+import {
+  ClockFace,
+  Credit,
+  Words,
+  firstTomorrow,
+  heroOf,
+  nextUp,
+  nextWords,
+  sized,
+  Deg,
+} from "./common";
 
 /*
  * D. Almanac. The sheet is a window onto the day's sky (living.tsx): one
@@ -103,7 +113,7 @@ export function Home(props: ViewProps) {
       {w ? (
         <SkyWords w={w} now={now} tz={tz}>
           <p className="text-[3.4rem] leading-none text-ink-soft">
-            {clockFace(now, tz)}
+            <ClockFace now={now} tz={tz} />
             <span className="mx-[1rem] text-ink-faint">·</span>
             <Deg v={w.now.temp} />
           </p>
@@ -111,7 +121,9 @@ export function Home(props: ViewProps) {
       ) : (
         // No sky report: the hour alone, where the sky would be.
         <Ink order={0} mode="seep" className="pt-[6rem] pb-[4rem] text-center">
-          <p className="text-[4.4rem] leading-none text-ink-soft">{clockFace(now, tz)}</p>
+          <p className="text-[4.4rem] leading-none text-ink-soft">
+            <ClockFace now={now} tz={tz} />
+          </p>
         </Ink>
       )}
       <Ink
@@ -151,11 +163,15 @@ export function Night(props: ViewProps) {
     <div className="flex h-full flex-col">
       {w ? (
         <SkyWords w={w} now={now} tz={tz}>
-          <p className="text-[5.4rem] leading-none text-ink">{clockFace(now, tz)}</p>
+          <p className="text-[5.4rem] leading-none text-ink">
+            <ClockFace now={now} tz={tz} />
+          </p>
         </SkyWords>
       ) : (
         <Ink order={0} className="pt-[8rem] text-center">
-          <p className="text-[8rem] text-ink">{clockFace(now, tz)}</p>
+          <p className="text-[8rem] text-ink">
+            <ClockFace now={now} tz={tz} />
+          </p>
         </Ink>
       )}
       {question?.kind === "question" ? (

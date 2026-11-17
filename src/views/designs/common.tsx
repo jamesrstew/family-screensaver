@@ -1,7 +1,7 @@
 // Shared pieces for the design directions. Pure; no state.
 
 import { leadAt, leadFor, questionFor } from "@/lib/pick";
-import { addDays, clock, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
+import { addDays, clock, clockFace, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
 import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 
@@ -133,4 +133,22 @@ export function sunProgress(w: Weather, now: Date): number {
 /** A temperature: the face's own degree sign, no fuss. */
 export function Deg({ v }: { v: number }) {
   return <>{v}°</>;
+}
+
+/**
+ * The time as a clock face with its a.m. or p.m., AP style ("6:30 p.m.",
+ * "noon", "midnight"). The suffix is set smaller, so it reads as part of the
+ * time without competing with the numerals.
+ */
+export function ClockFace({ now, tz }: { now: Date; tz: string }) {
+  const { hour, minute } = parts(now, tz);
+  if (minute === 0 && (hour === 0 || hour === 12)) return <>{hour === 0 ? "midnight" : "noon"}</>;
+  return (
+    <>
+      {clockFace(now, tz)}
+      <span className="ml-[0.22em] text-[0.58em] tracking-[0.01em]">
+        {hour < 12 ? "a.m." : "p.m."}
+      </span>
+    </>
+  );
 }
