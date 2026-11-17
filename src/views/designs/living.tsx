@@ -219,7 +219,7 @@ export function LivingSky({
         show={night && starsLevel === "all" && out === STAR_TIERS}
       />
       <Above>
-        <Afterglow x={edge} twilight={twilight} show={night && glow && twilight !== null} />
+        <Afterglow x={edge} twilight={twilight} show={arc && night && glow && twilight !== null} />
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
         <Streaks
           x={sun && low > 0 ? place!.x : edge}
@@ -385,7 +385,7 @@ function Afterglow({ x, twilight, show }: { x: number; twilight: Twilight | null
     <Layer
       show={show}
       className="sky-afterglow-at"
-      style={{ left: rem(x - 36), top: rem(ARC.cy - 13) }}
+      style={{ left: rem(x - 30), top: rem(ARC.cy - 7) }}
     >
       <div
         className="sky-afterglow"
@@ -957,16 +957,18 @@ function Stars({
     .sort((a, b) => b.b - a.b)
     .map((r) => r.i);
   const tierOf = (i: number) => TIER_ENDS.findIndex((end) => rank.indexOf(i) < end);
+  // One layer; the steps inside are plain groups that only fade at dusk and
+  // dawn (no layers of their own sitting up all night).
   return (
-    <>
+    <Layer show={show && level !== "none" && out > 0} className="sky-fill">
       {TIER_ENDS.map((_, tier) => (
-        <Layer key={tier} show={show && level !== "none" && out > tier} className="sky-fill">
+        <div key={tier} className="sky-fill sky-stars-step" data-on={on(out > tier)}>
           {shown.map((s, i) =>
             tierOf(i) === tier ? <TwinkleStar key={i} s={s} i={i} level={level} /> : null,
           )}
-        </Layer>
+        </div>
       ))}
-    </>
+    </Layer>
   );
 }
 

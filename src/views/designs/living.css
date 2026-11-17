@@ -85,7 +85,7 @@
 [data-mood="night"] .sky-land-night {
   opacity: 1;
 }
-[data-twilight] .sky-land-img {
+[data-turning] .sky-land-img {
   transition-duration: 3s;
 }
 .paper:not([data-settled]) .sky-land-img {
@@ -186,8 +186,8 @@
    a wide, flat glow (the sky above clips the rest), fading a minute at a
    time. Under the first stars. */
 .sky-afterglow-at {
-  width: 72rem;
-  height: 26rem;
+  width: 60rem;
+  height: 14rem;
 }
 .sky-afterglow {
   position: absolute;
@@ -421,7 +421,14 @@
   }
 }
 
-/* ---- Stars: most breathe slowly; a few scintillate now and then. */
+/* ---- Stars: most breathe slowly; a few scintillate now and then. At dusk
+   they come out in steps, brightest first (and go out the other way at dawn). */
+.sky-stars-step {
+  transition: opacity 24s ease;
+}
+.sky-stars-step[data-on="0"] {
+  opacity: 0;
+}
 .sky-star {
   position: absolute;
   margin: -0.8rem 0 0 -0.8rem;
