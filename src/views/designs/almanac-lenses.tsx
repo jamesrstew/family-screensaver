@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState, useSyncExternalStore } from "react";
-import { LENSES, compass, hourKind, lensAt, type Figure, type Lens } from "@/lib/lenses";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { LENSES, compass, hourKind, lensAt, lensOrder, type Figure, type Lens } from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -13,6 +13,11 @@ import { LENSES, compass, hourKind, lensAt, type Figure, type Lens } from "@/lib
  *                 engraver would set them.
  *  wind:          the sustained wind as one stroke; the gusts above it as a
  *                 fine line, the space between hatched.
+ *  the air:       the AQI as a hatched hill against the EPA's dotted lines,
+ *                 stopping where the air forecast ends.
+ *  feels like:    the thermometer dashed, the feel bold, the chill or the
+ *                 heat hatched between.
+ *  humidity:      the relative humidity as a hatched hill, very dry dotted.
  *  UV:            the sun's strength as a hatched hill each day.
  *
  * Every chart is drawn once, in plain SVG: nothing moves but the ink.
@@ -24,8 +29,14 @@ export const PH = 136;
 const TOP = 10;
 const BASE = 126;
 
-/** The lens to show: turning every half minute from the moment the view appeared. */
-export function useLens(now: Date, lenses: readonly Lens[]): Lens {
+/** The last lens each view showed, so the next visit carries on from it. */
+const lastSeen = new Map<string, Lens>();
+
+/**
+ * The lens to show: the sky first, then turning every half minute from the
+ * moment the view appeared, through the lenses after the one last seen.
+ */
+export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens {
   const forced = useForced();
   const t = now.getTime();
   // When the view appeared. A clock that jumps (the page waking, or catching
@@ -35,9 +46,14 @@ export function useLens(now: Date, lenses: readonly Lens[]): Lens {
     const jumped = t < clock.last || t - clock.last > 60_000;
     setClock({ since: jumped ? t : clock.since, last: t });
   }
-  if (forced) return forced;
+  const [after] = useState(() => lastSeen.get(view) ?? null);
   // To the second: the screen's ten-second tick lands a hair short of each turn.
-  return lensAt(Math.round((t - clock.since) / 1000) * 1000, lenses);
+  const lens =
+    forced ?? lensAt(Math.round((t - clock.since) / 1000) * 1000, lensOrder(lenses, after));
+  useEffect(() => {
+    if (lens !== "sky") lastSeen.set(view, lens);
+  }, [lens, view]);
+  return lens;
 }
 
 const noop = () => () => {};
@@ -61,6 +77,9 @@ export function captionOf(lens: Lens, kinds: { rain: boolean; snow: boolean }): 
   }
   if (lens === "wind") return "Wind, mph";
   if (lens === "uv") return "UV index";
+  if (lens === "feels") return "Feels like";
+  if (lens === "humidity") return "Humidity and dew point";
+  if (lens === "air") return "Air quality, US AQI";
   return null;
 }
 
@@ -144,12 +163,23 @@ function Fills({ id, scale }: { id: string; scale: number }) {
   );
 }
 
+/** One hour on the plate. The newer readings may be missing from an older report. */
+export type PlateHour = {
+  precip: number;
+  snow: number;
+  wind: number;
+  gust: number;
+  uv: number;
+  temp?: number;
+  feels?: number;
+  rh?: number;
+  aqi?: number | null;
+};
+
 type PlateProps = {
   lens: Exclude<Lens, "sky">;
   /** Hour by hour across the plate; `undefined` where the forecast runs out. */
-  hours: Array<
-    { precip: number; snow: number; wind: number; gust: number; uv: number } | undefined
-  >;
+  hours: Array<PlateHour | undefined>;
   /** Columns under the plate (8 slots of hours, or 7 days). */
   cols: number;
   scale: number;
@@ -158,6 +188,8 @@ type PlateProps = {
 /** One lens's chart across the whole row. */
 export function Plate({ lens, hours, cols, scale }: PlateProps) {
   const id = `plate-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const values = (pick: (h: PlateHour) => number | null | undefined) =>
+    hours.map((h) => (h ? (pick(h) ?? undefined) : undefined));
   return (
     <svg
       viewBox={`0 0 ${PW} ${PH}`}
@@ -172,7 +204,15 @@ export function Plate({ lens, hours, cols, scale }: PlateProps) {
       <Frame cols={cols} />
       {lens === "precip" ? <Precip id={id} hours={hours} /> : null}
       {lens === "wind" ? <Wind id={id} hours={hours} /> : null}
-      {lens === "uv" ? <Sun id={id} hours={hours} /> : null}
+      {lens === "feels" ? <Feels id={id} hours={hours} /> : null}
+      {lens === "uv" || lens === "air" || lens === "humidity" ? (
+        <Hill
+          id={id}
+          lens={lens}
+          values={values((h) => (lens === "uv" ? h.uv : lens === "air" ? h.aqi : h.rh))}
+          dots={lens === "uv"}
+        />
+      ) : null}
     </svg>
   );
 }
@@ -216,85 +256,168 @@ function Precip({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
   );
 }
 
+/** Two smooth strokes and the space between them hatched: a band. */
+function bandPath(upper: Array<[number, number]>, lower: Array<[number, number]>): string {
+  return `${smooth(upper)} L${r1(lower.at(-1)![0])} ${r1(lower.at(-1)![1])} ${smooth(
+    [...lower].reverse(),
+  ).replace(/^M/, "L")} Z`;
+}
+
+/** The hours that have a reading for `pick`, with their place on the plate. */
+function knownOf<T extends object>(hours: Array<T | undefined>, pick: (h: T) => boolean) {
+  const out: Array<{ i: number; h: T }> = [];
+  hours.forEach((h, i) => {
+    if (h && pick(h)) out.push({ i, h });
+  });
+  return out;
+}
+
 /** Wind: the sustained speed, one stroke; the gusts a fine line above it, hatched between. */
 function Wind({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
   const n = hours.length;
-  const known = hours
-    .map((h, i) => (h ? { i, ...h } : null))
-    .filter((h): h is NonNullable<typeof h> => Boolean(h));
+  const known = knownOf(hours, () => true);
   if (known.length < 2) return null;
-  const top = Math.max(20, Math.ceil(Math.max(...known.map((h) => h.gust)) / 10) * 10);
+  const top = Math.max(20, Math.ceil(Math.max(...known.map(({ h }) => h.gust)) / 10) * 10);
   const y = (v: number) => BASE - (v / top) * (BASE - TOP);
-  const speed = known.map((h) => [xOf(h.i, n), y(h.wind)] as [number, number]);
-  const gust = known.map((h) => [xOf(h.i, n), y(Math.max(h.gust, h.wind))] as [number, number]);
-  const band = `${smooth(gust)} L${r1(speed.at(-1)![0])} ${r1(speed.at(-1)![1])} ${smooth(
-    [...speed].reverse(),
-  ).replace(/^M/, "L")} Z`;
+  const speed = known.map(({ i, h }) => [xOf(i, n), y(h.wind)] as [number, number]);
+  const gust = known.map(
+    ({ i, h }) => [xOf(i, n), y(Math.max(h.gust, h.wind))] as [number, number],
+  );
   return (
     <g>
-      <path d={band} fill={`url(#${id}-hatch)`} stroke="none" className="text-ink-soft" />
+      <path
+        d={bandPath(gust, speed)}
+        fill={`url(#${id}-hatch)`}
+        stroke="none"
+        className="text-ink-soft"
+      />
       <path d={smooth(gust)} strokeWidth={0.9} className="text-ink-soft" />
       <path d={smooth(speed)} strokeWidth={2.4} />
     </g>
   );
 }
 
-const UV_BANDS = [
-  { at: 3, word: "moderate" },
-  { at: 6, word: "high" },
-  { at: 8, word: "very high" },
-  { at: 11, word: "extreme" },
-];
-
-/** The UV thresholds' names, set at the plate's right edge over their dotted lines. */
-export function uvBands(peak: number): Array<{ word: string; top: string }> {
-  const top = Math.max(9, peak);
-  return UV_BANDS.filter((b) => b.at <= top).map((b) => ({
-    word: b.word,
-    top: `${(((BASE - (b.at / top) * (BASE - TOP)) / PH) * 13.6).toFixed(2)}rem`,
-  }));
+/**
+ * How it feels: the thermometer as a fine line, the feel as one bold stroke,
+ * and the difference (the wind's chill, or the heat's weight) hatched between.
+ */
+function Feels({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
+  const n = hours.length;
+  const known = knownOf(hours, (h) => h.temp != null && h.feels != null);
+  if (known.length < 2) return null;
+  const all = known.flatMap(({ h }) => [h.temp!, h.feels!]);
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const span = Math.max(hi - lo, 15);
+  const y = (v: number) => BASE - 4 - ((v - lo) / span) * (BASE - TOP - 8);
+  const air = known.map(({ i, h }) => [xOf(i, n), y(h.temp!)] as [number, number]);
+  const feel = known.map(({ i, h }) => [xOf(i, n), y(h.feels!)] as [number, number]);
+  return (
+    <g>
+      <path
+        d={bandPath(air, feel)}
+        fill={`url(#${id}-hatch)`}
+        stroke="none"
+        className="text-ink-soft"
+      />
+      <path d={smooth(air)} strokeWidth={0.9} strokeDasharray="5 4" className="text-ink-soft" />
+      <path d={smooth(feel)} strokeWidth={2.4} />
+    </g>
+  );
 }
 
-/** The sun: the UV index as a hatched hill each day, the peak marked with a dot. */
-function Sun({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
-  const n = hours.length;
-  const known = hours
-    .map((h, i) => (h ? { i, ...h } : null))
-    .filter((h): h is NonNullable<typeof h> => Boolean(h));
+/** The lines worth drawing across a hill: the EPA's thresholds, and very dry air. */
+const BANDS: Record<"uv" | "air" | "humidity", Array<{ at: number; word: string }>> = {
+  uv: [
+    { at: 3, word: "moderate" },
+    { at: 6, word: "high" },
+    { at: 8, word: "very high" },
+    { at: 11, word: "extreme" },
+  ],
+  air: [
+    { at: 51, word: "moderate" },
+    { at: 101, word: "unhealthy for sensitive groups" },
+    { at: 151, word: "unhealthy" },
+    { at: 201, word: "very unhealthy" },
+    { at: 301, word: "hazardous" },
+  ],
+  humidity: [{ at: 15, word: "very dry" }],
+};
+
+/** The top of a hill's scale: room for the first lines that matter, and the peak. */
+const topOf = (lens: "uv" | "air" | "humidity", peak: number) =>
+  lens === "uv" ? Math.max(9, peak) : lens === "air" ? Math.max(170, peak * 1.1) : 100;
+
+/** The thresholds' names, set at the plate's right edge over their dotted lines. */
+export function bandsOf(lens: Lens, peak: number): Array<{ word: string; top: string }> {
+  if (lens !== "uv" && lens !== "air" && lens !== "humidity") return [];
+  const top = topOf(lens, peak);
+  return BANDS[lens]
+    .filter((b) => b.at <= top)
+    .map((b) => ({
+      word: b.word,
+      top: `${(((BASE - (b.at / top) * (BASE - TOP)) / PH) * 13.6).toFixed(2)}rem`,
+    }));
+}
+
+/**
+ * A reading drawn as a hatched hill: the sun's UV (each day's peak dotted),
+ * the AQI, the humidity. Hours with no reading (past the end of the air
+ * forecast) are left bare: the line simply stops.
+ */
+function Hill({
+  id,
+  lens,
+  values,
+  dots,
+}: {
+  id: string;
+  lens: "uv" | "air" | "humidity";
+  values: Array<number | undefined>;
+  dots: boolean;
+}) {
+  const n = values.length;
+  const known = knownOf(
+    values.map((v) => (v == null ? undefined : { v })),
+    () => true,
+  ).map(({ i, h }) => ({ i, v: h.v }));
   if (known.length < 2) return null;
-  const top = Math.max(9, Math.max(...known.map((h) => h.uv)));
-  const y = (v: number) => BASE - (v / top) * (BASE - TOP);
-  const pts = known.map((h) => [xOf(h.i, n), y(h.uv)] as [number, number]);
+  const top = topOf(lens, Math.max(...known.map((k) => k.v)));
+  const y = (v: number) => BASE - (Math.min(v, top) / top) * (BASE - TOP);
+  const pts = known.map((k) => [xOf(k.i, n), y(k.v)] as [number, number]);
   const line = smooth(pts);
   const area = `${line} L${r1(pts.at(-1)![0])} ${BASE} L${r1(pts[0][0])} ${BASE} Z`;
   // Each day's peak, where it rises above nothing (not where the forecast simply ends).
-  const peaks = known.filter((h, k) => {
-    const prev = known[k - 1];
-    const next = known[k + 1];
-    return prev && next && Math.round(h.uv) >= 1 && h.uv >= prev.uv && h.uv > next.uv;
-  });
+  const peaks = dots
+    ? known.filter((k, j) => {
+        const prev = known[j - 1];
+        const next = known[j + 1];
+        return prev && next && Math.round(k.v) >= 1 && k.v >= prev.v && k.v > next.v;
+      })
+    : [];
   return (
     <g>
-      {/* The EPA's thresholds, dotted, so a low hill reads as low. */}
-      {UV_BANDS.filter((b) => b.at <= top).map((b) => (
-        <line
-          key={b.at}
-          x1={0}
-          y1={r1(y(b.at))}
-          x2={PW}
-          y2={r1(y(b.at))}
-          strokeWidth={1}
-          strokeDasharray="1 7"
-          className="text-ink-faint"
-        />
-      ))}
+      {BANDS[lens]
+        .filter((b) => b.at <= top)
+        .map((b) => (
+          <line
+            key={b.at}
+            x1={0}
+            y1={r1(y(b.at))}
+            x2={PW}
+            y2={r1(y(b.at))}
+            strokeWidth={1}
+            strokeDasharray="1 7"
+            className="text-ink-faint"
+          />
+        ))}
       <path d={area} fill={`url(#${id}-hatch)`} stroke="none" className="text-ink-soft" />
       <path d={line} strokeWidth={2.2} />
-      {peaks.map((h) => (
+      {peaks.map((k) => (
         <circle
-          key={h.i}
-          cx={r1(xOf(h.i, n))}
-          cy={r1(y(h.uv))}
+          key={k.i}
+          cx={r1(xOf(k.i, n))}
+          cy={r1(y(k.v))}
           r={4}
           fill="currentColor"
           stroke="none"
@@ -316,20 +439,22 @@ export function Figures({ f, act }: { f: Figure; act: boolean }) {
         {f.big}
       </p>
       <p
-        className={`mt-[0.6rem] flex h-[3rem] items-center gap-[0.6rem] text-[3rem] leading-none whitespace-nowrap ${
+        className={`mt-[0.6rem] flex h-[3rem] items-center gap-[0.6rem] leading-none whitespace-nowrap ${f.small ? "text-[2.6rem]" : "text-[3rem]"} ${
           act ? "text-accent" : f.quiet ? "text-ink-faint italic" : "text-ink-soft"
         }`}
       >
         {f.kind ? <Mark kind={f.kind} /> : null}
         {f.sub}
       </p>
-      <p className="mt-[1rem] flex h-[3.2rem] items-center gap-[0.5rem] text-[2.5rem] text-ink-faint">
+      <p className="mt-[1rem] flex h-[3.2rem] items-center gap-[0.5rem] text-[2.5rem] whitespace-nowrap text-ink-faint">
         {f.dir != null && !f.quiet ? (
           <>
             <Vane dir={f.dir} />
             {compass(f.dir)}
           </>
-        ) : null}
+        ) : (
+          f.note
+        )}
       </p>
     </div>
   );

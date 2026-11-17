@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   LENS_MS,
+  aqiShort,
+  aqiWord,
+  airFigure,
+  daysAirLine,
+  daysFeelsLine,
+  daysHumidityLine,
+  hoursAirLine,
+  hoursFeelsLine,
+  hoursHumidityLine,
+  humidityDayFigure,
+  lensOrder,
   amountOf,
   compass,
   daysPrecipLine,
@@ -241,5 +252,160 @@ describe("UV", () => {
         { name: "Saturday", uv: 7.2 },
       ]),
     ).toBe("UV highest Saturday: 7, high. Sunscreen, a hat, and shade at midday.");
+  });
+});
+
+describe("lensOrder", () => {
+  const all = ["sky", "precip", "air", "feels", "wind", "humidity", "uv"] as const;
+  it("opens on the sky and carries on after the lens last seen", () => {
+    expect(lensOrder(all)).toEqual(all);
+    expect(lensOrder(all, "feels")).toEqual([
+      "sky",
+      "wind",
+      "humidity",
+      "uv",
+      "precip",
+      "air",
+      "feels",
+    ]);
+    expect(lensOrder(all, "uv")).toEqual(all);
+  });
+  it("finds its place when the lens last seen has nothing to say today", () => {
+    expect(lensOrder(["sky", "wind", "uv"], "feels")).toEqual(["sky", "wind", "uv"]);
+    expect(lensOrder(["sky", "precip", "wind"], "humidity")).toEqual(["sky", "precip", "wind"]);
+    expect(lensOrder(["sky", "precip", "wind", "uv"], "air")).toEqual([
+      "sky",
+      "wind",
+      "uv",
+      "precip",
+    ]);
+  });
+});
+
+describe("the newer lenses", () => {
+  const calm = { temp: 50, feels: 49, rh: 50, dew: 40, aqi: 30, wind: 3, gust: 5 };
+  it("shows how it feels only when the feel strays 5° from the thermometer", () => {
+    expect(lensesFor([calm])).not.toContain("feels");
+    expect(lensesFor([calm, { ...calm, feels: 44 }])).toContain("feels");
+    expect(lensesFor([{ ...calm, tempLow: 20, feelsLow: 12 }])).toContain("feels");
+  });
+  it("shows humidity only when it's sticky or very dry", () => {
+    expect(lensesFor([calm])).not.toContain("humidity");
+    expect(lensesFor([{ ...calm, dew: 62 }])).toContain("humidity");
+    expect(lensesFor([{ ...calm, rh: 12 }])).toContain("humidity");
+    expect(
+      lensesFor([
+        { ...calm, rh: undefined },
+        { ...calm, rh: 10 },
+      ]),
+    ).not.toContain("humidity");
+  });
+  it("shows the air only when some hour isn't good, even partly known", () => {
+    expect(lensesFor([calm])).not.toContain("air");
+    expect(lensesFor([calm, { ...calm, aqi: 51 }, { ...calm, aqi: undefined }])).toContain("air");
+  });
+  it("orders them by what matters", () => {
+    expect(
+      lensesFor([{ ...calm, precip: 0.2, snow: 0, aqi: 120, feels: 40, dew: 65, uv: 3 }]),
+    ).toEqual(["sky", "precip", "air", "feels", "wind", "humidity", "uv"]);
+  });
+});
+
+describe("how it feels, in words", () => {
+  const hour = (t: string, temp: number, feels: number) => ({
+    time: at(t).toISOString(),
+    temp,
+    feels,
+  });
+  it("says the coldest feel and how far the wind takes it", () => {
+    expect(hoursFeelsLine([hour("10:00", 30, 24), hour("22:00", 25, 16)], at("10:00"), tz)).toBe(
+      "Feels as cold as 16° tonight, up to 9° below the air.",
+    );
+    expect(hoursFeelsLine([hour("14:00", 96, 104)], at("10:00"), tz)).toBe(
+      "Feels as hot as 104° this afternoon, up to 8° above the air.",
+    );
+    expect(hoursFeelsLine([hour("14:00", 60, 58)], at("10:00"), tz)).toBe(
+      "Feels about like the thermometer says.",
+    );
+  });
+  it("finds a chill at either end of the day", () => {
+    const day = (name: string, high: number, feelsHigh: number, low: number, feelsLow: number) => ({
+      name,
+      high,
+      feelsHigh,
+      low,
+      feelsLow,
+    });
+    expect(daysFeelsLine([day("today", 33, 24, 24, 21), day("Friday", 30, 26, 15, 8)])).toBe(
+      "Feels up to 9° colder than the air; coldest Friday, 8°.",
+    );
+    expect(daysFeelsLine([day("Saturday", 95, 103, 60, 60)])).toBe(
+      "Feels up to 8° warmer than the air; hottest Saturday, 103°.",
+    );
+  });
+});
+
+describe("humidity, in words", () => {
+  const hour = (t: string, rh: number, dew: number) => ({ time: at(t).toISOString(), rh, dew });
+  it("follows the dew point when it's muggy, the humidity when it's parched", () => {
+    expect(hoursHumidityLine([hour("15:00", 60, 66)], at("10:00"), tz)).toBe(
+      "Muggy this afternoon, dew point up to 66°.",
+    );
+    expect(hoursHumidityLine([hour("15:00", 9, 24), hour("04:00", 40, 30)], at("10:00"), tz)).toBe(
+      "Very dry air, humidity down to 9% this afternoon.",
+    );
+    expect(daysHumidityLine([{ name: "Friday", rhLow: 8, dew: 30 }])).toBe(
+      "Driest Friday, humidity down to 8%.",
+    );
+    expect(daysHumidityLine([{ name: "Saturday", rhLow: 50, dew: 71 }])).toBe(
+      "Muggiest Saturday, dew point up to 71°.",
+    );
+  });
+  it("sets a day's range", () => {
+    expect(humidityDayFigure(9, 38, 36)).toMatchObject({ big: "9\u201338%", sub: "dew 36°" });
+  });
+});
+
+describe("the air, in words", () => {
+  it("uses the EPA's words, shortened only to fit a column", () => {
+    expect([50, 51, 101, 151, 201, 301].map(aqiWord)).toEqual([
+      "good",
+      "moderate",
+      "unhealthy for sensitive groups",
+      "unhealthy",
+      "very unhealthy",
+      "hazardous",
+    ]);
+    expect(aqiShort(120)).toBe("sensitive");
+    expect(aqiShort(160)).toBe("unhealthy");
+  });
+  it("sets a column, with the fine particles when they matter", () => {
+    expect(airFigure(undefined)).toMatchObject({ big: "", sub: "" });
+    expect(airFigure(30, 7)).toMatchObject({
+      big: "30",
+      sub: "good",
+      quiet: true,
+      note: undefined,
+    });
+    expect(airFigure(168, 76)).toMatchObject({ sub: "unhealthy", note: "PM2.5 76", act: true });
+  });
+  it("says when it's worst, and what to do", () => {
+    const hour = (t: string, aqi?: number) => ({ time: at(t).toISOString(), aqi });
+    expect(hoursAirLine([hour("10:00", 120), hour("15:00", 168)], at("10:00"), tz)).toBe(
+      "The air is unhealthy this afternoon, AQI up to 168. Best to stay inside.",
+    );
+    expect(hoursAirLine([hour("15:00", 62), hour("16:00")], at("10:00"), tz)).toBe(
+      "The air is moderate this afternoon, AQI up to 62.",
+    );
+  });
+  it("says how far the air forecast reaches", () => {
+    expect(
+      daysAirLine([
+        { name: "today", aqi: 168 },
+        { name: "tomorrow", aqi: 182 },
+        { name: "Sunday", aqi: 72 },
+        { name: "Monday" },
+      ]),
+    ).toBe("Worst air tomorrow: AQI 182, unhealthy. Forecast through Sunday.");
   });
 });

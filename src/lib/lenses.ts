@@ -1,15 +1,18 @@
 // The weather's lenses. The Hours and Days views each show one stretch of
-// time four ways, turning slowly from one to the next: the sky (as drawn
-// today), rain and snow, wind, and the sun's UV. This is the arithmetic and
-// the words; the drawing is in `views/designs/almanac-lenses.tsx`.
+// time several ways, turning slowly from one to the next: the sky (as drawn
+// today), rain and snow, the air, how it feels, wind, humidity, and the sun's
+// UV. A lens with nothing to say is skipped. This is the arithmetic and the
+// words; the drawing is in `views/designs/almanac-lenses.tsx`.
 //
 // Units throughout: inches of water for precipitation, inches of snow for
-// snowfall (Open-Meteo's own), mph for wind, the plain UV index.
+// snowfall (Open-Meteo's own), mph for wind, °F, percent humidity, the plain
+// UV index, the US AQI.
 
 import { CHANCE, periodWord } from "./forecast";
 import { clock, dayKey } from "./time";
 
-export const LENSES = ["sky", "precip", "wind", "uv"] as const;
+/** Every lens, in the order they turn: what matters most comes first. */
+export const LENSES = ["sky", "precip", "air", "feels", "wind", "humidity", "uv"] as const;
 export type Lens = (typeof LENSES)[number];
 
 /** How long each lens stays: four of them fill home's two-minute weather slide. */
@@ -21,6 +24,23 @@ export function lensAt(elapsed: number, lenses: readonly Lens[]): Lens {
   return lenses[Math.floor(Math.max(elapsed, 0) / LENS_MS) % lenses.length];
 }
 
+/**
+ * The turn, opening on the sky, then carrying on after the lens last seen.
+ * Home's two-minute slide has room for four lenses; the next time the view
+ * comes round, it picks up where it left off instead of starting over.
+ */
+export function lensOrder(lenses: readonly Lens[], after?: Lens | null): Lens[] {
+  const rest: Lens[] = lenses.filter((l) => l !== "sky");
+  // The first lens that comes after the one last seen, in the full order
+  // (that one may have nothing to say today); round to the start past the end.
+  const last = after ? LENSES.indexOf(after) : -1;
+  const k = Math.max(
+    rest.findIndex((l) => LENSES.indexOf(l) > last),
+    0,
+  );
+  return ["sky", ...rest.slice(k), ...rest.slice(0, k)];
+}
+
 /** One hour, slot, or day, as far as the lenses care. */
 export type Sample = {
   precip?: number;
@@ -29,13 +49,34 @@ export type Sample = {
   wind?: number;
   gust?: number;
   uv?: number;
+  /** The air temperature and how it feels; for a day, the high (and the low below). */
+  temp?: number;
+  feels?: number;
+  tempLow?: number;
+  feelsLow?: number;
+  /** Relative humidity (%) and dew point (°F); for a day, the driest and the muggiest. */
+  rh?: number;
+  dew?: number;
+  /** US AQI; missing past the end of the air forecast. */
+  aqi?: number;
 };
+
+/** How far the feel must stray from the thermometer to be worth a lens (°F). */
+export const FEELS_GAP = 5;
+/** A dew point this high is sticky (°F). */
+export const MUGGY = 60;
+/** Humidity this low is very dry air: the fire-weather line (%). */
+export const PARCHED = 15;
+/** Above this the air is no longer "good". */
+export const AQI_GOOD = 50;
 
 /**
  * The lenses with something to say about these samples, in order. The sky
  * always; rain and snow only when some is forecast (an amount, or a fair
- * chance); wind whenever it's known; UV only when the sun is strong enough
- * to register at all.
+ * chance); the air when any hour isn't good; how it feels when the wind or
+ * the heat moves it 5° or more from the thermometer; wind whenever it's
+ * known; humidity when it's sticky (dew point 60° or more) or very dry (15%
+ * or less); UV only when the sun is strong enough to register at all.
  */
 export function lensesFor(samples: Sample[]): Lens[] {
   const out: Lens[] = ["sky"];
@@ -45,7 +86,13 @@ export function lensesFor(samples: Sample[]): Lens[] {
     (s) => (s.precip ?? 0) >= 0.01 || (s.snow ?? 0) >= 0.1 || (s.chance ?? 0) >= CHANCE,
   );
   if (known("precip") && known("snow") && wet) out.push("precip");
+  if (samples.some((s) => (s.aqi ?? 0) > AQI_GOOD)) out.push("air");
+  const strays = (t?: number, f?: number) => t != null && f != null && Math.abs(f - t) >= FEELS_GAP;
+  if (samples.some((s) => strays(s.temp, s.feels) || strays(s.tempLow, s.feelsLow)))
+    out.push("feels");
   if (known("wind") && known("gust")) out.push("wind");
+  if (known("rh") && known("dew") && samples.some((s) => s.dew! >= MUGGY || s.rh! <= PARCHED))
+    out.push("humidity");
   if (known("uv") && samples.some((s) => Math.round(s.uv!) >= 1)) out.push("uv");
   return out;
 }
@@ -125,6 +172,10 @@ export type Figure = {
   kind?: Kind;
   /** How strong, to give the accent to the strongest. */
   score?: number;
+  /** A small third line (fine particles). */
+  note?: string;
+  /** Long words (the EPA's air words) set a size smaller to fit the column. */
+  small?: boolean;
 };
 
 /** "0.4″" over "80%" (with rain's or snow's mark); or just "40%"; or nothing, when dry. */
@@ -350,3 +401,173 @@ export function daysPrecipLine(
 
 const list = (xs: string[]) =>
   xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")}, and ${xs.at(-1)}`;
+
+/* ---------------------------------------------------------------- how it feels */
+
+/** "18°" over "air 27°": an hour slot's feel beside the thermometer. */
+export function feelsFigure(feels: number, temp: number): Figure {
+  const gap = feels - temp;
+  return {
+    big: `${feels}°`,
+    sub: `air ${temp}°`,
+    quiet: Math.abs(gap) < FEELS_GAP,
+  };
+}
+
+/** A day's feel: the warmest over the coldest, as the sky's high and low are set. */
+export function feelsDayFigure(high: number, low: number): Figure {
+  return { big: `${high}°`, sub: `${low}°` };
+}
+
+/** "Feels as cold as 12° tonight, up to 9° below the air." */
+export function hoursFeelsLine(
+  hours: Array<{ time: string; temp: number; feels: number }>,
+  now: Date,
+  tz: string,
+): string {
+  if (!hours.length) return "";
+  const chill = Math.max(...hours.map((h) => h.temp - h.feels));
+  const heat = Math.max(...hours.map((h) => h.feels - h.temp));
+  if (Math.max(chill, heat) < FEELS_GAP) return "Feels about like the thermometer says.";
+  if (chill >= heat) {
+    const cold = hours.reduce((a, b) => (b.feels < a.feels ? b : a));
+    const when = periodWord(new Date(cold.time), now, tz);
+    return `Feels as cold as ${cold.feels}° ${when}, up to ${chill}° below the air.`;
+  }
+  const hot = hours.reduce((a, b) => (b.feels > a.feels ? b : a));
+  const when = periodWord(new Date(hot.time), now, tz);
+  return `Feels as hot as ${hot.feels}° ${when}, up to ${heat}° above the air.`;
+}
+
+/** "Feels up to 9° colder than the air; coldest Thursday, 5°." */
+export function daysFeelsLine(
+  days: Array<{ name: string; high: number; low: number; feelsHigh: number; feelsLow: number }>,
+): string {
+  if (!days.length) return "";
+  const chill = Math.max(...days.flatMap((d) => [d.high - d.feelsHigh, d.low - d.feelsLow]));
+  const heat = Math.max(...days.flatMap((d) => [d.feelsHigh - d.high, d.feelsLow - d.low]));
+  if (Math.max(chill, heat) < FEELS_GAP) return "Feels about like the thermometer all week.";
+  if (chill >= heat) {
+    const cold = days.reduce((a, b) => (b.feelsLow < a.feelsLow ? b : a));
+    return `Feels up to ${chill}° colder than the air; coldest ${cold.name}, ${cold.feelsLow}°.`;
+  }
+  const hot = days.reduce((a, b) => (b.feelsHigh > a.feelsHigh ? b : a));
+  return `Feels up to ${heat}° warmer than the air; hottest ${hot.name}, ${hot.feelsHigh}°.`;
+}
+
+/* ---------------------------------------------------------------- humidity */
+
+/*
+ * Relative humidity is the number people know, so the plate draws it; but on
+ * its own it misleads (a cold night is "100%" and feels like nothing). The
+ * dew point is the honest measure of how the air feels: sticky from 60°,
+ * oppressive from 70°. So the figures carry both, and the words follow the
+ * dew point when it's muggy, the humidity when it's parched.
+ */
+
+const dewWord = (dew: number) => (dew >= 70 ? "Oppressive" : dew >= 65 ? "Muggy" : "Humid");
+
+/** "38%" over "dew 45°". */
+export function humidityFigure(rh: number, dew: number): Figure {
+  return { big: `${rh}%`, sub: `dew ${dew}°`, quiet: dew < MUGGY && rh > PARCHED };
+}
+
+/** A day's humidity, driest to dampest: "12–64%". */
+export function humidityDayFigure(lo: number, hi: number, dew: number): Figure {
+  return {
+    big: lo < hi ? `${lo}\u2013${hi}%` : `${hi}%`,
+    sub: `dew ${dew}°`,
+    quiet: dew < MUGGY && lo > PARCHED,
+  };
+}
+
+/** "Muggy this afternoon, dew point up to 66°." or "Very dry air, down to 9% this afternoon." */
+export function hoursHumidityLine(
+  hours: Array<{ time: string; rh: number; dew: number }>,
+  now: Date,
+  tz: string,
+): string {
+  if (!hours.length) return "";
+  const wet = hours.reduce((a, b) => (b.dew > a.dew ? b : a));
+  const dry = hours.reduce((a, b) => (b.rh < a.rh ? b : a));
+  if (wet.dew >= MUGGY)
+    return `${dewWord(wet.dew)} ${periodWord(new Date(wet.time), now, tz)}, dew point up to ${wet.dew}°.`;
+  if (dry.rh <= PARCHED)
+    return `Very dry air, humidity down to ${dry.rh}% ${periodWord(new Date(dry.time), now, tz)}.`;
+  return `Comfortable air, dew point near ${Math.round(hours.reduce((a, h) => a + h.dew, 0) / hours.length)}°.`;
+}
+
+/** "Muggiest Saturday, dew point up to 66°." or "Driest Friday, humidity down to 8%." */
+export function daysHumidityLine(
+  days: Array<{ name: string; rhLow: number; dew: number }>,
+): string {
+  if (!days.length) return "";
+  const wet = days.reduce((a, b) => (b.dew > a.dew ? b : a));
+  const dry = days.reduce((a, b) => (b.rhLow < a.rhLow ? b : a));
+  if (wet.dew >= MUGGY) return `Muggiest ${wet.name}, dew point up to ${wet.dew}°.`;
+  if (dry.rhLow <= PARCHED) return `Driest ${dry.name}, humidity down to ${dry.rhLow}%.`;
+  return "Comfortable air all week.";
+}
+
+/* ---------------------------------------------------------------- the air */
+
+/** The EPA's words for the US AQI. */
+export function aqiWord(aqi: number): string {
+  if (aqi <= 50) return "good";
+  if (aqi <= 100) return "moderate";
+  if (aqi <= 150) return "unhealthy for sensitive groups";
+  if (aqi <= 200) return "unhealthy";
+  if (aqi <= 300) return "very unhealthy";
+  return "hazardous";
+}
+
+/** The EPA's word, short enough for a column ("sensitive" for "unhealthy for sensitive groups"). */
+export const aqiShort = (aqi: number) => (aqi > 100 && aqi <= 150 ? "sensitive" : aqiWord(aqi));
+
+/** From here up, everyone should take care (the EPA's "unhealthy"). */
+export const AQI_UNHEALTHY = 151;
+
+/** "135" over "sensitive", and the fine particles under it. */
+export function airFigure(aqi: number | undefined, pm?: number): Figure {
+  if (aqi == null) return { big: "", sub: "", quiet: true };
+  return {
+    big: String(aqi),
+    sub: aqiShort(aqi),
+    small: true,
+    note: pm != null && aqi > AQI_GOOD ? `PM2.5 ${pm}` : undefined,
+    quiet: aqi <= AQI_GOOD,
+    act: aqi >= AQI_UNHEALTHY,
+    score: aqi,
+  };
+}
+
+const airAdvice = (aqi: number) =>
+  aqi >= AQI_UNHEALTHY
+    ? " Best to stay inside."
+    : aqi > 100
+      ? " Go easy outside if you're sensitive."
+      : "";
+
+/** "The air is unhealthy for sensitive groups this afternoon, AQI up to 135." */
+export function hoursAirLine(
+  hours: Array<{ time: string; aqi?: number }>,
+  now: Date,
+  tz: string,
+): string {
+  const known = hours.filter((h): h is { time: string; aqi: number } => h.aqi != null);
+  if (!known.length) return "";
+  const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
+  if (worst.aqi <= AQI_GOOD) return `Good air, AQI ${worst.aqi} at most.`;
+  const when = periodWord(new Date(worst.time), now, tz);
+  return `The air is ${aqiWord(worst.aqi)} ${when}, AQI up to ${worst.aqi}.${airAdvice(worst.aqi)}`;
+}
+
+/** "Worst air Saturday: AQI 160, unhealthy. Forecast through Sunday." */
+export function daysAirLine(days: Array<{ name: string; aqi?: number }>): string {
+  const known = days.filter((d): d is { name: string; aqi: number } => d.aqi != null);
+  if (!known.length) return "";
+  const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
+  const through = known.length < days.length ? ` Forecast through ${known.at(-1)!.name}.` : "";
+  if (worst.aqi <= AQI_GOOD) return `Good air.${through}`;
+  return `Worst air ${worst.name}: AQI ${worst.aqi}, ${aqiWord(worst.aqi)}.${through}`;
+}

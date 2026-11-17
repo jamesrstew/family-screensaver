@@ -19,6 +19,17 @@ import {
   hoursPrecipLine,
   hoursUvLine,
   hoursWindLine,
+  airFigure,
+  daysAirLine,
+  daysFeelsLine,
+  daysHumidityLine,
+  feelsDayFigure,
+  feelsFigure,
+  hoursAirLine,
+  hoursFeelsLine,
+  hoursHumidityLine,
+  humidityDayFigure,
+  humidityFigure,
   lensesFor,
   meanDir,
   precipFigure,
@@ -32,7 +43,7 @@ import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
-import { Figures, Plate, captionOf, useLens, uvBands } from "./almanac-lenses";
+import { Figures, Plate, bandsOf, captionOf, useLens, type PlateHour } from "./almanac-lenses";
 import { fitStyle, hourWord } from "./common";
 
 /*
@@ -534,21 +545,22 @@ function LensBody({
     (best, f, i) => (f.act && (best < 0 || (f.score ?? 0) > (figures[best].score ?? 0)) ? i : best),
     -1,
   );
-  const peak = Math.max(0, ...hours.map((h) => h?.uv ?? 0));
+  const peak = Math.max(
+    0,
+    ...hours.map((h) => (lens === "uv" ? h?.uv : lens === "air" ? h?.aqi : h?.rh) ?? 0),
+  );
   return (
     <>
       <Plate lens={lens} hours={plate} cols={cols} scale={scale} />
-      {lens === "uv"
-        ? uvBands(peak).map((b) => (
-            <p
-              key={b.word}
-              className="absolute right-0 -translate-y-1/2 bg-paper px-[0.6rem] text-[1.85rem] leading-none text-ink-faint italic"
-              style={{ top: b.top }}
-            >
-              {b.word}
-            </p>
-          ))
-        : null}
+      {bandsOf(lens, peak).map((b) => (
+        <p
+          key={b.word}
+          className="absolute right-0 -translate-y-1/2 bg-paper px-[0.6rem] text-[1.85rem] leading-none text-ink-faint italic"
+          style={{ top: b.top }}
+        >
+          {b.word}
+        </p>
+      ))}
       <div className={`grid ${cols === 7 ? "grid-cols-7" : "grid-cols-8"} pt-[13.6rem]`}>
         {figures.map((f, i) => (
           <Figures key={i} f={f} act={i === acted} />
@@ -576,6 +588,8 @@ function Days({ w, now, snapshot }: Drawn) {
     k === today || k === addDays(today, 1) ? lower(labelOf(k)) : labelOf(k);
 
   // The lenses need every day's hours; an older report has none, and shows the sky alone.
+  const lo = (xs?: number[]) => (xs?.length ? Math.min(...xs) : undefined);
+  const hi = (xs?: number[]) => (xs?.length ? Math.max(...xs) : undefined);
   const samples = days.map((d) =>
     d.hourly
       ? {
@@ -585,10 +599,17 @@ function Days({ w, now, snapshot }: Drawn) {
           wind: d.wind,
           gust: d.gust,
           uv: d.uv,
+          temp: d.high,
+          feels: d.hourly.feels && d.feelsHigh,
+          tempLow: d.low,
+          feelsLow: d.hourly.feels && d.feelsLow,
+          rh: lo(d.hourly.rh),
+          dew: hi(d.hourly.dew),
+          aqi: d.aqi,
         }
       : {},
   );
-  const lens = useLens(now, lensesFor(samples));
+  const lens = useLens(now, lensesFor(samples), "days");
   const cols: Column[] = days.map((d) => ({
     key: d.date,
     label: labelOf(d.date),
@@ -596,11 +617,12 @@ function Days({ w, now, snapshot }: Drawn) {
     strong: weekend(d.date),
   }));
 
+  const named = days.map((d, i) => ({ d, s: samples[i], name: nameOf(d.date) }));
   const line =
     lens === "precip"
       ? daysPrecipLine(
-          days.map((d) => ({
-            name: nameOf(d.date),
+          named.map(({ d, name }) => ({
+            name,
             precip: d.precip ?? 0,
             snow: d.snow ?? 0,
             chance: d.precipChance,
@@ -609,16 +631,48 @@ function Days({ w, now, snapshot }: Drawn) {
         )
       : lens === "wind"
         ? daysWindLine(
-            days.map((d) => ({
-              name: nameOf(d.date),
+            named.map(({ d, name }) => ({
+              name,
               lo: Math.min(...(d.hourly?.wind ?? [0])),
               hi: d.wind ?? 0,
               gust: d.gust ?? 0,
             })),
           )
         : lens === "uv"
-          ? daysUvLine(days.map((d) => ({ name: nameOf(d.date), uv: d.uv ?? 0 })))
-          : weekLine(w, now, tz);
+          ? daysUvLine(named.map(({ d, name }) => ({ name, uv: d.uv ?? 0 })))
+          : lens === "air"
+            ? daysAirLine(named.map(({ d, name }) => ({ name, aqi: d.aqi })))
+            : lens === "feels"
+              ? daysFeelsLine(
+                  named.map(({ d, name }) => ({
+                    name,
+                    high: d.high,
+                    low: d.low,
+                    feelsHigh: d.feelsHigh ?? d.high,
+                    feelsLow: d.feelsLow ?? d.low,
+                  })),
+                )
+              : lens === "humidity"
+                ? daysHumidityLine(
+                    named.map(({ s, name }) => ({ name, rhLow: s.rh ?? 100, dew: s.dew ?? 0 })),
+                  )
+                : weekLine(w, now, tz);
+
+  const figureOf = (d: (typeof days)[number], s: (typeof samples)[number]): Figure => {
+    if (lens === "precip")
+      return precipFigure(d.precip ?? 0, d.snow ?? 0, d.precipChance, precipKind(d.code));
+    if (lens === "wind")
+      return windFigure(
+        Math.min(...(d.hourly?.wind ?? [d.wind ?? 0])),
+        d.wind ?? 0,
+        d.gust ?? 0,
+        d.dir,
+      );
+    if (lens === "air") return airFigure(d.aqi);
+    if (lens === "feels") return feelsDayFigure(d.feelsHigh ?? d.high, d.feelsLow ?? d.low);
+    if (lens === "humidity") return humidityDayFigure(s.rh ?? 0, hi(d.hourly?.rh) ?? 0, s.dew ?? 0);
+    return uvFigure(d.uv ?? 0);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -654,7 +708,7 @@ function Days({ w, now, snapshot }: Drawn) {
               scale={1}
               // Each day's 24 hours from midnight (a clock-change day's 23 or 25 kept to 24).
               hours={days.flatMap((d) =>
-                Array.from({ length: 24 }, (_, h) => {
+                Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
                   const day = d.hourly;
                   if (!day || h >= day.wind.length) return undefined;
                   return {
@@ -663,21 +717,14 @@ function Days({ w, now, snapshot }: Drawn) {
                     wind: day.wind[h],
                     gust: day.gust[h],
                     uv: day.uv[h],
+                    temp: day.temp?.[h],
+                    feels: day.feels?.[h],
+                    rh: day.rh?.[h],
+                    aqi: day.aqi?.[h],
                   };
                 }),
               )}
-              figures={days.map((d) =>
-                lens === "precip"
-                  ? precipFigure(d.precip ?? 0, d.snow ?? 0, d.precipChance, precipKind(d.code))
-                  : lens === "wind"
-                    ? windFigure(
-                        Math.min(...(d.hourly?.wind ?? [d.wind ?? 0])),
-                        d.wind ?? 0,
-                        d.gust ?? 0,
-                        d.dir,
-                      )
-                    : uvFigure(d.uv ?? 0),
-              )}
+              figures={days.map((d, i) => figureOf(d, samples[i]))}
             />
           )}
         </Ink>
@@ -707,8 +754,13 @@ function Hours({ w, o, now, snapshot }: Drawn) {
     wind: h.wind,
     gust: h.gust,
     uv: h.uv,
+    temp: h.temp,
+    feels: h.feels,
+    rh: h.rh,
+    dew: h.dew,
+    aqi: h.aqi,
   }));
-  const lens = useLens(now, lensesFor(samples));
+  const lens = useLens(now, lensesFor(samples), "hours");
   const cols: Column[] = slots.map((slot, i) => {
     const night = !(i === 0 ? w.now.isDay : (slot[0].isDay ?? true));
     return {
@@ -733,7 +785,21 @@ function Hours({ w, o, now, snapshot }: Drawn) {
         ? hoursWindLine(span.map(known), now, tz)
         : lens === "uv"
           ? hoursUvLine(span.map(known), now, tz)
-          : hoursLine(w, now, tz);
+          : lens === "air"
+            ? hoursAirLine(span, now, tz)
+            : lens === "feels"
+              ? hoursFeelsLine(
+                  span.map((h) => ({ time: h.time, temp: h.temp, feels: h.feels ?? h.temp })),
+                  now,
+                  tz,
+                )
+              : lens === "humidity"
+                ? hoursHumidityLine(
+                    span.map((h) => ({ time: h.time, rh: h.rh ?? 50, dew: h.dew ?? 0 })),
+                    now,
+                    tz,
+                  )
+                : hoursLine(w, now, tz);
 
   const sum = (xs: Array<number | undefined>) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
   const most = (xs: Array<number | undefined>) => Math.max(...xs.map((x) => x ?? 0));
@@ -786,6 +852,10 @@ function Hours({ w, o, now, snapshot }: Drawn) {
                       wind: h.wind ?? 0,
                       gust: h.gust ?? 0,
                       uv: h.uv ?? 0,
+                      temp: h.temp,
+                      feels: h.feels,
+                      rh: h.rh,
+                      aqi: h.aqi,
                     }
                   : undefined;
               })}
@@ -807,6 +877,18 @@ function Hours({ w, o, now, snapshot }: Drawn) {
                   );
                   return windFigure(hi, hi, most(slot.map((h) => h.gust)), dir);
                 }
+                if (lens === "air") {
+                  const aqis = slot.flatMap((h) => (h.aqi == null ? [] : [h.aqi]));
+                  const pms = slot.flatMap((h) => (h.pm == null ? [] : [h.pm]));
+                  return airFigure(
+                    aqis.length ? Math.max(...aqis) : undefined,
+                    pms.length ? Math.max(...pms) : undefined,
+                  );
+                }
+                // How it feels and the air's water: as the slot begins, like its temperature.
+                const first = slot[0];
+                if (lens === "feels") return feelsFigure(first.feels ?? first.temp, first.temp);
+                if (lens === "humidity") return humidityFigure(first.rh ?? 0, first.dew ?? 0);
                 return uvFigure(most(slot.map((h) => h.uv)));
               })}
             />
