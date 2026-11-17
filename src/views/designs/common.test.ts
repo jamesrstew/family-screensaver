@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Happening, Snapshot } from "@/lib/types";
 import { leadDeck, passagesFrom } from "@/lib/pick";
 import type { NotebookItem } from "@/lib/types";
-import { firstTomorrow, fitsEverywhere, heroOf } from "./common";
+import { degrees, firstTomorrow, fitsEverywhere, heroOf } from "./common";
 
 const TZ = "America/Los_Angeles";
 const timed = (id: string, start: string): Happening => ({
@@ -114,5 +114,13 @@ describe("heroOf on the carousel", () => {
     expect(fitsEverywhere(short)).toBe(true);
     expect(fitsEverywhere(long)).toBe(false);
     expect(leadDeck([short, long], fitsEverywhere).map((i) => i.id)).toEqual(["s"]);
+  });
+});
+
+describe("degrees", () => {
+  it("writes a true minus sign below zero, and zero as zero", () => {
+    expect(degrees(68)).toBe("68°");
+    expect(degrees(0)).toBe("0°");
+    expect(degrees(-5)).toBe("\u22125°");
   });
 });
