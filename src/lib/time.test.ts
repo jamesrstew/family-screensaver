@@ -19,7 +19,7 @@ describe("clock (AP style)", () => {
 
 describe("days", () => {
   it("uses the family's day, not the server's", () => {
-    // 11 p.m. in Oregon is already tomorrow in UTC.
+    // 11 p.m. on the West Coast is already tomorrow in UTC.
     expect(dayKey(at("2026-11-16T23:30:00-08:00"), TZ)).toBe("2026-11-16");
   });
   it("adds days across month ends", () => {

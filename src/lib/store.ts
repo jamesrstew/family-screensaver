@@ -9,6 +9,8 @@ import { Redis } from "@upstash/redis";
 type Store = {
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown): Promise<void>;
+  /** Add `by` (one) to a counter that forgets itself after `ttl` seconds; the new count. */
+  bump(key: string, ttl: number, by?: number): Promise<number>;
 };
 
 const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
@@ -20,16 +22,35 @@ function redis(r: Redis): Store {
     set: async (key, value) => {
       await r.set(key, value);
     },
+    bump: async (key, ttl, by = 1) => {
+      // One round trip, and the counter always gets its expiry.
+      const [n] = await r.multi().incrby(key, by).expire(key, ttl).exec<[number, number]>();
+      return n;
+    },
   };
 }
 
 function memory(): Store {
-  const g = globalThis as { __familyStore?: Map<string, unknown> };
+  const g = globalThis as {
+    __familyStore?: Map<string, unknown>;
+    __familyTimers?: Map<string, ReturnType<typeof setTimeout>>;
+  };
   const m = (g.__familyStore ??= new Map());
   return {
     get: async <T>(key: string) => (m.get(key) as T | undefined) ?? null,
     set: async (key, value) => {
       m.set(key, value);
+    },
+    bump: async (key, ttl, by = 1) => {
+      const t = (g.__familyTimers ??= new Map());
+      const n = ((m.get(key) as number | undefined) ?? 0) + by;
+      m.set(key, n);
+      if (!t.has(key))
+        t.set(
+          key,
+          setTimeout(() => (m.delete(key), t.delete(key)), ttl * 1000),
+        );
+      return n;
     },
   };
 }
@@ -40,4 +61,6 @@ export const store: Store = url && token ? redis(new Redis({ url, token })) : me
 export const KEYS = {
   show: "family:show",
   notebook: "family:notebook",
+  /** Tries at the family key this hour, from one address or "all" (see auth.ts). */
+  tries: (hour: number, who: string) => `family:tries:${hour}:${who}`,
 } as const;
