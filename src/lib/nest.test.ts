@@ -97,3 +97,30 @@ describe("indoorOf", () => {
     expect(indoorOf([at(20.25), at(20.3)])?.temp).toBe(68);
   });
 });
+
+describe("indoorOf: the one thermostat", () => {
+  const at = (c: number, room: string) =>
+    thermostat({ "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: c } }, room);
+  // Den 20 °C (68°), Loft 22 °C (72°): 70° on average.
+  const house = [at(20, "Den"), at(22, "Loft")];
+
+  it("gives the named room's own reading, as one number", () => {
+    expect(read(house, AT, "Loft")?.temp).toBe(72);
+    expect(read(house, AT, "Den")?.temp).toBe(68);
+  });
+
+  it("matches the name in any case, and with stray spaces", () => {
+    expect(read(house, AT, "loft")?.temp).toBe(72);
+    expect(read(house, AT, "  DEN ")?.temp).toBe(68);
+  });
+
+  it("falls back to the house's average when no room is named or none matches", () => {
+    expect(read(house, AT)?.temp).toBe(70);
+    expect(read(house, AT, "")?.temp).toBe(70);
+    expect(read(house, AT, "Attic")?.temp).toBe(70);
+  });
+
+  it("keeps every room for the voice, whichever is shown", () => {
+    expect(read(house, AT, "Loft")?.rooms.map((r) => r.name)).toEqual(["Den", "Loft"]);
+  });
+});

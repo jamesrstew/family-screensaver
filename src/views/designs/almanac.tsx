@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { insideText, type Inside as InsideNote } from "@/lib/indoor";
+import { insideText } from "@/lib/indoor";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -205,23 +205,16 @@ export function Home(props: ViewProps) {
             ) : null}
           </Ink>
           <Ink
-            k={inside?.kind ?? "none"}
+            k={inside === null ? "none" : "inside"}
             order={3}
             mode="seep"
             className="absolute right-0 bottom-[0.7rem] isolate"
           >
-            {inside ? (
+            {inside !== null ? (
               <>
                 <div className="sky-word-clearing corner-clearing" aria-hidden />
                 <Corner word="inside">
-                  {inside.kind === "one" ? (
-                    <Deg v={inside.temp} />
-                  ) : (
-                    <>
-                      <Deg v={inside.low} /> <span className="text-ink-faint italic">to</span>{" "}
-                      <Deg v={inside.high} />
-                    </>
-                  )}
+                  <Deg v={inside} />
                 </Corner>
               </>
             ) : null}
@@ -244,35 +237,33 @@ const outsideText = (t: number) => `${t}° outside`;
 
 /**
  * The corner notes, if they have room beside what's next (centered on the
- * same line, so both corners have the same room). The house's range narrows
- * to its one number first; then the two give way together, so the foot stays
- * balanced rather than leaning to one side. The outside temperature is never
- * gone for long: the weather comes round on its own turn. With no reading
- * from the house, outside stands alone; with no sky, inside does.
+ * same line, so both corners have the same room). When they don't, the two
+ * give way together, so the foot stays balanced rather than leaning to one
+ * side. The outside temperature is never gone for long: the weather comes
+ * round on its own turn. With no reading from the house, outside stands
+ * alone; with no sky, inside does.
  */
 export function corners(
   outside: number | null,
-  inside: InsideNote | null | undefined,
+  inside: number | null | undefined,
   nextLine: string,
-): { outside: number | null; inside: InsideNote | null } {
+): { outside: number | null; inside: number | null } {
   const room = FOOT_W / 2 - (widthEm(nextLine) * NEXT) / 2 - AIR;
   const fits = (words: string) => widthEm(words) * CORNER <= room;
-  const one = inside ? ({ kind: "one", temp: inside.temp } as const) : null;
-  const house = inside && one ? [inside, one].find((i) => fits(insideText(i))) : undefined;
+  const house = inside != null && fits(insideText(inside)) ? inside : null;
   const sky = outside !== null && fits(outsideText(outside)) ? outside : null;
   // Both, or neither, when both have something to say.
-  if (inside && outside !== null && (!house || sky === null)) {
+  if (inside != null && outside !== null && (house === null || sky === null)) {
     return { outside: null, inside: null };
   }
-  return { outside: sky, inside: house ?? null };
+  return { outside: sky, inside: house };
 }
 
 /**
  * A temperature in a bottom corner, written as the ends of the day are at the
  * horizon: the number in soft ink, the word in faint italic ("50° outside",
- * "68° inside", "66° to 71° inside"). Part of the paper's furniture: they stay
- * put while the sun moves, and come and go with the passages. A new number
- * just changes; a new form re-inks.
+ * "68° inside"). Part of the paper's furniture: they stay put while the sun
+ * moves, and come and go with the passages. A new number just changes.
  */
 function Corner({ word, children }: { word: string; children: ReactNode }) {
   return (

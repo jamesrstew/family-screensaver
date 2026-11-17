@@ -91,7 +91,11 @@ export async function getIndoor(): Promise<Indoor | null> {
     const devices = await devicesOf(c.project);
     cacheLife({ stale: 120, revalidate: 300, expire: 900 });
     // Stamped here, inside the cache, so a cached reading keeps its true age.
-    return indoorOf(Array.isArray(devices) ? devices : [], new Date().toISOString());
+    return indoorOf(
+      Array.isArray(devices) ? devices : [],
+      new Date().toISOString(),
+      process.env.NEST_ROOM ?? "",
+    );
   } catch (err) {
     cacheLife({ stale: 60, revalidate: 120, expire: 120 });
     console.error("[nest] unavailable", err instanceof Error ? err.message : "");
@@ -105,11 +109,13 @@ const fahrenheit = (c: number) => Math.round((c * 9) / 5 + 32);
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 /**
- * Each thermostat's room, temperature (°F), and humidity. Pure. A thermostat
- * that's offline is left out: Google keeps answering with its last reading,
- * which may be hours old. Anything malformed is skipped, never the whole list.
+ * Each thermostat's room, temperature (°F), and humidity, and the house's one
+ * number: the thermostat in the room named `pick` (any case), else the
+ * average of them all. Pure. A thermostat that's offline is left out: Google
+ * keeps answering with its last reading, which may be hours old. Anything
+ * malformed is skipped, never the whole list.
  */
-export function indoorOf(devices: Device[], at: string): Indoor | null {
+export function indoorOf(devices: Device[], at: string, pick = ""): Indoor | null {
   const read = devices.flatMap((d) => {
     const t = d?.traits;
     if (d?.type !== "sdm.devices.types.THERMOSTAT" || !t) return [];
@@ -126,7 +132,12 @@ export function indoorOf(devices: Device[], at: string): Indoor | null {
     return [{ celsius, room }];
   });
   if (!read.length) return null;
-  // The house's average from the raw readings, rounded once.
-  const temp = fahrenheit(read.reduce((s, r) => s + r.celsius, 0) / read.length);
+  const want = pick.trim().toLowerCase();
+  const chosen = want ? read.find((r) => r.room.name.toLowerCase() === want) : undefined;
+  // The chosen room's own reading; else the house's average from the raw
+  // readings, rounded once.
+  const temp = chosen
+    ? chosen.room.temp
+    : fahrenheit(read.reduce((s, r) => s + r.celsius, 0) / read.length);
   return { at, temp, rooms: read.map((r) => r.room) };
 }
