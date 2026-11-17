@@ -4,7 +4,7 @@ import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import type { Mood } from "@/lib/time";
 import type { Weather } from "@/lib/types";
-import { Moon, Star, moonAge } from "../Engraving";
+import { CLOUD, CLOUD_BOX, Cloud, Moon, Star, moonAge } from "../Engraving";
 import { ARC, arcAt, placeOf, type Place } from "./arc";
 
 /*
@@ -72,6 +72,7 @@ type SkyState = {
   stratus: number;
   wisps: number;
 };
+
 
 export function skyOf(code: number | null): SkyState {
   if (code === null)
@@ -525,62 +526,6 @@ function Streaks({ place, show }: { place: Place | null; show: boolean }) {
 
 /* ---------------------------------------------------------------- clouds */
 
-type Billow = { x: number; y: number; r: number };
-
-/**
- * A cumulus as an engraver cuts it: a heap of billows on a slightly bowed
- * base, the silhouette in one fine line, and the shadow laid in with
- * horizontal strokes, darkest under the crown, thinning upward and toward the
- * ends, the lowest broken into dashes. Units: 10 per rem.
- */
-function cloudShape(r: () => number, W: number, H: number) {
-  const base = H * 0.93;
-  const billows: Billow[] = [];
-  const lean = 0.36 + r() * 0.28;
-  const n = 7 + Math.floor(r() * 4);
-  const dome = (u: number) => {
-    const d = u < lean ? u / lean : (1 - u) / (1 - lean);
-    return Math.pow(Math.sin((Math.PI / 2) * Math.min(Math.max(d, 0), 1)), 0.8);
-  };
-  for (let k = 0; k < n; k++) {
-    const u = 0.06 + (0.88 * k) / (n - 1) + (r() - 0.5) * 0.03;
-    const height = H * (0.18 + 0.8 * dome(u)) * (0.88 + r() * 0.2);
-    const rr = Math.max(height / 1.55, H * 0.12);
-    billows.push({ x: W * u, y: base - height + rr, r: rr });
-  }
-  // A few small billows breaking the outline, as real cloud tops do.
-  for (let k = 0; k < 3; k++) {
-    const host = billows[1 + Math.floor(r() * (n - 2))];
-    const a = -Math.PI / 2 + (r() - 0.5) * 1.6;
-    billows.push({
-      x: host.x + Math.cos(a) * host.r * 0.85,
-      y: host.y + Math.sin(a) * host.r * 0.85,
-      r: host.r * (0.35 + r() * 0.2),
-    });
-  }
-  const top = Math.min(...billows.map((b) => b.y - b.r));
-  const rows: Array<{ y: number; w: number; o: number; dash: string; half: number }> = [];
-  let k = 0;
-  for (let y = base + H * 0.04; y > top + (base - top) * 0.3; y -= 4.2 + k * 0.55, k++) {
-    const up = (base - y) / (base - top);
-    const lowest = k < 3;
-    rows.push({
-      y,
-      // Shorter toward the base, centered under the crown: the shadow tapers
-      // to both ends instead of filling the base edge to edge.
-      half: W * (0.22 + 0.4 * Math.min(up * 1.6, 1)),
-      w: Math.max(0.95 - up * 1.1, 0.3),
-      o: lowest ? 0.4 : Math.max(0.75 - up * 0.9, 0.12),
-      dash: lowest
-        ? `${(14 + r() * 26).toFixed(0)} ${(6 + r() * 10).toFixed(0)}`
-        : up < 0.18
-          ? ""
-          : `${(20 + r() * 60).toFixed(0)} ${(4 + up * 30 * r()).toFixed(0)}`,
-    });
-  }
-  return { billows, base, rows, crown: W * lean };
-}
-
 const CUMULUS = 6;
 
 type CloudSlot = {
@@ -591,7 +536,7 @@ type CloudSlot = {
   dur: number;
   delay: number;
   rest: number;
-  shape: ReturnType<typeof cloudShape>;
+  flip: boolean;
   id: string;
 };
 
@@ -604,8 +549,9 @@ function cloudSlots(seed: number, epoch: number): CloudSlot[] {
   const lanes = [8, -0.5, 10.5, 2.5, 6.5, 1];
   return Array.from({ length: CUMULUS }, (_, i) => {
     const far = i % 2 === 0;
-    const w = far ? 10 + r() * 6 : 20 + r() * 9;
-    const h = w * (far ? 0.34 : 0.4);
+    const w = far ? 10 + r() * 5 : 16 + r() * 7;
+    // Not far from the forecast cloud's own proportions, so it isn't stretched thin.
+    const h = w * (far ? 0.48 : 0.52);
     const dur = (far ? 11 : 6.5) * PRIMES[12 + Math.floor(r() * 10)] * (0.9 + r() * 0.2);
     const phase = cycleAt(epoch, dur, (i * 0.382 + r() * 0.2) % 1);
     return {
@@ -616,7 +562,8 @@ function cloudSlots(seed: number, epoch: number): CloudSlot[] {
       dur,
       delay: -phase * dur,
       rest: -50 + phase * 175,
-      shape: cloudShape(rng(seed + i * 7919), w * 10, h * 10),
+      // Mirrored now and then, so the same drawing never reads as a stamp.
+      flip: i % 4 >= 2,
       id: `c${seed % 997}x${i}`,
     };
   });
@@ -639,56 +586,12 @@ function Clouds({
     <>
       {cloudSlots(seed, epoch).map((c, i) => {
         if (c.far !== (depth === "far")) return null;
-        const { billows, base, rows, crown } = c.shape;
-        const W = c.w * 10;
-        const H = c.h * 10;
-        // The cloud's true extent (billows can reach past its nominal box),
-        // so nothing is cut off by the edge of its drawing.
-        const x0 = Math.min(...billows.map((b) => b.x - b.r)) - 4;
-        const x1 = Math.max(...billows.map((b) => b.x + b.r)) + 4;
-        const y0 = Math.min(...billows.map((b) => b.y - b.r)) - 4;
-        const bow = H * 0.08;
-        const y1 = base + bow + 4;
-        const vb = `${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`;
+        // The forecast's own engraved cloud, drawn big; its lines stay hairline.
         const box = {
-          width: rem((x1 - x0) / 10),
-          height: rem((y1 - y0) / 10),
-          marginLeft: rem(x0 / 10),
-          marginTop: rem(y0 / 10),
+          width: rem(c.w),
+          height: rem(c.h),
+          transform: c.flip ? "scaleX(-1)" : undefined,
         };
-        // The bowed base: `bow` lower in the middle, rising to the ends. It's
-        // the same quadratic as the clip below (control point 2 * bow down, so
-        // the curve dips by bow); x runs linearly along it.
-        const baseAt = (x: number) => {
-          const t = (x1 - x) / (x1 - x0);
-          return base + 4 * t * (1 - t) * bow;
-        };
-        // Drawn only where the billows actually reach the base, as a fine
-        // broken stroke, so the cloud is a closed silhouette.
-        const reach = billows
-          .filter((b) => Math.abs(base - b.y) < b.r)
-          .map((b) => {
-            const half = Math.sqrt(b.r * b.r - (base - b.y) ** 2);
-            return [b.x - half, b.x + half];
-          });
-        const bx0 = Math.min(...reach.map((r) => r[0]));
-        const bx1 = Math.max(...reach.map((r) => r[1]));
-        const baseLine = reach.length
-          ? Array.from({ length: 13 }, (_, k) => {
-              const x = bx0 + ((bx1 - bx0) * k) / 12;
-              return `${k ? "L" : "M"}${x.toFixed(1)} ${baseAt(x).toFixed(1)}`;
-            }).join("")
-          : "";
-        const circles = (dr: number, fill?: string) =>
-          billows.map((b, k) => (
-            <circle
-              key={k}
-              cx={b.x.toFixed(1)}
-              cy={b.y.toFixed(1)}
-              r={(b.r + dr).toFixed(1)}
-              fill={fill}
-            />
-          ));
         return (
           <Layer
             key={i}
@@ -704,72 +607,26 @@ function Clouds({
                 transform: `translateX(${rem(c.rest)})`,
               }}
             >
-              <svg viewBox={vb} style={box} fill="none" stroke="currentColor" strokeLinecap="round">
-                <defs>
-                  {/* A slightly bowed base: nothing below it. */}
-                  <clipPath id={`${c.id}b`}>
-                    <path
-                      d={`M${x0.toFixed(1)} ${y0.toFixed(1)}H${x1.toFixed(1)}V${base.toFixed(1)}Q${((x0 + x1) / 2).toFixed(1)} ${(base + 2 * bow).toFixed(1)} ${x0.toFixed(1)} ${base.toFixed(1)}Z`}
-                    />
-                  </clipPath>
-                  <clipPath id={c.id}>{circles(0)}</clipPath>
-                  {/* The shadow is darkest under the crown, fading to both ends. */}
-                  <radialGradient
-                    id={`${c.id}g`}
-                    cx={crown}
-                    cy={base}
-                    r={W * 0.6}
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop offset={0} stopColor="#fff" />
-                    <stop offset={0.55} stopColor="#fff" stopOpacity={0.75} />
-                    <stop offset={1} stopColor="#fff" stopOpacity={0.1} />
-                  </radialGradient>
-                  <mask
-                    id={`${c.id}m`}
-                    maskUnits="userSpaceOnUse"
-                    x={x0}
-                    y={y0}
-                    width={x1 - x0}
-                    height={y1 - y0}
-                  >
-                    <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={`url(#${c.id}g)`} />
-                  </mask>
-                </defs>
-                <g clipPath={`url(#${c.id}b)`}>
-                  {/* The silhouette: every billow outlined, then the insides painted out. */}
-                  <g strokeWidth={c.far ? 1.1 : 1.4}>{circles(0)}</g>
-                  <g stroke="none">{circles(-1.1, "var(--paper)")}</g>
-                  <g clipPath={`url(#${c.id})`} mask={`url(#${c.id}m)`} className="sky-cloud-hatch">
-                    {rows.map((row, k) => (
-                      <line
-                        key={k}
-                        x1={(crown - row.half).toFixed(1)}
-                        x2={(crown + row.half).toFixed(1)}
-                        y1={row.y.toFixed(1)}
-                        y2={row.y.toFixed(1)}
-                        strokeWidth={row.w.toFixed(2)}
-                        opacity={row.o.toFixed(2)}
-                        strokeDasharray={row.dash || undefined}
-                      />
-                    ))}
-                  </g>
-                </g>
-                {/* The base, closing the silhouette: a fine broken line. */}
-                <path
-                  d={baseLine}
-                  strokeWidth={c.far ? 0.9 : 1.1}
-                  strokeDasharray="14 7"
-                  opacity={0.4}
-                />
+              <svg
+                viewBox={CLOUD_BOX}
+                preserveAspectRatio="none"
+                style={box}
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+              >
+                <Cloud id={c.id} fine />
               </svg>
               {/* Sheet lightning, by day in a storm: once in a long while the
                   cloud is lit from within (its shadow briefly paled). */}
               {flash && !c.far && i === 1 ? (
-                <svg viewBox={vb} className="sky-flash" style={box}>
-                  <g clipPath={`url(#${c.id}b)`} stroke="none">
-                    {circles(-1.1, "var(--paper)")}
-                  </g>
+                <svg
+                  viewBox={CLOUD_BOX}
+                  preserveAspectRatio="none"
+                  className="sky-flash"
+                  style={box}
+                >
+                  <path d={CLOUD} fill="var(--paper)" />
                 </svg>
               ) : null}
             </div>

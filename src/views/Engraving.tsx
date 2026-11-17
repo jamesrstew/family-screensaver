@@ -189,9 +189,15 @@ export function Star({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   );
 }
 
-function Cloud({ id, dy = 0 }: { id: string; dy?: number }) {
+/**
+ * The engraved cloud. Drawn large in the living sky, `fine` keeps its lines
+ * hairline however big it's drawn (and lays the hatching closer).
+ */
+export function Cloud({ id, dy = 0, fine = false }: { id: string; dy?: number; fine?: boolean }) {
+  const ve = fine ? ("non-scaling-stroke" as const) : undefined;
+  const hatch = fine ? [0, 1.5, 3, 4.5, 6, 7.5, 9, 10.5, 12] : [0, 3, 6, 9, 12];
   return (
-    <g transform={`translate(0 ${dy})`}>
+    <g transform={dy ? `translate(0 ${dy})` : undefined}>
       <defs>
         <clipPath id={id}>
           <path d={CLOUD} />
@@ -200,24 +206,30 @@ function Cloud({ id, dy = 0 }: { id: string; dy?: number }) {
       <path d={CLOUD} fill="var(--paper)" stroke="none" />
       {/* Contour hatching along the underside: the shadow follows the form. */}
       <g clipPath={`url(#${id})`}>
-        {[0, 3, 6, 9, 12].map((o, i) => (
+        {hatch.map((o, i) => (
           <path
             key={o}
             d={`M10 ${66 - o} C28 ${71 - o} 70 ${71 - o} 92 ${61 - o}`}
-            strokeWidth={0.75 - i * 0.12}
-            opacity={1 - i * 0.16}
+            strokeWidth={fine ? 1 - (i / hatch.length) * 0.6 : 0.75 - i * 0.12}
+            opacity={1 - (i / hatch.length) * 0.8}
+            vectorEffect={ve}
           />
         ))}
       </g>
-      <path d={CLOUD} strokeWidth={1.7} />
+      <path d={CLOUD} strokeWidth={fine ? 1.4 : 1.7} vectorEffect={ve} />
       {/* Inner billows, cut fine. */}
       <path
         d="M29 37 C33 40 34 44 33 47 M52 30 C55 33 56 37 55 41 M75 34 C73 38 72 41 74 44"
-        strokeWidth={0.7}
+        strokeWidth={fine ? 1 : 0.7}
+        vectorEffect={ve}
       />
     </g>
   );
 }
+
+/** The cloud's extent in its own units, for drawing it at any size. */
+export const CLOUD_BOX = "9 20 85 51";
+export { CLOUD };
 
 /** One engraved symbol for a weather code. */
 export function Engraving({

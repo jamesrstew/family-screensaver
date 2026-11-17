@@ -344,16 +344,23 @@
 .sky[data-quiet] .sky-cloud[data-on="1"] {
   opacity: 0.4;
 }
+/* Its own starting point, or the veil would outrank the fade-in and a cloud
+   arriving on a weather page would pop in. */
+@starting-style {
+  [data-settled] .sky[data-quiet] .sky-cloud[data-on="1"] {
+    opacity: 0;
+  }
+}
 [data-heavy] .sky-cloud-near,
 [data-heavy] .sky-stratus {
   color: var(--ink-soft);
 }
-/* Scoped to shown clouds, so a cloud leaving at night still fades out. */
-[data-mood="night"] .sky-cloud-far[data-on="1"],
-[data-mood="night"] .sky-cloud-near[data-on="1"],
-[data-mood="night"] .sky-stratus[data-on="1"] {
+/* At night the ink dims, not the cloud: a cloud stays solid, so the moon, the
+   stars, and the clouds behind never show through it. */
+[data-mood="night"] .sky-cloud-far,
+[data-mood="night"] .sky-cloud-near,
+[data-mood="night"] .sky-stratus {
   color: var(--ink-faint);
-  opacity: 0.8;
 }
 /* Sheet lightning, by day in storms: once in a long while, one slow glow
    (about 3 s up and down, peak 0.35) as a cloud is lit from within. Never a
@@ -580,6 +587,12 @@
 .sky[data-quiet] .sky-rain-far[data-on="1"],
 .sky[data-quiet] .sky-snow-far[data-on="1"] {
   opacity: 0.35;
+}
+@starting-style {
+  [data-settled] .sky[data-quiet] .sky-rain-far[data-on="1"],
+  [data-settled] .sky[data-quiet] .sky-snow-far[data-on="1"] {
+    opacity: 0;
+  }
 }
 
 /* The weather pages' small engravings, cut in the sky's fine hand: stroke
