@@ -40,6 +40,7 @@ type View =
   | "night"
   | `home:${string}`
   | `night:${string}`
+  | `carousel:${string}`
   | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
@@ -289,9 +290,12 @@ export function Screen({
   );
 
   const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
-  // A carousel slide, by day ("home:…") or by night ("night:…").
+  // A carousel slide: a weather view ("carousel:…", the same by day or by
+  // night, so sunset doesn't re-ink it), or a passage by day ("home:…") or
+  // by night ("night:…").
   const [at, key] = view.split(":");
-  const slide = (at === "home" || at === "night") && key ? slideFromKey(key) : undefined;
+  const slide =
+    (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
@@ -320,18 +324,25 @@ export function Screen({
             now={now}
             mood={mood}
             // The carousel's sky holds steady, slide to slide: the sun or moon
-            // on its arc, nothing dimmed (its fades take longer than a slide,
-            // so following the slides would make the sky pulse). The weather
-            // slides' words carry their own clearing, in their ink.
+            // on its arc, nothing dimmed by the long fades (they take longer
+            // than a slide, so following the slides would make the sky pulse).
+            // A weather slide's words get a short step back instead: no rule
+            // or arc dots through them, the body faint behind them.
             arc={view === "home" || view === "night" || Boolean(slide)}
             quiet={!slide && (asked ?? "now") !== "now"}
+            words={slide?.kind === "weather"}
             seed={seed}
             epoch={epoch}
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
           <InkStage.Provider value={leaving}>
-            <div key={view} className="relative z-[1] h-full">
+            <div
+              key={view}
+              className="relative z-[1] h-full"
+              // The weather's words, set in night's soft ink after dark (designs.css).
+              data-weather-view={slide?.kind === "weather" || asked ? "" : undefined}
+            >
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
               {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}

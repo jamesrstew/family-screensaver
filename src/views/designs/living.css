@@ -249,6 +249,21 @@
   );
 }
 
+/* A weather slide's words are up (home or night): the horizon rule and the
+   arc's dots step back, and the sun or moon goes faint behind the words, in
+   the time the page takes to turn. Only the layers' insides fade (opacity),
+   so the layers themselves never start their long fades. */
+.sky-arc > svg,
+.sky-body > * {
+  transition: opacity 1.5s ease;
+}
+.sky[data-words] .sky-arc > svg {
+  opacity: 0;
+}
+.sky[data-words] .sky-body > * {
+  opacity: 0.2;
+}
+
 /* ---- Sun and moon. */
 .sky-body {
   left: 0;

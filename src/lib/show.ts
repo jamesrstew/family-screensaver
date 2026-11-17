@@ -75,6 +75,9 @@ export function targetOf(o: {
   asked: WeatherView | null;
   fromUrl: WeatherView;
 }): string {
+  // A weather slide keeps its name across sunset and sunrise; a passage
+  // turns into the night page's (or home's) with the mood.
+  if (o.slide?.startsWith("weather")) return `carousel:${o.slide}`;
   if (o.slide) return `${o.base === "night" ? "night" : "home"}:${o.slide}`;
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;

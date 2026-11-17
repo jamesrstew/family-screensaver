@@ -53,7 +53,7 @@ describe("what a request turns the screen to", () => {
   });
   it("draws home's carousel slide by day, and the night page at night", () => {
     expect(targetOf({ base: "home", slide: "weather-hours", asked: null, fromUrl: "now" })).toBe(
-      "home:weather-hours",
+      "carousel:weather-hours",
     );
     expect(targetOf({ base: "night", slide: null, asked: null, fromUrl: "now" })).toBe("night");
   });

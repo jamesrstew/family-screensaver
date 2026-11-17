@@ -85,11 +85,14 @@ describe("night turns as day does", () => {
     expect(turns("night")).toBe(true);
     expect(turns("weather")).toBe(false);
   });
-  it("draws the night's slides as the night's", () => {
-    const at = (s: Slide) =>
-      targetOf({ base: "night", slide: slideKey(s), asked: null, fromUrl: "now" });
-    expect(at({ kind: "weather", view: "now" })).toBe("night:weather-now");
-    expect(at({ kind: "passage", n: 7 })).toBe("night:passage-7");
+  it("keeps a weather slide's name across sunset; a passage turns with the mood", () => {
+    const at = (base: "home" | "night", sl: Slide) =>
+      targetOf({ base, slide: slideKey(sl), asked: null, fromUrl: "now" });
+    const now: Slide = { kind: "weather", view: "now" };
+    // The weather slide that's up when the sun sets keeps its place (and its lens).
+    expect(at("home", now)).toBe(at("night", now));
+    expect(at("night", { kind: "passage", n: 7 })).toBe("night:passage-7");
+    expect(at("home", { kind: "passage", n: 7 })).toBe("home:passage-7");
   });
 });
 
