@@ -36,6 +36,7 @@ The Stewart family's living-room screen (Google TV). Enchanted paper, like the m
 ## Shipping
 
 - Run `/scrutinize` on every change before it reaches `main`. Pushing `main` deploys production on Vercel.
+- Never merge a PR whose CI check isn't green (`gh pr checks` must show `check pass`); `main` requires it. A pre-push hook (`.githooks/pre-push`, set by `pnpm install`) runs `pnpm check` before any push.
 - Run vercel commands only from this folder (linked to the Vercel project `family-screensaver`). Never re-link other folders.
 - Conventional Commits (`feat:`, `fix:`, `style:`, `docs:`, `chore:`, `refactor:`, `test:`). Short branches, PRs, squash-merge.
 - Never commit secrets, the family's location, calendar contents, photos, or `content/private/`.
