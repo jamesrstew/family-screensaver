@@ -96,10 +96,13 @@ export function Screen({
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
   // A forecast that no longer speaks of now (offline for hours, a clock far
   // off) is left out, never shown as fact: the screen turns passages alone.
-  const snapshot = useMemo(() => {
-    const weather = freshWeather(latest.weather, now);
-    return weather === latest.weather ? latest : { ...latest, weather };
-  }, [latest, now]);
+  // Memoized on fresh or stale, not on the clock, so it stays the same object
+  // from tick to tick.
+  const fresh = freshWeather(latest.weather, now) !== null;
+  const snapshot = useMemo(
+    () => (fresh || !latest.weather ? latest : { ...latest, weather: null }),
+    [latest, fresh],
+  );
   const [page, setPage] = useState<Page>(initialPage);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
