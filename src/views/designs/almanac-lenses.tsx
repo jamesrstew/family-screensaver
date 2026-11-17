@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { hourKind, LENSES, turning, visitLens, type Figure, type Lens } from "@/lib/lenses";
+import { useContext, useEffect, useId, useState, useSyncExternalStore } from "react";
+import { InkStage } from "@/components/Ink";
+import {
+  hourKind,
+  LENSES,
+  shownLens,
+  turning,
+  visitLens,
+  type Figure,
+  type Lens,
+} from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -50,14 +59,16 @@ export function useLens(now: Date, lenses: readonly Lens[], view: string, visit 
   const t = now.getTime();
   const [after] = useState(() => lastSeen.get(view) ?? null);
   const [visiting] = useState(() => visitLens(lenses, after));
-  // The turning itself is lenses.ts's `turning`: here it's only kept.
+  const leaving = useContext(InkStage);
+  // The choosing itself is lenses.ts's `shownLens`: here it's only kept.
   const [state, setState] = useState(() => turning(null, t, lenses, after));
-  const next = turning(state, t, lenses, after);
-  if (next !== state) setState(next);
-  const lens = forced ?? (visit ? visiting : next.lens);
+  const shown = shownLens(state, t, lenses, after, { visit, visiting, leaving });
+  if (shown.state !== state) setState(shown.state);
+  const lens = forced ?? shown.lens;
+  // Only a lens actually on the page counts as seen.
   useEffect(() => {
-    lastSeen.set(view, lens);
-  }, [lens, view]);
+    if (!leaving) lastSeen.set(view, lens);
+  }, [lens, view, leaving]);
   return lens;
 }
 

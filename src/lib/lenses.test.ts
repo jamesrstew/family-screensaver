@@ -28,6 +28,7 @@ import {
   nextLens,
   precipFigure,
   restOfDay,
+  shownLens,
   turning,
   visitLens,
   type Lens,
@@ -590,5 +591,41 @@ describe("visitLens: one lens a carousel visit", () => {
   it("finds its place when the lens last seen has gone quiet", () => {
     expect(visitLens(["sky", "precip", "wind"], "air")).toBe("wind");
     expect(visitLens(["sky", "precip"], "uv")).toBe("sky");
+  });
+});
+
+describe("shownLens: what's on the page each tick", () => {
+  const all: Lens[] = ["sky", "precip", "wind", "uv"];
+  const t0 = 1_000_000;
+  const start = turning(null, t0, all, null);
+  it("never turns a home or night slide mid-visit, on any tick through the slide", () => {
+    let state = start;
+    // Ten-second ticks, a few milliseconds late, past the slide's 30 s (it leaves on that tick).
+    for (let t = t0 + 10_003; t <= t0 + 40_000; t += 10_000) {
+      const shown = shownLens(state, t, all, null, {
+        visit: true,
+        visiting: "wind",
+        leaving: false,
+      });
+      expect(shown.lens).toBe("wind");
+      state = shown.state;
+    }
+  });
+  it("doesn't turn while the page is leaving (a lens nobody sees isn't 'seen')", () => {
+    const leaving = shownLens(start, t0 + 30_000, all, null, {
+      visit: false,
+      visiting: "sky",
+      leaving: true,
+    });
+    expect(leaving.lens).toBe("sky");
+    expect(leaving.state).toBe(start);
+  });
+  it("turns on the Weather page someone asked for", () => {
+    const asked = shownLens(start, t0 + 30_000, all, null, {
+      visit: false,
+      visiting: "sky",
+      leaving: false,
+    });
+    expect(asked.lens).toBe("precip");
   });
 });
