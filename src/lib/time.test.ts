@@ -111,11 +111,37 @@ describe("twilight", () => {
   it("veils the light most at the turn, and not at all at either end", () => {
     expect(veilOf(null)).toBe(0);
     expect(veilOf({ side: "dusk", depth: 0 })).toBe(0);
-    expect(veilOf({ side: "dusk", depth: 0.5 })).toBe(DUSK_PEAK.dusk);
-    expect(veilOf({ side: "dawn", depth: 0.5 })).toBe(DUSK_PEAK.dawn);
+    expect(veilOf({ side: "dusk", depth: 0.499 })).toBeCloseTo(DUSK_PEAK.dusk, 2);
+    expect(veilOf({ side: "dawn", depth: 0.499 })).toBeCloseTo(DUSK_PEAK.dawn, 2);
+    // Never over the night's paper.
+    expect(veilOf({ side: "dusk", depth: 0.5 })).toBe(0);
+    expect(veilOf({ side: "dawn", depth: 0.7 })).toBe(0);
     expect(veilOf({ side: "dawn", depth: 1 })).toBe(0);
-    const curve = [0, 0.1, 0.2, 0.3, 0.4, 0.5].map((depth) => veilOf({ side: "dusk", depth }));
+    const curve = [0, 0.1, 0.2, 0.3, 0.4, 0.49].map((depth) => veilOf({ side: "dusk", depth }));
     expect(curve).toEqual([...curve].sort((a, b) => a - b));
+  });
+
+  it("runs past midnight in a northern summer", () => {
+    // Far north in June: sunset 11:40 p.m., sunrise 3:10 a.m., 90 minutes each.
+    const north = {
+      sunrise: "2026-06-21T03:10:00-07:00",
+      sunset: "2026-06-21T23:40:00-07:00",
+      twilight: 90,
+    };
+    expect(twilightOf(at("2026-06-21T23:50:00-07:00"), TZ, north)).toEqual({
+      side: "dusk",
+      depth: 10 / 90,
+    });
+    expect(twilightOf(at("2026-06-22T00:40:00-07:00"), TZ, north)).toEqual({
+      side: "dusk",
+      depth: 60 / 90,
+    });
+    expect(moodOf(at("2026-06-22T00:40:00-07:00"), TZ, north)).toBe("night");
+    expect(twilightOf(at("2026-06-22T01:40:00-07:00"), TZ, north)).toEqual({
+      side: "dawn",
+      depth: 1,
+    });
+    expect(moodOf(at("2026-06-22T02:30:00-07:00"), TZ, north)).toBe("morning");
   });
 
   it("isn't drawn without a forecast's twilight", () => {

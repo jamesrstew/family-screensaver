@@ -73,44 +73,40 @@ export const TURN = 0.5;
 
 /**
  * Where we are in the day's twilight, by the minute; null in full day or full
- * night. Read as times of day, like the mood. No forecast, no twilight.
+ * night. Read as times of day, like the mood, around the clock (a summer dusk
+ * far north runs past midnight). No forecast, no twilight. Where the sun never
+ * sinks six degrees, the dusk is held to 90 minutes (lib/sun.ts) and night
+ * falls while the sky is still pale: the room needs its dark at bedtime.
  */
 export function twilightOf(date: Date, timeZone: string, sun?: Sun | null): Twilight | null {
   if (!sun?.twilight) return null;
   const m = minuteOfDay(date, timeZone);
-  const rise = minuteOfDay(new Date(sun.sunrise), timeZone);
-  const set = minuteOfDay(new Date(sun.sunset), timeZone);
+  const since = (m - minuteOfDay(new Date(sun.sunset), timeZone) + 1440) % 1440;
+  const until = (minuteOfDay(new Date(sun.sunrise), timeZone) - m + 1440) % 1440;
   const long = sun.twilight;
-  if (m >= set && m < set + long) return { side: "dusk", depth: (m - set) / long };
-  if (m < rise && m >= rise - long) return { side: "dawn", depth: (rise - m) / long };
+  if (since < long) return { side: "dusk", depth: since / long };
+  if (until > 0 && until <= long) return { side: "dawn", depth: until / long };
   return null;
 }
 
 /**
- * How dark the room's light runs at the turn: the veil over the whole sheet.
- * Deeper at dawn, so the morning's paper comes up out of the dark gently,
- * in a room where people are only waking.
+ * How far the day's paper dims by the turn: the veil over the sheet. Deeper
+ * at dawn, so the morning's paper comes up out of the dark gently, in a room
+ * where people are only waking.
  */
-export const DUSK_PEAK = { dusk: 0.7, dawn: 0.8 } as const;
+export const DUSK_PEAK = { dusk: 0.6, dawn: 0.8 } as const;
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
-// After the turn, the veil lifts over this much of the twilight: only long
-// enough to hide the paper changing, since the night's ink is dim already.
-const LIFT = 0.2;
-
 /**
- * How much of the light has gone, 0 to its peak: the veil deepens from
- * sunset to the turn (the day's paper dimming, its ink with it), then lifts
- * within a few minutes of it (the night's ink coming up, as eyes adjust).
- * Dawn runs the same curve backward. Held near the peak at the turn, so the
- * paper changes under the veil.
+ * How much of the day's light has gone, 0 to its peak: the veil deepens from
+ * sunset to the turn, and lifts from the turn to sunrise. It lies only on the
+ * day's paper; the night's is dark already, and a veil there would only eat
+ * its ink. (Screen holds it at the peak while the paper turns.)
  */
 export function veilOf(t: Twilight | null): number {
-  if (!t) return 0;
-  const k =
-    t.depth < TURN ? smooth(t.depth / TURN) : 1 - smooth(Math.min((t.depth - TURN) / LIFT, 1));
-  return +(DUSK_PEAK[t.side] * k).toFixed(3);
+  if (!t || t.depth >= TURN) return 0;
+  return +(DUSK_PEAK[t.side] * smooth(t.depth / TURN)).toFixed(3);
 }
 
 /**
