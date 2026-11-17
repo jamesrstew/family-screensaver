@@ -265,7 +265,8 @@ const FALLING: Condition[] = [
  * The circumstance a day has been given, held for the day: a forecast that
  * hovers at a line (wind at 11 or 12 mph, a feel a degree off the chill)
  * mustn't flip the line back and forth on every refresh. Only a change in
- * what falls replaces it. Keyed by the day and whether it's spoken of as
+ * what falls replaces it, or the end of the hours a line was about (the
+ * morning's frost, the afternoon's walk). Keyed by the day and whether it's spoken of as
  * today or tomorrow.
  */
 export type Hold = Map<string, Condition>;
@@ -275,7 +276,10 @@ function held(f: Facts, hold?: Hold): Condition {
   if (!hold) return now;
   const key = `${f.date}:${f.when}`;
   const before = hold.get(key);
-  if (before && before !== now && !FALLING.includes(now) && !FALLING.includes(before)) {
+  // A line whose moment has passed lets go: the frost once the morning's
+  // gone, the walk once the afternoon has.
+  const over = (before === "frost" && !f.frost) || (before === "walk" && !f.afternoon);
+  if (before && before !== now && !over && !FALLING.includes(now) && !FALLING.includes(before)) {
     return before;
   }
   hold.set(key, now);

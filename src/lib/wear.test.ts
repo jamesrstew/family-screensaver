@@ -123,6 +123,26 @@ describe("wearLine", () => {
     // Without a hold, each forecast speaks for itself.
     expect(wearLine(breezy)).not.toBe(first);
   });
+  it("lets go of a line once its hours have passed", () => {
+    const frosty = new Map();
+    wearLine(day({ cold: 36, coldFeel: 33, frost: true }), frosty);
+    // Afternoon: no more "first thing".
+    expect(wearLine(day({ cold: 36, coldFeel: 33, frost: false }), frosty)).not.toMatch(
+      /frost|scraper/,
+    );
+    const walking = new Map();
+    wearLine(day({ cold: 52, warm: 68, coldFeel: 52 }), walking);
+    // Evening: no more "a fine afternoon".
+    expect(
+      wearLine(day({ cold: 52, warm: 68, coldFeel: 52, afternoon: false }), walking),
+    ).not.toMatch(/afternoon|walk|stroll/);
+  });
+  it("keeps holding the wind's chill through a hovering forecast", () => {
+    const hold = new Map();
+    expect(wearLine(day({ cold: 30, coldFeel: 21 }), hold)).toMatch(/feel like 21°/);
+    // A degree or two off the line: still the wind's line, with the new feel.
+    expect(wearLine(day({ cold: 30, coldFeel: 23 }), hold)).toMatch(/feel like 23°/);
+  });
   it("fits where the coat line always has: one line under the sentence", () => {
     const conditions: Array<Partial<Facts>> = [
       { freshSnow: 3, clear: true, cold: 12, coldFeel: 5, when: "tomorrow" },
