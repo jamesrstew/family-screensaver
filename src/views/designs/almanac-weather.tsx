@@ -50,7 +50,8 @@ const STYLES: Record<string, WeatherStyle> = {
 };
 
 const noop = () => () => {};
-function useAsked(): WeatherStyle {
+/** The view the weather page was asked for (?weather=), Now by default. */
+export function useAsked(): WeatherStyle {
   const asked = useSyncExternalStore(
     noop,
     () => new URLSearchParams(window.location.search).get("weather") ?? "",
@@ -365,53 +366,21 @@ function Fall({
 
 /* ------------------------------------------------------------------ now */
 
-/** The sky worth drawing big: what's coming if it's wet, otherwise the focus. */
-function heroSky(w: Sky, o: Outlook, now: Date): { code: number; isDay: boolean } {
-  if (o.spell) {
-    const from = Date.parse(o.spell.from);
-    const h = w.hours.find((x) => Date.parse(x.time) === from) ?? w.hours[0];
-    const f = hourFall(h);
-    const code =
-      h.code != null && f
-        ? h.code
-        : o.spell.kind === "snow"
-          ? 73
-          : o.spell.kind === "storms"
-            ? 95
-            : 63;
-    return { code, isDay: h.isDay ?? true };
-  }
-  if (o.focus === "tomorrow") {
-    const next = o.parts.find((p) => p.label === "Tomorrow" || p.label === "Today");
-    if (next) return { code: next.code, isDay: true };
-  }
-  void now;
-  return { code: w.now.code, isDay: w.now.isDay };
-}
-
 /**
- * Now: one engraving of the sky that matters, then the answer. The sentence
- * says what it's like and where it's going; the two italic lines say what's
- * coming and what to wear. The rest of the day sits along the foot in words.
+ * Now: the answer, set large under the living sky (which is itself the
+ * weather, so no icon). The sentence says what it's like and where it's
+ * going; the two italic lines say what's coming and what to wear. The rest
+ * of the day sits along the foot in words.
  */
-function Now({ w, o, now }: Drawn) {
+function Now({ o }: Drawn) {
   const act = urgent(o);
-  const sky = heroSky(w, o, now);
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-1 flex-col items-center justify-center px-[6rem] text-center">
-        <Ink order={0} mode="seep" k={`${sky.code}${sky.isDay}`} className="mb-[2.2rem]">
-          <Engraving
-            code={sky.code}
-            isDay={sky.isDay}
-            date={now}
-            className="size-[16rem] text-ink"
-          />
-        </Ink>
         <Ink order={1}>
           <p
             className="max-w-[104rem] text-balance"
-            style={headline(o.line, 104, o.timing ? 14.5 : 20)}
+            style={headline(o.line, 104, o.timing ? 30 : 36)}
           >
             {nb(o.line)}
           </p>
@@ -511,10 +480,10 @@ function Days({ w, now, snapshot }: Drawn) {
                 code={p.code}
                 isDay
                 date={now}
-                className="my-[0.8rem] size-[12rem] text-ink"
+                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
               />
               <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
-              <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-faint">{d.low}°</p>
+              <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-soft">{d.low}°</p>
               <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
                 {p.wet ? p.words : ""}
               </p>
@@ -570,7 +539,7 @@ function Hours({ w, now, snapshot }: Drawn) {
                 code={code}
                 isDay={isDay}
                 date={now}
-                className="my-[0.8rem] size-[12rem] text-ink"
+                className="fine-ink my-[0.8rem] size-[12rem] text-ink"
               />
               <p className="text-[5rem] leading-none text-ink">{temp}°</p>
               <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
