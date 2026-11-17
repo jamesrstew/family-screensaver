@@ -6,6 +6,9 @@ import {
   dayKey,
   happeningsOn,
   moodOf,
+  twilightOf,
+  veilOf,
+  DUSK_PEAK,
   shortDate,
   weekdayOf,
   whenOf,
@@ -77,6 +80,48 @@ describe("moodOf", () => {
     ["2026-06-21T20:48:00-07:00", "night"],
   ])("%s is %s in June", (iso, mood) => {
     expect(moodOf(at(iso), TZ, summer)).toBe(mood);
+  });
+});
+
+describe("twilight", () => {
+  // November again, with 28 minutes of civil twilight at each end.
+  const sun = {
+    sunrise: "2026-11-16T07:01:00-08:00",
+    sunset: "2026-11-16T16:37:00-08:00",
+    twilight: 28,
+  };
+  it.each([
+    ["2026-11-16T16:36:00-08:00", null, "afternoon"],
+    ["2026-11-16T16:37:00-08:00", { side: "dusk", depth: 0 }, "afternoon"],
+    ["2026-11-16T16:50:00-08:00", { side: "dusk", depth: 13 / 28 }, "afternoon"],
+    // The first stars: the paper turns to night.
+    ["2026-11-16T16:51:00-08:00", { side: "dusk", depth: 0.5 }, "night"],
+    ["2026-11-16T17:04:00-08:00", { side: "dusk", depth: 27 / 28 }, "night"],
+    ["2026-11-16T17:05:00-08:00", null, "night"],
+    ["2026-11-17T06:32:00-08:00", null, "night"],
+    ["2026-11-17T06:33:00-08:00", { side: "dawn", depth: 1 }, "night"],
+    ["2026-11-17T06:47:00-08:00", { side: "dawn", depth: 0.5 }, "night"],
+    ["2026-11-17T06:48:00-08:00", { side: "dawn", depth: 13 / 28 }, "morning"],
+    ["2026-11-17T07:01:00-08:00", null, "morning"],
+  ] as const)("%s is %o, %s", (iso, twilight, mood) => {
+    expect(twilightOf(at(iso), TZ, sun)).toEqual(twilight);
+    expect(moodOf(at(iso), TZ, sun)).toBe(mood);
+  });
+
+  it("veils the light most at the turn, and not at all at either end", () => {
+    expect(veilOf(null)).toBe(0);
+    expect(veilOf({ side: "dusk", depth: 0 })).toBe(0);
+    expect(veilOf({ side: "dusk", depth: 0.5 })).toBe(DUSK_PEAK.dusk);
+    expect(veilOf({ side: "dawn", depth: 0.5 })).toBe(DUSK_PEAK.dawn);
+    expect(veilOf({ side: "dawn", depth: 1 })).toBe(0);
+    const curve = [0, 0.1, 0.2, 0.3, 0.4, 0.5].map((depth) => veilOf({ side: "dusk", depth }));
+    expect(curve).toEqual([...curve].sort((a, b) => a - b));
+  });
+
+  it("isn't drawn without a forecast's twilight", () => {
+    const bare = { sunrise: sun.sunrise, sunset: sun.sunset };
+    expect(twilightOf(at("2026-11-16T16:50:00-08:00"), TZ, bare)).toBeNull();
+    expect(twilightOf(at("2026-11-16T16:50:00-08:00"), TZ, null)).toBeNull();
   });
 });
 

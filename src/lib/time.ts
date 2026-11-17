@@ -63,20 +63,69 @@ const minuteOfDay = (date: Date, timeZone: string) => {
   return hour * 60 + minute;
 };
 
+type Sun = { sunrise: string; sunset: string; twilight?: number };
+
+/** Dusk or dawn, and how deep: 0 with the sun on the horizon, 1 at civil night. */
+export type Twilight = { side: "dusk" | "dawn"; depth: number };
+
+/** Halfway through civil twilight, as the first stars come out, the paper turns. */
+export const TURN = 0.5;
+
 /**
- * The paper's mood follows the sun: night from sunset to sunrise. Sunrise and
- * sunset are read as times of day, so a forecast from yesterday still works
- * (they move a minute or two a day). With no forecast, 5 a.m. and 9:30 p.m.
+ * Where we are in the day's twilight, by the minute; null in full day or full
+ * night. Read as times of day, like the mood. No forecast, no twilight.
  */
-export function moodOf(
-  date: Date,
-  timeZone: string,
-  sun?: { sunrise: string; sunset: string } | null,
-): Mood {
+export function twilightOf(date: Date, timeZone: string, sun?: Sun | null): Twilight | null {
+  if (!sun?.twilight) return null;
+  const m = minuteOfDay(date, timeZone);
+  const rise = minuteOfDay(new Date(sun.sunrise), timeZone);
+  const set = minuteOfDay(new Date(sun.sunset), timeZone);
+  const long = sun.twilight;
+  if (m >= set && m < set + long) return { side: "dusk", depth: (m - set) / long };
+  if (m < rise && m >= rise - long) return { side: "dawn", depth: (rise - m) / long };
+  return null;
+}
+
+/**
+ * How dark the room's light runs at the turn: the veil over the whole sheet.
+ * Deeper at dawn, so the morning's paper comes up out of the dark gently,
+ * in a room where people are only waking.
+ */
+export const DUSK_PEAK = { dusk: 0.7, dawn: 0.8 } as const;
+
+const smooth = (x: number) => x * x * (3 - 2 * x);
+
+// After the turn, the veil lifts over this much of the twilight: only long
+// enough to hide the paper changing, since the night's ink is dim already.
+const LIFT = 0.2;
+
+/**
+ * How much of the light has gone, 0 to its peak: the veil deepens from
+ * sunset to the turn (the day's paper dimming, its ink with it), then lifts
+ * within a few minutes of it (the night's ink coming up, as eyes adjust).
+ * Dawn runs the same curve backward. Held near the peak at the turn, so the
+ * paper changes under the veil.
+ */
+export function veilOf(t: Twilight | null): number {
+  if (!t) return 0;
+  const k =
+    t.depth < TURN ? smooth(t.depth / TURN) : 1 - smooth(Math.min((t.depth - TURN) / LIFT, 1));
+  return +(DUSK_PEAK[t.side] * k).toFixed(3);
+}
+
+/**
+ * The paper's mood follows the sun: night from the middle of dusk (the first
+ * stars) to the middle of dawn. Either side of the turn, the day's paper dims
+ * and brightens under the twilight. Sunrise and sunset are read as times of
+ * day, so a forecast from yesterday still works (they move a minute or two a
+ * day). With no forecast, night from 9:30 p.m. to 5 a.m.
+ */
+export function moodOf(date: Date, timeZone: string, sun?: Sun | null): Mood {
   const m = minuteOfDay(date, timeZone);
   const rise = sun ? minuteOfDay(new Date(sun.sunrise), timeZone) : 5 * 60;
   const set = sun ? minuteOfDay(new Date(sun.sunset), timeZone) : 21 * 60 + 30;
-  if (m < rise || m >= set) return "night";
+  const dusk = twilightOf(date, timeZone, sun);
+  if (dusk ? dusk.depth >= TURN : m < rise || m >= set) return "night";
   if (m < 11 * 60) return "morning";
   if (m < 17 * 60) return "afternoon";
   return "evening";
