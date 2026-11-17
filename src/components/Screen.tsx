@@ -137,7 +137,9 @@ export function Screen({
   const fromUrl = useAsked();
   const target = targetOf({
     base,
-    slide: carousel ? slideKey(slideOf(now, homeSince, Boolean(snapshot.weather))) : null,
+    slide: carousel
+      ? slideKey(slideOf(now, homeSince, Boolean(snapshot.weather), snapshot.timeZone))
+      : null,
     asked: view0,
     fromUrl,
   }) as View;
