@@ -38,7 +38,7 @@ private fun notConfiguredUrl(reason: String) =
 @SuppressLint("SetJavaScriptEnabled")
 fun createFamilyWebView(context: Context): WebView = WebView(context).apply {
     // Dark until the page paints: a moment of dark by day is fine; a flash of light at night isn't.
-    setBackgroundColor(Color.parseColor("#0b0a09"))
+    setBackgroundColor(Color.parseColor("#080807"))
     isFocusable = true
     isFocusableInTouchMode = true
     settings.apply {

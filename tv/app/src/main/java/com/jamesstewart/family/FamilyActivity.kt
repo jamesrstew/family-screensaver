@@ -25,9 +25,8 @@ class FamilyActivity : Activity() {
         webView = createFamilyWebView(this)
         setContentView(webView)
         webView.requestFocus()
-        if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
-            webView.loadFamily(pageFor(intent))
-        }
+        // Always the live page: a restored one would repaint an old snapshot from cache.
+        webView.loadFamily(pageFor(intent))
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, ::handleBack
@@ -40,11 +39,6 @@ class FamilyActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         webView.loadFamily(pageFor(intent))
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        webView.saveState(outState)
     }
 
     override fun onResume() {
