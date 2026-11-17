@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
-import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
+import { dayKey, moodOf, parts, twilightOf, veilOf, type Mood, type Twilight } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -14,6 +14,8 @@ import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
+import { bodyAt } from "@/views/designs/arc";
+import { glowsAt } from "@/views/designs/living";
 import { DESIGNS, type Design } from "@/views/designs/registry";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
@@ -81,6 +83,7 @@ export function Screen({
   // night honest even if the forecast is gone for a while.
   const [sun, setSun] = useState(initial.weather?.today ?? null);
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
+  const twilight = twilightOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Inside the house. Each snapshot's note is decided against the last
   // one decided (before the corner narrows it for room), so a reading that
@@ -276,6 +279,7 @@ export function Screen({
       data-mood={mood}
       data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
+      data-twilight={twilight ? twilight.side : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -298,6 +302,7 @@ export function Screen({
             quiet={(slide?.kind === "weather" ? slide.view : (asked ?? "now")) !== "now"}
             seed={seed}
             epoch={epoch}
+            twilight={twilight}
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
@@ -316,8 +321,35 @@ export function Screen({
         </InkModeContext.Provider>
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
+      <Dusk twilight={twilight} glow={glowsAt(snapshot.weather) && twilight !== null} />
       <Fps />
     </div>
+  );
+}
+
+/**
+ * The light of dusk and dawn: one veil of the night's paper over the whole
+ * sheet, words and all, so the room's light falls without the ink losing the
+ * page. Where the sun has gone down (or is coming up) the veil is thinner, an
+ * afterglow on the horizon, unless cloud or smoke hides it. Its opacity is set
+ * once a minute and glides there on the compositor; nothing repaints.
+ */
+function Dusk({ twilight, glow }: { twilight: Twilight | null; glow: boolean }) {
+  const x = bodyAt(twilight?.side === "dawn" ? 0 : 1).x;
+  return (
+    <div
+      className="dusk"
+      aria-hidden
+      data-on={twilight ? "1" : "0"}
+      data-glow={glow ? "" : undefined}
+      style={
+        {
+          opacity: veilOf(twilight),
+          // The sheet's horizon, measured from the screen's center.
+          "--glow-x": `calc(50% + ${(x - 60).toFixed(1)}rem)`,
+        } as CSSProperties
+      }
+    />
   );
 }
 

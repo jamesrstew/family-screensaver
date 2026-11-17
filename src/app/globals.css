@@ -73,6 +73,8 @@ body {
   --ink-faint: #8a7d69;
   --rule: #2b241c;
   --accent: #7d2e24;
+  /* The night's own paper: the veil that falls over the page at dusk. */
+  --shade: #080807;
   position: relative;
   isolation: isolate;
   background-color: var(--paper);
@@ -156,13 +158,58 @@ body {
   text-indent: -0.42em;
 }
 
+/*
+ * Dusk and dawn: the night's paper laid over the whole sheet, words and all,
+ * deepening and lifting a minute at a time (Screen's Dusk). Its opacity
+ * glides on the compositor; it is painted once. Where the sun went down, the
+ * veil is thinner: the afterglow on the horizon (the sheet's horizon sits
+ * 7.25 rem above the screen's middle).
+ */
+.dusk {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--shade);
+  transition:
+    opacity 60s linear,
+    display 60s allow-discrete;
+}
+.dusk[data-glow] {
+  background: radial-gradient(
+    ellipse 56rem 14rem at var(--glow-x) calc(50% - 8.75rem),
+    color-mix(in srgb, var(--shade) 64%, transparent),
+    color-mix(in srgb, var(--shade) 84%, transparent) 50%,
+    var(--shade)
+  );
+}
+.dusk[data-on="0"] {
+  display: none;
+}
+/* At the turn, under the veil, the paper changes quickly: while the day's
+   words sink out, before the night's ink in, so no word is ever caught
+   halfway, its ink the color of its paper. */
+.paper[data-twilight] {
+  transition:
+    --paper 3s ease,
+    --ink 3s ease,
+    --ink-soft 3s ease,
+    --ink-faint 3s ease,
+    --rule 3s ease,
+    --accent 3s ease;
+}
+.paper:not([data-settled]) .dusk {
+  transition: none;
+}
+
 /* Waking up at night shouldn't take forty seconds of bright paper. */
 .paper:not([data-settled]) {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .paper {
+  .paper,
+  .dusk {
     transition: none;
   }
 }
