@@ -672,19 +672,14 @@ const list = (xs: string[]) =>
 
 /* ---------------------------------------------------------------- how it feels */
 
-/** "18°" over "air 27°": an hour slot's feel beside the thermometer. */
+/** "18°": what an hour feels like, faint when that's just what it reads. */
 export function feelsFigure(feels: number, temp: number): Figure {
-  return {
-    big: `${feels}°`,
-    sub: `air ${temp}°`,
-    quiet: !feelsSays(temp, feels),
-  };
+  return { big: `${feels}°`, sub: "", quiet: !feelsSays(temp, feels) };
 }
 
 /**
- * A day's feel beside the thermometer, from whichever end of the day it
- * strays: the coldest feel over the low ("11°" over "air 19°"), or the
- * hottest over the high.
+ * What a day feels like, from whichever end of it strays further from the
+ * thermometer: "11°" over "coldest", or "104°" over "hottest".
  */
 export function feelsDayFigure(
   high: number,
@@ -695,10 +690,11 @@ export function feelsDayFigure(
   const chill = low - feelsLow;
   const heat = feelsHigh - high;
   const [feels, air] = chill >= heat ? [feelsLow, low] : [feelsHigh, high];
-  return { big: `${feels}°`, sub: `air ${air}°`, quiet: !feelsSays(air, feels) };
+  const quiet = !feelsSays(air, feels);
+  return { big: `${feels}°`, sub: quiet ? "" : chill >= heat ? "coldest" : "hottest", quiet };
 }
 
-/** "Feels as cold as 12° tonight, up to 9° below the air." */
+/** "Feels like 12° tonight.": plain words, never how far from the thermometer. */
 export function hoursFeelsLine(
   hours: Array<{ time: string; temp: number; feels: number }>,
   now: Date,
@@ -712,17 +708,16 @@ export function hoursFeelsLine(
   if (chill >= heat) {
     const cold = hours.reduce((a, b) => (b.feels < a.feels ? b : a));
     const when = periodWord(new Date(cold.time), now, tz);
-    return `Feels as cold as ${cold.feels}° ${when}, up to ${chill}° below the air.`;
+    return `Feels like ${cold.feels}° ${when}.`;
   }
   const hot = hours.reduce((a, b) => (b.feels > a.feels ? b : a));
   const when = periodWord(new Date(hot.time), now, tz);
-  return `Feels as hot as ${hot.feels}° ${when}, up to ${heat}° above the air.`;
+  return `Feels like ${hot.feels}° ${when}.`;
 }
 
 /**
- * "Feels up to 9° colder than the air; coldest Thursday, 5°." Like with
- * like: the chill is the low against the coldest feel, the heat the high
- * against the hottest.
+ * "Thursday feels like 5° at its coldest." Like with like: the chill is the
+ * low against the coldest feel, the heat the high against the hottest.
  */
 export function daysFeelsLine(
   days: Array<{ name: string; high: number; low: number; feelsHigh: number; feelsLow: number }>,
@@ -734,10 +729,10 @@ export function daysFeelsLine(
     return "Feels about like the thermometer all week.";
   if (chill >= heat) {
     const cold = days.reduce((a, b) => (b.feelsLow < a.feelsLow ? b : a));
-    return `Feels up to ${chill}° colder than the air; coldest ${cold.name}, ${cold.feelsLow}°.`;
+    return `${cap(cold.name)} feels like ${cold.feelsLow}° at its coldest.`;
   }
   const hot = days.reduce((a, b) => (b.feelsHigh > a.feelsHigh ? b : a));
-  return `Feels up to ${heat}° warmer than the air; hottest ${hot.name}, ${hot.feelsHigh}°.`;
+  return `${cap(hot.name)} feels like ${hot.feelsHigh}° at its hottest.`;
 }
 
 /* ---------------------------------------------------------------- humidity */
