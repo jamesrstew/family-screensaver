@@ -64,5 +64,8 @@ export function placeOf(w: Weather, now: Date): Place {
   const fromEdge = Math.min(now.getTime() - body.from.getTime(), body.to.getTime() - now.getTime());
   const low = Math.min(Math.max(1 - fromEdge / LOW_MS, 0), 1);
   const sink = Math.pow(low, 1.5);
-  return { x: p.x, y: p.y + (ARC.cy + 1.5 - p.y) * sink, size: 15 + 4 * low, low, body };
+  // In the last two minutes the disc, rays and all, slips under the horizon,
+  // so the sun is gone by the minute it sets (and rises the same way).
+  const under = Math.max(0, (low - 0.95) / 0.05) * 7.5;
+  return { x: p.x, y: p.y + (ARC.cy + 1.5 - p.y) * sink + under, size: 15 + 4 * low, low, body };
 }
