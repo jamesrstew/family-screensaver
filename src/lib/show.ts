@@ -65,8 +65,9 @@ export const viewAsked = (page: Page, view?: WeatherView): WeatherView | null =>
   page === "weather" ? (view ?? null) : null;
 
 /**
- * What the screen draws: home's carousel slide (Almanac by day), the weather
- * in the view asked for (by request, else ?weather=), or the page itself.
+ * What the screen draws: a carousel slide (home's by day, the night page's
+ * by night, in Almanac), the weather in the view asked for (by request, else
+ * ?weather=), or the page itself.
  */
 export function targetOf(o: {
   base: Page | "night";
@@ -74,7 +75,10 @@ export function targetOf(o: {
   asked: WeatherView | null;
   fromUrl: WeatherView;
 }): string {
-  if (o.slide) return `home:${o.slide}`;
+  // A weather slide keeps its name across sunset and sunrise; a passage
+  // turns into the night page's (or home's) with the mood.
+  if (o.slide?.startsWith("weather")) return `carousel:${o.slide}`;
+  if (o.slide) return `${o.base === "night" ? "night" : "home"}:${o.slide}`;
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;
 }

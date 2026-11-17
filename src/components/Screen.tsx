@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
-import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
+import {
+  nextTurnIn,
+  sinceAfter,
+  slideFromKey,
+  slideKey,
+  slideOf,
+  turns,
+  type WeatherView,
+} from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
@@ -27,7 +35,13 @@ import { useVoice } from "./useVoice";
 
 // A page, the night page, one piece of home's carousel ("home:passage-12"),
 // or one view of the weather ("weather:hours").
-type View = Exclude<Page, "weather"> | "night" | `home:${string}` | `weather:${WeatherView}`;
+type View =
+  | Exclude<Page, "weather">
+  | "night"
+  | `home:${string}`
+  | `night:${string}`
+  | `carousel:${string}`
+  | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
 const HOLD_MS: Record<Page, number> = {
@@ -41,6 +55,7 @@ const SNAPSHOT_EVERY_MS = 5 * 60_000;
 const STALE_WEATHER_MS = 3 * 60 * 60_000;
 // Ask often while people are up; rarely in the small hours (by the clock, not the sun).
 const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
+// The clock shows minutes; the carousel's turns get a timer of their own.
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 
@@ -93,17 +108,17 @@ export function Screen({
   }
 
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
-  // Home by day is a slow carousel (Almanac only): each piece turns like a page.
+  // Home and night are a carousel (Almanac only), half a minute a piece, each turning like a page.
   // It counts from the moment home appears, so it always opens on the weather.
   const base = viewOf(page, mood);
   const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
     setLastBase(base);
-    // Back from the Weather page, the weather's just been seen: open on a passage.
-    if (base === "home") setHomeSince(now.getTime() - (lastBase === "weather" ? WEATHER_MS : 0));
+    // Day and night are one carousel; back from another page, it starts over.
+    setHomeSince(sinceAfter(lastBase, base, now.getTime(), homeSince));
   }
-  const carousel = base === "home" && design === "almanac";
+  const carousel = turns(base) && design === "almanac";
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
@@ -141,6 +156,15 @@ export function Screen({
       window.clearInterval(t);
     };
   }, []);
+
+  // ---- The carousel's next turn lands on its moment, not on the next tick.
+  useEffect(() => {
+    if (!carousel) return;
+    const at = clockNow();
+    const wait = nextTurnIn(at, homeSince);
+    const t = window.setTimeout(() => setNow(new Date(clockNow())), wait + 50);
+    return () => window.clearTimeout(t);
+  }, [carousel, homeSince, now]);
 
   // ---- Everything returns home.
   useEffect(() => {
@@ -266,7 +290,12 @@ export function Screen({
   );
 
   const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
-  const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
+  // A carousel slide: a weather view ("carousel:…", the same by day or by
+  // night, so sunset doesn't re-ink it), or a passage by day ("home:…") or
+  // by night ("night:…").
+  const [at, key] = view.split(":");
+  const slide =
+    (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
@@ -294,17 +323,29 @@ export function Screen({
             w={snapshot.weather}
             now={now}
             mood={mood}
-            arc={view === "home" || view === "night" || slide?.kind === "passage"}
-            quiet={(slide?.kind === "weather" ? slide.view : (asked ?? "now")) !== "now"}
+            // The carousel's sky holds steady, slide to slide: the sun or moon
+            // on its arc, nothing dimmed by the long fades (they take longer
+            // than a slide, so following the slides would make the sky pulse).
+            // A weather slide's words get a short step back instead: no rule
+            // or arc dots through them, the body faint behind them.
+            arc={view === "home" || view === "night" || Boolean(slide)}
+            quiet={!slide && (asked ?? "now") !== "now"}
+            words={slide?.kind === "weather"}
             seed={seed}
             epoch={epoch}
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
           <InkStage.Provider value={leaving}>
-            <div key={view} className="relative z-[1] h-full">
+            <div
+              key={view}
+              className="relative z-[1] h-full"
+              // The weather's words, set in night's soft ink after dark (designs.css).
+              data-weather-view={slide?.kind === "weather" || asked ? "" : undefined}
+            >
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
-              {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&

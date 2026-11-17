@@ -18,7 +18,7 @@ import type { Weather } from "./types";
 export const LENSES = ["sky", "precip", "air", "feels", "wind", "humidity", "uv"] as const;
 export type Lens = (typeof LENSES)[number];
 
-/** How long each lens stays: four of them fill home's two-minute weather slide. */
+/** How long each lens stays on the Weather page someone asked for. (On home's and night's slides, one lens a visit: visitLens.) */
 export const LENS_MS = 30_000;
 
 /**
@@ -35,9 +35,9 @@ export function nextLens(order: readonly Lens[], current: Lens): Lens {
 }
 
 /**
- * The turn, opening on the sky, then carrying on after the lens last seen.
- * Home's two-minute slide has room for four lenses; the next time the view
- * comes round, it picks up where it left off instead of starting over.
+ * The turn, opening on the sky, then carrying on after the lens last seen,
+ * so a Weather page asked for again picks up where the last view left off
+ * (on home or at night too) instead of starting over.
  */
 export function lensOrder(lenses: readonly Lens[], after?: Lens | null): Lens[] {
   const rest: Lens[] = lenses.filter((l) => l !== "sky");
@@ -51,13 +51,41 @@ export function lensOrder(lenses: readonly Lens[], after?: Lens | null): Lens[] 
   return ["sky", ...rest.slice(k), ...rest.slice(0, k)];
 }
 
+/**
+ * A carousel visit's one lens (home's and night's hours and days slides,
+ * half a minute each): the lens after the one last seen, round the whole
+ * turn, the sky included, so successive visits show every lens without
+ * anyone asking. The first visit opens on the sky.
+ */
+export function visitLens(lenses: readonly Lens[], after: Lens | null): Lens {
+  return after ? nextLens(lenses, after) : "sky";
+}
+
+/**
+ * The lens a view shows on this tick, and its turning kept for the next.
+ * A carousel visit holds its one lens for the whole visit (it never turns
+ * mid-slide). A leaving page doesn't turn either: a lens turned on the tick
+ * the page sinks would never be seen, yet would count as seen.
+ */
+export function shownLens(
+  prev: Turning,
+  t: number,
+  lenses: readonly Lens[],
+  after: Lens | null,
+  o: { visit: boolean; visiting: Lens; leaving: boolean },
+): { state: Turning; lens: Lens } {
+  if (o.visit) return { state: prev, lens: o.visiting };
+  const state = o.leaving ? prev : turning(prev, t, lenses, after);
+  return { state, lens: state.lens };
+}
+
 /** Where a view's turning stands: when it began, the last tick, which turn, and its lens. */
 export type Turning = { since: number; last: number; turn: number; lens: Lens };
 
 /**
  * One tick of a view's turning (useLens keeps it). It opens on the sky and
  * steps to the next lens every half minute, counted to the second (the
- * screen's ten-second tick lands a hair short of each turn). A clock that
+ * screen's tick can land a hair short of a turn). A clock that
  * jumps (the page waking, or catching up from the server's time) starts over
  * on the sky. A lens changes only at a turn, so a list that changes mid-turn
  * (UV gone at dusk) leaves the lens showing its time; the next turn steps on

@@ -20,5 +20,8 @@ async function Gate({ searchParams }: Pick<PageProps<"/remote">, "searchParams">
   const params = await searchParams;
   if (!(await isFamily()))
     return <Locked next="/remote" wrong={params.nope === "1"} wait={params.wait === "1"} />;
-  return <Remote snapshot={await getSnapshot()} />;
+  // The phone never turns the carousel, so it doesn't get the TV's deck.
+  const snapshot = await getSnapshot();
+  delete snapshot.passages;
+  return <Remote snapshot={snapshot} />;
 }

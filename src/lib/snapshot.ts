@@ -3,10 +3,12 @@ import { connection } from "next/server";
 import { getAir, shapeAir, withAir, type OpenMeteoAir } from "./air";
 import { getHappenings } from "./calendar";
 import { getIndoor } from "./nest";
+import { TURN_MS } from "./carousel";
+import { fitsEverywhere } from "@/views/designs/common";
 import { getNotebook } from "./notebook";
-import { forDay } from "./pick";
+import { forDay, leadDeck, passagesFrom } from "./pick";
 import { dayKey } from "./time";
-import type { Snapshot, Weather } from "./types";
+import type { NotebookItem, Snapshot, Weather } from "./types";
 import { getWeather } from "./weather";
 
 /** Where the family lives. Env, so the repo stays free of it. */
@@ -33,9 +35,11 @@ const HOUR = 3_600_000;
  * Everything the TV needs for the next while. Each source fails on its own:
  * a dead weather service leaves the weather out, never the whole paper.
  */
-export async function getSnapshot(): Promise<Snapshot> {
+export async function getSnapshot(at?: Date): Promise<Snapshot> {
   await connection(); // always fresh: it's the news
-  const now = new Date();
+  // `at` is for design review only (page.tsx, in dev): the day's run and the
+  // deck as they'd be then.
+  const now = at ?? new Date();
   const h = household();
   // Round the window to the hour so the calendar cache can do its job.
   const hour = Math.floor(now.getTime() / HOUR) * HOUR;
@@ -65,8 +69,18 @@ export async function getSnapshot(): Promise<Snapshot> {
     happenings,
     indoor,
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
+    // From a couple of passages back, so a page that appeared a moment ago still finds its own.
+    passages: passagesFrom(deckOf(notebook ?? []), Math.floor(now.getTime() / TURN_MS) - 2),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
+}
+
+// Fitting every passage takes a moment; the notebook changes rarely, so
+// the deck is kept until the notebook itself is a different list.
+let deck: { from: NotebookItem[]; items: NotebookItem[] } | null = null;
+function deckOf(notebook: NotebookItem[]): NotebookItem[] {
+  if (deck?.from !== notebook) deck = { from: notebook, items: leadDeck(notebook, fitsEverywhere) };
+  return deck.items;
 }
 
 const NEST_MS = 6000;

@@ -1,6 +1,6 @@
 // Shared pieces for the design directions. Pure; no state.
 
-import { leadAt, questionFor, slotOf } from "@/lib/pick";
+import { QUESTION_EVERY, leadAt, passageAt, questionFor, slotOf } from "@/lib/pick";
 import {
   addDays,
   asksQuestion,
@@ -16,32 +16,44 @@ import type { ViewProps } from "../parts";
 import { fitType } from "./fit";
 
 /**
- * Home's one piece: from 2 to 6 p.m. the question for the table, otherwise
- * the idea of the hour.
- * `skip` passes over that many candidates (the question first, then ideas in
- * the day's order), for when one won't fit its space.
+ * Home's one piece: a carousel passage reads the deck's passage n (pick.ts);
+ * from 2 to 6 p.m. the question for the table takes about one passage in
+ * twelve. Without a carousel, the idea of the quarter hour.
+ * `skip` passes over that many candidates, for when one won't fit its space.
+ * The deck holds only passages that fit everywhere (fitsEverywhere), so that
+ * is rare; then it borrows from the day's own run, never from the deck's
+ * passages still to come, so the deck's no-repeat promise holds.
  */
 export function heroOf({ snapshot, now, slide }: ViewProps, skip = 0): NotebookItem | null {
   const n = slide?.kind === "passage" ? slide.n : null;
-  // In the afternoon the question for the table comes around every other passage.
   const asking = asksQuestion(now, snapshot.timeZone);
-  const ask = asking && (n === null || n % 2 === 0);
+  const ask = asking && (n === null || n % QUESTION_EVERY === 0);
   const question = ask ? questionFor(snapshot.notebook) : null;
   if (question && skip === 0) return question;
-  const at =
-    n === null
-      ? slotOf(now)
-      : // While asking, only every other passage is a quote; count those alone.
-        asking
-        ? Math.floor(n / 2)
-        : n;
-  return leadAt(snapshot.notebook, at + skip - (question ? 1 : 0));
+  const at = n ?? slotOf(now);
+  const deck = n === null || skip > 0 ? null : passageAt(snapshot.passages, at);
+  return deck ?? leadAt(snapshot.notebook, at + skip);
 }
 
 // Home's page inside its margins (67.5 rem less 3.25 top and 3 bottom), and
 // the band the sky's words take at its head (less the top margin).
 const PAGE_H = 61.25;
 const SKY_H = 27.75;
+
+/**
+ * Whether an idea or quote fits Almanac's smallest rooms for a passage:
+ * home's with the sky and what's next, and the night page's with tomorrow's
+ * line. The carousel's deck keeps only these, so a passage rarely skips.
+ */
+export function fitsEverywhere(item: NotebookItem): boolean {
+  const style = { italic: item.kind !== "idea", min: 3.6 };
+  const home = heroBox({ sky: true, next: true, ask: false, item });
+  const night = { w: 100, h: PAGE_H - SKY_H - 3.9 - (item.author ? 6.3 : 0) - 3.5 };
+  return (
+    fitType(item.text, home, { ...style, max: 11 }).fits &&
+    fitType(item.text, night, { ...style, max: 9 }).fits
+  );
+}
 
 /**
  * The room home's piece has, in rem: the page below the sky, less the lines

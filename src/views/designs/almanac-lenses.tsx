@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { hourKind, LENSES, turning, type Figure, type Lens } from "@/lib/lenses";
+import { useContext, useEffect, useId, useState, useSyncExternalStore } from "react";
+import { InkStage } from "@/components/Ink";
+import {
+  hourKind,
+  LENSES,
+  shownLens,
+  turning,
+  visitLens,
+  type Figure,
+  type Lens,
+} from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -37,23 +46,29 @@ const BASE = 126;
 const lastSeen = new Map<string, Lens>();
 
 /**
- * The lens to show: the sky first, then the next lens every half minute
- * from the moment the view appeared, carrying on after the one last seen.
- * A lens only ever changes at a turn: if the snapshot refreshes mid-turn
- * and the list changes (UV gone at dusk), the lens showing stays its time.
+ * The lens to show. On the Weather page someone asked for: the sky first,
+ * then the next lens every half minute from the moment the view appeared,
+ * carrying on after the one last seen. A lens only ever changes at a turn:
+ * if the snapshot refreshes mid-turn and the list changes (UV gone at dusk),
+ * the lens showing stays its time. On a carousel slide (`visit`, half a
+ * minute on home or the night page), one lens for the whole visit: the next
+ * one after the last seen, so the family sees every lens over a few visits.
  */
-export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens {
+export function useLens(now: Date, lenses: readonly Lens[], view: string, visit = false): Lens {
   const forced = useForced();
   const t = now.getTime();
   const [after] = useState(() => lastSeen.get(view) ?? null);
-  // The turning itself is lenses.ts's `turning`: here it's only kept.
+  const [visiting] = useState(() => visitLens(lenses, after));
+  const leaving = useContext(InkStage);
+  // The choosing itself is lenses.ts's `shownLens`: here it's only kept.
   const [state, setState] = useState(() => turning(null, t, lenses, after));
-  const next = turning(state, t, lenses, after);
-  if (next !== state) setState(next);
-  const lens = forced ?? next.lens;
+  const shown = shownLens(state, t, lenses, after, { visit, visiting, leaving });
+  if (shown.state !== state) setState(shown.state);
+  const lens = forced ?? shown.lens;
+  // Only a lens actually on the page counts as seen.
   useEffect(() => {
-    if (lens !== "sky") lastSeen.set(view, lens);
-  }, [lens, view]);
+    if (!leaving) lastSeen.set(view, lens);
+  }, [lens, view, leaving]);
   return lens;
 }
 

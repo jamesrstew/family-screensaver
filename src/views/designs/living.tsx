@@ -41,6 +41,12 @@ export type LivingSkyProps = {
   arc: boolean;
   /** The weather pages whose words sit high (hours, days, ribbon): the sky draws back. */
   quiet: boolean;
+  /**
+   * A weather slide's words are up, on home or at night: the horizon rule
+   * and the arc's dots step back, and the sun or moon goes faint behind the
+   * words, all in the time the page takes to turn (the body stays where it is).
+   */
+  words?: boolean;
   seed: number;
   /**
    * The wall clock at first paint, in seconds (the same on server and TV).
@@ -141,6 +147,7 @@ export function LivingSky({
   seed,
   epoch,
   hidden = false,
+  words = false,
 }: LivingSkyProps) {
   const sky = skyOf(w ? w.now.code : null);
   const smoke = smokeOf(w);
@@ -160,6 +167,7 @@ export function LivingSky({
       aria-hidden
       data-heavy={sky.cover === "over" ? "" : undefined}
       data-quiet={quiet ? "" : undefined}
+      data-words={words ? "" : undefined}
       data-hidden={hidden ? "" : undefined}
     >
       {/* What never moves is painted first, into the paper itself. Anything
@@ -337,7 +345,7 @@ function Arc({ place, show }: { place: Place | null; show: boolean }) {
   const u = (n: number) => +(n * 10).toFixed(1);
   const end = place ? arcAt(Math.min(Math.max(place.body.t, 0.04), 0.96)) : arcAt(0);
   return (
-    <Layer show={show} className="sky-fill">
+    <Layer show={show} className="sky-fill sky-arc">
       <svg viewBox="0 0 1200 675" className="sky-fill" fill="none" stroke="currentColor">
         <line
           x1={u(3)}
