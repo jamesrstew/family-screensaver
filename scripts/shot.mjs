@@ -17,11 +17,15 @@ const height = Number(opt("height", 1080));
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width, height } });
-// --at "2026-11-16T22:30:00-08:00" runs the TV's clock from that moment.
+// --at "2026-11-16T22:30:00-08:00" runs the TV's clock from that moment, and
+// (unless the URL already says) the server's too (&at=), so the first paint,
+// the weather's freshness, and the passages all agree with it.
 const at = opt("at", null);
 if (at) await page.clock.install({ time: new Date(at) });
+const target = new URL(url);
+if (at && !target.searchParams.has("at")) target.searchParams.set("at", at);
 page.on("console", (m) => m.type() === "error" && console.error("[page]", m.text()));
-await page.goto(url, { waitUntil: "load" });
+await page.goto(target.toString(), { waitUntil: "load" });
 // Dev's error badge isn't part of the screen.
 await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
 const advance = Number(opt("advance", 0));

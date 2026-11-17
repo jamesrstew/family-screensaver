@@ -29,7 +29,7 @@ The Stewart family's living-room screen (Google TV). Enchanted paper, like the m
 
 - `pnpm dev`, then open http://localhost:3000 (the TV) and /remote (the phone).
 - `pnpm check`: lint, typecheck, tests, prettier.
-- `node scripts/shot.mjs <url> <out.png> [--at ISO] [--frames n,ms] [--wait ms]`: 1920 × 1080 screenshots. `--at "2026-11-16T22:30:00-08:00"` for night, `--frames 8,250` to watch the ink. **Look at your screens** (doctrine §19).
+- `node scripts/shot.mjs <url> <out.png> [--at ISO] [--frames n,ms] [--wait ms]`: 1920 × 1080 screenshots. `--at "2026-11-16T22:30:00-08:00"` for night (it sets the TV's clock and adds `&at=` for the server), `--frames 8,250` to watch the ink. **Look at your screens** (doctrine §19).
 - `pnpm key`: a new family key. `FAMILY_KEY=… pnpm notebook:push [site]`: upload `content/private/notebook.json` (gitignored) to production's store through `PUT /api/notebook` (the store's keys are sensitive in Vercel and can't be pulled).
 - Dev calendar: `CALENDAR_ICS_URLS=file://$PWD/content/fixtures/family.ics` (a fictional family; `file:` works only outside production).
 

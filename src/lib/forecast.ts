@@ -11,15 +11,6 @@ import type { Weather } from "./types";
 import { hourFeel } from "./feel";
 import { heldCondition, holdKey, wearLine, type Condition, type Facts, type Hold } from "./wear";
 
-/** A report older than this no longer says what it's like outside right now. */
-export const NOW_STALE_MS = 60 * 60_000;
-
-/** Whether the report's "now" is still now: fetched within the hour. */
-export function nowIsFresh(w: Weather, now: Date): boolean {
-  const at = w.at ? Date.parse(w.at) : NaN;
-  return Number.isFinite(at) && now.getTime() - at < NOW_STALE_MS;
-}
-
 /** WMO weather code to a short label. */
 export function describe(code: number, isDay = true): string {
   if (code === 0) return isDay ? "Fair" : "Clear";
@@ -709,3 +700,33 @@ export function forecastLine(w: Weather, now: Date, tz: string): string {
 const tidy = (s: string) => s.replace(/\.\./g, ".");
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
+
+/** A forecast older than this (from its first hour) is left out rather than shown as fact. */
+export const WEATHER_STALE_MS = 3 * HOUR;
+
+/**
+ * The forecast, if it still speaks of now: not more than about three hours
+ * old, and not past its last hour. Otherwise none (§15, §21), and the screen
+ * carries on with passages, as it does with no weather at all. Pure.
+ */
+export function freshWeather(w: Weather | null, now: Date): Weather | null {
+  if (!w?.hours.length) return null;
+  const first = Date.parse(w.hours[0].time);
+  const last = Date.parse(w.hours[w.hours.length - 1].time);
+  const t = now.getTime();
+  return t - first > WEATHER_STALE_MS + HOUR || t >= last + HOUR ? null : w;
+}
+
+// Two clocks on one report: freshWeather asks whether the forecast still
+// speaks of today (three hours, by its own hours); nowIsFresh asks the
+// stricter question, whether its "now" (the temperature this minute) is
+// still now (one hour, by when it was fetched). WEA-2 would join them.
+
+/** A report older than this no longer says what it's like outside right now. */
+export const NOW_STALE_MS = HOUR;
+
+/** Whether the report's "now" is still now: fetched within the hour. */
+export function nowIsFresh(w: Weather, now: Date): boolean {
+  const at = w.at ? Date.parse(w.at) : NaN;
+  return Number.isFinite(at) && now.getTime() - at < NOW_STALE_MS;
+}

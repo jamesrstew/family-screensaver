@@ -893,6 +893,8 @@ function Hours({ w, now, snapshot, slide }: Drawn) {
       strong: night,
     };
   });
+  // No hours left to speak of (a forecast that's run out): nothing, never a broken row.
+  if (!cols.length) return null;
 
   const sum = (xs: Array<number | undefined>) => r2(xs.reduce<number>((a, x) => a + (x ?? 0), 0));
   const most = (xs: Array<number | undefined>) => Math.max(...xs.map((x) => x ?? 0));

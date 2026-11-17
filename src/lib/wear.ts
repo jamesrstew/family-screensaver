@@ -133,6 +133,8 @@ type Say = {
   t: string;
   feel: number;
   warm: number;
+  /** A warm coat or heavier: "still warm-coat weather", never "the warmest day; a warm coat". */
+  still: string | null;
 };
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
@@ -212,9 +214,13 @@ const LINES: Record<Condition, Array<(s: Say) => string>> = {
   ],
   warmest: [
     (s) =>
-      `${s.t}the warmest day of the week ahead. ${s.coat ? `${cap(s.coat)} should do.` : "No coat needed."}`,
+      s.still
+        ? `${s.t}the warmest day of the week ahead, but ${s.still}.`
+        : `${s.t}the warmest day of the week ahead. ${s.coat ? `${cap(s.coat)} should do.` : "No coat needed."}`,
     (s) =>
-      `${s.t}the warmest day for a while${s.coat ? `; ${s.coat} for the cool hours` : ", and no coat needed"}.`,
+      s.still
+        ? `${s.t}the warmest day for a while, but ${s.still}.`
+        : `${s.t}the warmest day for a while${s.coat ? `; ${s.coat} for the cool hours` : ", and no coat needed"}.`,
   ],
   bitter: [
     (s) => want(s),
@@ -303,6 +309,8 @@ export function wearLine(f: Facts, hold?: Hold): string {
     t: tomorrow ? "Tomorrow, " : "",
     feel: condition === "heat" ? f.hotFeel : f.coldFeel,
     warm: f.warm,
+    still:
+      f.cold < 20 ? "still a day for heavy layers" : f.cold < 40 ? "still warm-coat weather" : null,
   });
   return cap(line);
 }

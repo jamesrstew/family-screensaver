@@ -10,6 +10,7 @@ import {
   daysUvLine,
   daysWindLine,
   feelsDayFigure,
+  feelsFigure,
   hourKind,
   hoursAirLine,
   hoursFeelsLine,
@@ -407,12 +408,12 @@ describe("how it feels, in words", () => {
     temp,
     feels,
   });
-  it("says the coldest feel and how far below the air", () => {
+  it("says the coldest (or hottest) feel in plain words", () => {
     expect(hoursFeelsLine([hour("10:00", 30, 24), hour("22:00", 25, 16)], at("10:00"), tz)).toBe(
-      "Feels as cold as 16° tonight, up to 9° below the air.",
+      "Feels like 16° tonight.",
     );
     expect(hoursFeelsLine([hour("14:00", 96, 104)], at("10:00"), tz)).toBe(
-      "Feels as hot as 104° this afternoon, up to 8° above the air.",
+      "Feels like 104° this afternoon.",
     );
     expect(hoursFeelsLine([hour("14:00", 60, 55)], at("10:00"), tz)).toBe(
       "Feels about like the thermometer says.",
@@ -427,20 +428,35 @@ describe("how it feels, in words", () => {
       feelsLow,
     });
     expect(daysFeelsLine([day("today", 33, 33, 24, 15), day("Friday", 30, 30, 15, 4)])).toBe(
-      "Feels up to 11° colder than the air; coldest Friday, 4°.",
+      "Friday feels like 4° at its coldest.",
     );
     expect(daysFeelsLine([day("Saturday", 95, 103, 60, 60)])).toBe(
-      "Feels up to 8° warmer than the air; hottest Saturday, 103°.",
+      "Saturday feels like 103° at its hottest.",
     );
     // A dry, hot day with a cold-feeling night is never "colder" by its high.
     expect(daysFeelsLine([day("today", 95, 95, 58, 58)])).toBe(
       "Feels about like the thermometer all week.",
     );
   });
-  it("sets a day's feel beside the air it strays from", () => {
-    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({ big: "15°", sub: "air 24°", quiet: false });
-    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({ big: "108°", sub: "air 96°", quiet: false });
-    expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true });
+  it("sets a day's feel over the thermometer it strays from, in plain words", () => {
+    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({
+      big: "15°",
+      sub: "low 24°",
+      quiet: false,
+      small: true,
+      aside: true,
+    });
+    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({
+      big: "108°",
+      sub: "high 96°",
+      quiet: false,
+      small: true,
+      aside: true,
+    });
+    expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true, sub: "low 45°" });
+    // An hour: its feel over a faint thermometer.
+    expect(feelsFigure(18, 29)).toMatchObject({ big: "18°", sub: "29° out", aside: true });
+    expect(feelsFigure(28, 29)).toMatchObject({ quiet: true });
   });
 });
 

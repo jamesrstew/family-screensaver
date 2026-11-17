@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { getAir, shapeAir, withAir, type OpenMeteoAir } from "./air";
 import { getHappenings } from "./calendar";
 import { getIndoor } from "./nest";
-import { TURN_MS } from "./carousel";
+import { passageNear } from "./carousel";
 import { fitsEverywhere } from "@/views/designs/common";
 import { getNotebook } from "./notebook";
 import { forDay, leadDeck, passagesFrom } from "./pick";
@@ -70,7 +70,7 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
     indoor,
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     // From a couple of passages back, so a page that appeared a moment ago still finds its own.
-    passages: passagesFrom(deckOf(notebook ?? []), Math.floor(now.getTime() / TURN_MS) - 2),
+    passages: passagesFrom(deckOf(notebook ?? []), passageNear(now.getTime()) - 4),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
 }

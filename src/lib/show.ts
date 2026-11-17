@@ -82,3 +82,9 @@ export function targetOf(o: {
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;
 }
+
+/**
+ * The page a target draws: passages back to back ("home:passage-7", then
+ * "home:passage-8") are the same page, so it stays and only its piece turns.
+ */
+export const pageKey = (target: string) => target.replace(/:passage-\d+$/, ":passage");
