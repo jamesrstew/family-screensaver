@@ -136,6 +136,8 @@ export type Snapshot = {
   /** null: no thermostats connected, or they didn't answer. Optional for older snapshots. */
   indoor?: Indoor | null;
   notebook: NotebookItem[]; // today's selection, in order
+  /** The carousel's passages for the next hour or so (pick.ts), by passage number. */
+  passages?: { from: number; items: NotebookItem[] };
   voice: boolean; // can it talk?
 };
 

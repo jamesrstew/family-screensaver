@@ -1,6 +1,6 @@
 // Shared pieces for the design directions. Pure; no state.
 
-import { leadAt, questionFor, slotOf } from "@/lib/pick";
+import { QUESTION_EVERY, leadAt, passageAt, questionFor, slotOf } from "@/lib/pick";
 import {
   addDays,
   asksQuestion,
@@ -15,27 +15,24 @@ import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { fitType } from "./fit";
 
+/** How far a passage that won't fit looks ahead for one that will: far enough not to show it again soon. */
+const SKIP_STRIDE = 17;
+
 /**
- * Home's one piece: from 2 to 6 p.m. the question for the table, otherwise
- * the idea of the hour.
- * `skip` passes over that many candidates (the question first, then ideas in
- * the day's order), for when one won't fit its space.
+ * Home's one piece: a carousel passage reads the deck's passage n (pick.ts);
+ * from 2 to 6 p.m. the question for the table takes about one passage in
+ * twelve. Without a carousel, the idea of the quarter hour.
+ * `skip` passes over that many candidates, for when one won't fit its space;
+ * it looks well ahead, so the one it borrows isn't up again a minute later.
  */
 export function heroOf({ snapshot, now, slide }: ViewProps, skip = 0): NotebookItem | null {
   const n = slide?.kind === "passage" ? slide.n : null;
-  // In the afternoon the question for the table comes around every other passage.
   const asking = asksQuestion(now, snapshot.timeZone);
-  const ask = asking && (n === null || n % 2 === 0);
+  const ask = asking && (n === null || n % QUESTION_EVERY === 0);
   const question = ask ? questionFor(snapshot.notebook) : null;
   if (question && skip === 0) return question;
-  const at =
-    n === null
-      ? slotOf(now)
-      : // While asking, only every other passage is a quote; count those alone.
-        asking
-        ? Math.floor(n / 2)
-        : n;
-  return leadAt(snapshot.notebook, at + skip - (question ? 1 : 0));
+  const k = (n ?? slotOf(now)) + skip * SKIP_STRIDE;
+  return (n === null ? null : passageAt(snapshot.passages, k)) ?? leadAt(snapshot.notebook, k);
 }
 
 // Home's page inside its margins (67.5 rem less 3.25 top and 3 bottom), and

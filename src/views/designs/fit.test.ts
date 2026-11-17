@@ -93,7 +93,10 @@ describe("heroFitting", () => {
     });
     const fits = (i: NotebookItem) => fitType(i.text, worst, o).fits;
     expect(fits(notebook[0])).toBe(false);
-    expect(heroFitting(props, fits)?.id).toBe("short");
+    // Passed over for one that fits (looking well ahead, so it isn't up again next).
+    const chosen = heroFitting(props, fits);
+    expect(chosen?.id).not.toBe("long");
+    expect(chosen && fits(chosen)).toBe(true);
   });
 
   it("takes the first passage when it fits", () => {

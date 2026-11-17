@@ -67,6 +67,43 @@ export function leadAt(today: NotebookItem[], n: number): NotebookItem | null {
   return pool.length ? pool[n % pool.length] : null;
 }
 
+/*
+ * Home's and night's carousel turns a passage a minute, far more than a
+ * day's run of entries. So the carousel reads its own deck: every short idea
+ * and quote in the notebook, shuffled once in a fixed order, passage n
+ * reading the nth (round and round), so nothing repeats until all have
+ * shown. The snapshot carries only a window of it, the next hour or so.
+ */
+
+/** Passages the snapshot carries: an hour's worth, refreshed every few minutes. */
+export const PASSAGE_WINDOW = 60;
+/** The afternoon's question comes round once in this many passages (about minutes). */
+export const QUESTION_EVERY = 12;
+
+/** The carousel's deck: every short idea and quote, in a fixed shuffled order. */
+export function leadDeck(items: NotebookItem[]): NotebookItem[] {
+  const leads = items
+    .filter((i) => i.kind !== "question" && heroFit(i))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return shuffled(leads, 3_2_1_2);
+}
+
+/** A window of the deck: passages `from` to `from + length`. */
+export type Passages = { from: number; items: NotebookItem[] };
+export function passagesFrom(
+  deck: NotebookItem[],
+  from: number,
+  length = PASSAGE_WINDOW,
+): Passages {
+  if (!deck.length) return { from, items: [] };
+  const at = (n: number) => deck[((n % deck.length) + deck.length) % deck.length];
+  return { from, items: Array.from({ length }, (_, i) => at(from + i)) };
+}
+
+/** Passage n, if the window holds it. */
+export const passageAt = (w: Passages | undefined, n: number): NotebookItem | null =>
+  w && n >= w.from && n < w.from + w.items.length ? w.items[n - w.from] : null;
+
 /** The evening's question for the table: one per day, so it can be discussed. */
 export function questionFor(today: NotebookItem[]): NotebookItem | null {
   return today.find((i) => i.kind === "question" && heroFit(i)) ?? null;
