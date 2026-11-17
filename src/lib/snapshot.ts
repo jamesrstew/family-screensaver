@@ -35,9 +35,11 @@ const HOUR = 3_600_000;
  * Everything the TV needs for the next while. Each source fails on its own:
  * a dead weather service leaves the weather out, never the whole paper.
  */
-export async function getSnapshot(): Promise<Snapshot> {
+export async function getSnapshot(at?: Date): Promise<Snapshot> {
   await connection(); // always fresh: it's the news
-  const now = new Date();
+  // `at` is for design review only (page.tsx, in dev): the day's run and the
+  // deck as they'd be then.
+  const now = at ?? new Date();
   const h = household();
   // Round the window to the hour so the calendar cache can do its job.
   const hour = Math.floor(now.getTime() / HOUR) * HOUR;

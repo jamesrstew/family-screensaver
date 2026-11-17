@@ -31,15 +31,16 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   const page: Page = PAGES.includes(asked as Page) ? (asked as Page) : "home";
   // Almanac, tentatively chosen; ?design=a|b|c|d still shows the other directions.
   const design = designOf(String(params.design ?? "")) ?? "almanac";
-  const snapshot = await getSnapshot();
   // Design review only: ?sky=fair|snow|storm|rain draws a made-up sky,
   // ?indoor=one|close|apart|dry|none made-up thermostats, and &at= sets the
-  // clock (the first paint here and the TV's own clock after).
+  // clock (the first paint here, the passages it reads, and the TV's own
+  // clock after).
+  const dev = process.env.NODE_ENV !== "production";
+  const at = dev && params.at ? new Date(String(params.at)) : null;
+  const snapshot = await getSnapshot(at && !Number.isNaN(+at) ? at : undefined);
   const sky = String(params.sky ?? "") as FakeSky;
-  if (process.env.NODE_ENV !== "production") {
-    const at = new Date(String(params.at ?? snapshot.issuedAt));
-    const when = Number.isNaN(+at) ? new Date() : at;
-    if (params.at && !Number.isNaN(+at)) snapshot.issuedAt = at.toISOString();
+  if (dev) {
+    const when = new Date(snapshot.issuedAt);
     if (SKIES.includes(sky)) snapshot.weather = fakeWeather(sky, when, snapshot.timeZone);
     const indoor = String(params.indoor ?? "");
     if (isFakeIndoor(indoor)) {
