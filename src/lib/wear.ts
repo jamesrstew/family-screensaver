@@ -265,29 +265,33 @@ const FALLING: Condition[] = [
  * The circumstance a day has been given, held for the day: a forecast that
  * hovers at a line (wind at 11 or 12 mph, a feel a degree off the chill)
  * mustn't flip the line back and forth on every refresh. Only a change in
- * what falls replaces it, or the end of the hours a line was about (the
- * morning's frost, the afternoon's walk). Keyed by the day and whether it's spoken of as
- * today or tomorrow.
+ * what falls replaces it, or a line's reason being clearly gone: the
+ * morning's frost once the morning's over, the afternoon's walk once the
+ * afternoon is, the wind's chill once the feel is back within 4° of the air,
+ * the heat once it feels under 90°. Keyed by the day and whether it's spoken
+ * of as today or tomorrow. Read here; the caller (the TV) writes it.
  */
-export type Hold = Map<string, Condition>;
+export type Hold = ReadonlyMap<string, Condition>;
 
-function held(f: Facts, hold?: Hold): Condition {
+/** Where a day's held circumstance is kept. */
+export const holdKey = (f: Pick<Facts, "date" | "when">) => `${f.date}:${f.when}`;
+
+/** The day's circumstance: the one held, while it still holds, or the one the forecast gives now. */
+export function heldCondition(f: Facts, hold?: Hold): Condition {
   const now = conditionOf(f);
-  if (!hold) return now;
-  const key = `${f.date}:${f.when}`;
-  const before = hold.get(key);
-  // A line whose moment has passed lets go: the frost once the morning's
-  // gone, the walk once the afternoon has.
-  const over = (before === "frost" && !f.frost) || (before === "walk" && !f.afternoon);
-  if (before && before !== now && !over && !FALLING.includes(now) && !FALLING.includes(before)) {
-    return before;
-  }
-  hold.set(key, now);
-  return now;
+  const before = hold?.get(holdKey(f));
+  if (!before || before === now) return now;
+  const over =
+    (before === "frost" && !f.frost) ||
+    (before === "walk" && !f.afternoon) ||
+    (before === "wind-chill" && f.coldFeel > f.cold - 4) ||
+    (before === "heat" && f.hotFeel < 90 && f.warm < 90);
+  if (over || FALLING.includes(now) || FALLING.includes(before)) return now;
+  return before;
 }
 
 export function wearLine(f: Facts, hold?: Hold): string {
-  const condition = held(f, hold);
+  const condition = heldCondition(f, hold);
   const lines = LINES[condition];
   const pick = lines[dayNumber(f.date) % lines.length];
   const coat = coatOf(f.cold);

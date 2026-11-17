@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Ink } from "@/components/Ink";
 import {
   CHANCE,
@@ -46,7 +46,7 @@ import {
 } from "@/lib/lenses";
 import { airNow, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
-import type { Hold } from "@/lib/wear";
+import type { Condition } from "@/lib/wear";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
@@ -101,20 +101,27 @@ export function Weather({ view, ...props }: ViewProps & { view?: WeatherStyle })
   const asked = useAsked();
   const style = view ?? asked;
   const w = props.snapshot.weather;
-  if (!w) {
+  // The day's advice is held on the TV (not on the server, which renders afresh).
+  const o = w
+    ? outlook(
+        w,
+        props.now,
+        props.snapshot.timeZone,
+        typeof window === "undefined" ? undefined : HOLD,
+      )
+    : null;
+  const key = o?.held.key;
+  const condition = o?.held.condition;
+  useEffect(() => {
+    if (key && condition) HOLD.set(key, condition);
+  }, [key, condition]);
+  if (!w || !o) {
     return (
       <Ink className="flex h-full items-center justify-center">
         <p className="text-[3rem] text-ink-soft italic">The sky hasn&rsquo;t reported in yet.</p>
       </Ink>
     );
   }
-  // The day's advice is held on the TV (not on the server, which renders afresh).
-  const o = outlook(
-    w,
-    props.now,
-    props.snapshot.timeZone,
-    typeof window === "undefined" ? undefined : HOLD,
-  );
   if (style === "ribbon") return <Ribbon {...props} w={w} o={o} />;
   if (style === "days") return <Days {...props} w={w} o={o} />;
   if (style === "hours") return <Hours {...props} w={w} o={o} />;
@@ -128,7 +135,7 @@ type Drawn = ViewProps & { w: Sky; o: Outlook };
  * flip back and forth on a forecast hovering at a line (wear.ts). Empty at
  * first load, so the TV's first drawing matches the server's.
  */
-const HOLD: Hold = new Map();
+const HOLD = new Map<string, Condition>();
 
 /** Rain or snow on the way: that's the news. Otherwise, what to wear. */
 const urgent = (o: Outlook) => Boolean(o.spell);

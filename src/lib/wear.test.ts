@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { conditionOf, waysOf, wearLine, type Condition, type Facts } from "./wear";
+import {
+  conditionOf,
+  heldCondition,
+  holdKey,
+  waysOf,
+  wearLine,
+  type Condition,
+  type Facts,
+} from "./wear";
+
+/** As the TV does: say the line, then keep the day's circumstance. */
+const say = (f: Facts, hold: Map<string, Condition>) => {
+  const line = wearLine(f, hold);
+  hold.set(holdKey(f), heldCondition(f, hold));
+  return line;
+};
 
 /** A plain, cool, dry November day; each test changes what it needs. */
 const base: Facts = {
@@ -113,35 +128,43 @@ describe("wearLine", () => {
       expect(new Set(allDays(f, 8)).size).toBe(4);
   });
   it("holds the day's circumstance through a forecast hovering at a line", () => {
-    const hold = new Map();
+    const hold = new Map<string, Condition>();
     const walk = day({ cold: 52, warm: 68, coldFeel: 52, wind: 11 });
     const breezy = day({ cold: 52, warm: 68, coldFeel: 52, wind: 12 });
-    const first = wearLine(walk, hold);
-    expect(wearLine(breezy, hold)).toBe(first);
+    const first = say(walk, hold);
+    expect(say(breezy, hold)).toBe(first);
     // A change in what falls shows at once.
-    expect(wearLine(day({ fall: "rain", wetHours: 3 }), hold)).toMatch(/umbrella/i);
+    expect(say(day({ fall: "rain", wetHours: 3 }), hold)).toMatch(/umbrella/i);
     // Without a hold, each forecast speaks for itself.
     expect(wearLine(breezy)).not.toBe(first);
   });
   it("lets go of a line once its hours have passed", () => {
-    const frosty = new Map();
-    wearLine(day({ cold: 36, coldFeel: 33, frost: true }), frosty);
+    const frosty = new Map<string, Condition>();
+    say(day({ cold: 36, coldFeel: 33, frost: true }), frosty);
     // Afternoon: no more "first thing".
-    expect(wearLine(day({ cold: 36, coldFeel: 33, frost: false }), frosty)).not.toMatch(
-      /frost|scraper/,
-    );
-    const walking = new Map();
-    wearLine(day({ cold: 52, warm: 68, coldFeel: 52 }), walking);
+    expect(say(day({ cold: 36, coldFeel: 33, frost: false }), frosty)).not.toMatch(/frost|scraper/);
+    const walking = new Map<string, Condition>();
+    say(day({ cold: 52, warm: 68, coldFeel: 52 }), walking);
     // Evening: no more "a fine afternoon".
-    expect(
-      wearLine(day({ cold: 52, warm: 68, coldFeel: 52, afternoon: false }), walking),
-    ).not.toMatch(/afternoon|walk|stroll/);
+    expect(say(day({ cold: 52, warm: 68, coldFeel: 52, afternoon: false }), walking)).not.toMatch(
+      /afternoon|walk|stroll/,
+    );
+  });
+  it("lets go of the wind's chill when the wind dies, and the heat when it cools", () => {
+    const chill = new Map<string, Condition>();
+    say(day({ cold: 30, coldFeel: 20 }), chill);
+    expect(say(day({ cold: 30, coldFeel: 28 }), chill)).not.toMatch(/feel like|wind/);
+    const heat = new Map<string, Condition>();
+    say(day({ cold: 75, warm: 96, coldFeel: 75, hotFeel: 104 }), heat);
+    expect(say(day({ cold: 70, warm: 84, coldFeel: 70, hotFeel: 86 }), heat)).not.toMatch(
+      /hot|shade/,
+    );
   });
   it("keeps holding the wind's chill through a hovering forecast", () => {
-    const hold = new Map();
-    expect(wearLine(day({ cold: 30, coldFeel: 21 }), hold)).toMatch(/feel like 21°/);
+    const hold = new Map<string, Condition>();
+    expect(say(day({ cold: 30, coldFeel: 21 }), hold)).toMatch(/feel like 21°/);
     // A degree or two off the line: still the wind's line, with the new feel.
-    expect(wearLine(day({ cold: 30, coldFeel: 23 }), hold)).toMatch(/feel like 23°/);
+    expect(say(day({ cold: 30, coldFeel: 23 }), hold)).toMatch(/feel like 23°/);
   });
   it("fits where the coat line always has: one line under the sentence", () => {
     const conditions: Array<Partial<Facts>> = [

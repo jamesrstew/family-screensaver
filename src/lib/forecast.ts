@@ -8,7 +8,7 @@
 import { AQI_SENSITIVE, airAhead, airLine, airNow, smokeOf, smokeOver, type Smoke } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
-import { wearLine, type Facts, type Hold } from "./wear";
+import { heldCondition, holdKey, wearLine, type Condition, type Facts, type Hold } from "./wear";
 
 /** WMO weather code to a short label. */
 export function describe(code: number, isDay = true): string {
@@ -192,6 +192,8 @@ export type Outlook = {
   wear: string;
   /** The air, when it isn't fine for everyone: it takes the coat's place. */
   air: string | null;
+  /** The day's coat-line circumstance, for the TV to hold (wear.ts). */
+  held: { key: string; condition: Condition };
   /** Beyond the next day: the next wet day, or how long it stays dry. */
   ahead: string | null;
   /** Whether we're talking about today or, after the day is done, tomorrow. */
@@ -466,16 +468,14 @@ export function outlook(w: Weather, now: Date, tz: string, hold?: Hold): Outlook
     const f = i >= 0 && !waking.length ? dayFall(w.days[i]) : null;
     return f?.sure === "likely" ? f.kind : null;
   })();
-  const wear = wearLine(
-    wearFacts(w, now, tz, {
-      date: wearDay,
-      when: focus === "today" || lateNight ? "today" : "tomorrow",
-      waking,
-      cold,
-      fall: wetWhileOut ?? dayWet,
-    }),
-    hold,
-  );
+  const facts = wearFacts(w, now, tz, {
+    date: wearDay,
+    when: focus === "today" || lateNight ? "today" : "tomorrow",
+    waking,
+    cold,
+    fall: wetWhileOut ?? dayWet,
+  });
+  const wear = wearLine(facts, hold);
 
   // Beyond the parts: the next wet day, or how long it stays dry.
   // (Only this week: past a week, a weekday's name would be ambiguous.)
@@ -510,6 +510,7 @@ export function outlook(w: Weather, now: Date, tz: string, hold?: Hold): Outlook
     line: tidy(line),
     timing: timing && tidy(timing),
     wear,
+    held: { key: holdKey(facts), condition: heldCondition(facts, hold) },
     // Bad air now; or, once the day is done, tomorrow's.
     air:
       airLine(w.now) ??
