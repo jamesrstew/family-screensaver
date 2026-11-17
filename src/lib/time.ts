@@ -90,11 +90,11 @@ export function twilightOf(date: Date, timeZone: string, sun?: Sun | null): Twil
 }
 
 /**
- * How far the day's paper dims by the turn: the veil over the sheet. Deeper
- * at dawn, so the morning's paper comes up out of the dark gently, in a room
- * where people are only waking.
+ * How far the day's paper dims by the turn: the veil over the sheet. The same
+ * at both ends, so the corner notes stay readable as the morning comes up
+ * (when someone is leaving for school).
  */
-export const DUSK_PEAK = { dusk: 0.6, dawn: 0.8 } as const;
+export const DUSK_PEAK = { dusk: 0.6, dawn: 0.6 } as const;
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
