@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contours, fbm, hashOf, noise, rng, terrain } from "./organic";
+import { contours, drainage, fbm, hashOf, levelsOf, noise, rng, terrain } from "./organic";
 
 describe("rng", () => {
   it("is deterministic for a seed, and different across seeds", () => {
@@ -76,5 +76,42 @@ describe("contours", () => {
   it("is deterministic", () => {
     const f = (i: number, j: number) => terrain(9, i / 10, j / 10);
     expect(contours(f, 30, 20, [0, 0.2], 6)).toEqual(contours(f, 30, 20, [0, 0.2], 6));
+  });
+});
+
+describe("contours, specks", () => {
+  it("leaves out closed loops smaller than minLoop", () => {
+    const n = 20;
+    const ring = (i: number, j: number) => Math.hypot(i - n / 2, j - n / 2);
+    expect(contours(ring, n, n, [2], 10, 0)[0]).not.toBe("");
+    // A loop of radius 2 steps is 40 units across: dropped at minLoop 50.
+    expect(contours(ring, n, n, [2], 10, 50)[0]).toBe("");
+  });
+});
+
+describe("levelsOf", () => {
+  it("spreads levels through the field's range, in order", () => {
+    const levels = levelsOf((i) => i, 100, 10, 5);
+    expect(levels).toHaveLength(5);
+    expect([...levels].sort((a, b) => a - b)).toEqual(levels);
+    expect(levels[0]).toBeGreaterThan(0);
+    expect(levels[4]).toBeLessThan(100);
+  });
+});
+
+describe("drainage", () => {
+  // A valley down the middle, sloping toward row 0 (the horizon).
+  const valley = (i: number, j: number) => Math.abs(i - 20) * 0.1 + j * 0.05;
+
+  it("gathers water into a trunk that grows downstream", () => {
+    const rivers = drainage(valley, 40, 30, 10, 8, 4, 1);
+    expect(rivers).toHaveLength(4);
+    // Something is drawn, and the biggest class (the trunk) exists.
+    expect(rivers.join("")).not.toBe("");
+    expect(rivers[3]).not.toBe("");
+  });
+
+  it("is deterministic", () => {
+    expect(drainage(valley, 40, 30, 10, 8, 4, 1)).toEqual(drainage(valley, 40, 30, 10, 8, 4, 1));
   });
 });

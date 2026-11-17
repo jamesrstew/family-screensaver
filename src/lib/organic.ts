@@ -76,7 +76,8 @@ export function terrain(seed: number, x: number, y: number, t = 0): number {
 /**
  * Contour lines of a field sampled on a grid (marching squares), joined into
  * polylines and written as one SVG path per level. Coordinates are rounded to
- * whole units: `scale` units per grid step.
+ * whole units: `scale` units per grid step. Closed loops smaller than
+ * `minLoop` units across are left out.
  */
 export function contours(
   field: (x: number, y: number) => number,
@@ -84,6 +85,7 @@ export function contours(
   rows: number,
   levels: number[],
   scale: number,
+  minLoop = 0,
 ): string[] {
   const v: number[] = new Array((cols + 1) * (rows + 1));
   for (let j = 0; j <= rows; j++)
@@ -137,33 +139,212 @@ export function contours(
         }
       }
     }
-    // Walk each chain from an open end (or anywhere, for closed loops).
+    // Walk each chain from an open end (or anywhere, for closed loops). A
+    // closed loop smaller than `minLoop` across is a speck, not land: dropped.
     const seen = new Set<number>();
     let d = "";
     const walk = (start: number) => {
       let prev = -1;
       let cur = start;
-      let first = true;
-      let last: [number, number] | null = null;
+      const chain: Array<[number, number]> = [];
+      let closed = false;
       while (cur !== -1 && !seen.has(cur)) {
         seen.add(cur);
         const p = pts.get(cur)!;
-        if (!last || p[0] !== last[0] || p[1] !== last[1]) {
-          d += `${first ? "M" : " "}${p[0]} ${p[1]}`;
-          first = false;
-          last = p;
-        }
+        const last = chain.at(-1);
+        if (!last || p[0] !== last[0] || p[1] !== last[1]) chain.push(p);
         const next: number = (links.get(cur) ?? []).find((n) => n !== prev && !seen.has(n)) ?? -1;
         prev = cur;
         if (next === -1 && prev !== start && (links.get(prev) ?? []).includes(start)) {
-          const s = pts.get(start)!;
-          d += ` ${s[0]} ${s[1]}`;
+          chain.push(pts.get(start)!);
+          closed = true;
         }
         cur = next;
       }
+      if (chain.length < 2) return;
+      if (closed && minLoop > 0) {
+        const xs = chain.map((p) => p[0]);
+        const ys = chain.map((p) => p[1]);
+        const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        if (span < minLoop) return;
+      }
+      d += chain.map((p, i) => `${i ? " " : "M"}${p[0]} ${p[1]}`).join("");
     };
     for (const [id, l] of links) if (l.length === 1 && !seen.has(id)) walk(id);
     for (const id of links.keys()) if (!seen.has(id)) walk(id);
     return d;
   });
+}
+
+/** Evenly spaced levels through the bulk of a field's values (by quantile). */
+export function levelsOf(
+  field: (x: number, y: number) => number,
+  cols: number,
+  rows: number,
+  count: number,
+): number[] {
+  const vs: number[] = [];
+  for (let j = 0; j <= rows; j += 2) for (let i = 0; i <= cols; i += 2) vs.push(field(i, j));
+  vs.sort((a, b) => a - b);
+  const lo = vs[Math.floor(vs.length * 0.04)];
+  const hi = vs[Math.floor(vs.length * 0.96)];
+  return Array.from({ length: count }, (_, k) => lo + ((hi - lo) * (k + 0.5)) / count);
+}
+
+/**
+ * The drainage of a height field: where rain on it would run. Each grid point
+ * drains to its steepest-downhill neighbor, and flow accumulates downstream
+ * (D8). The channels that gather enough flow are returned as segments in a
+ * few classes by size, from capillaries to trunks, so they can be drawn with
+ * tapering weight: veins in the land. Units as in `contours`.
+ */
+export function drainage(
+  field: (x: number, y: number) => number,
+  cols: number,
+  rows: number,
+  scale: number,
+  threshold: number,
+  classes = 4,
+  seed = 0,
+): string[] {
+  const W = cols + 1;
+  const n = W * (rows + 1);
+  const h = new Float64Array(n);
+  // A little fine roughness, so water meanders instead of running along
+  // the grid's straight lines.
+  for (let j = 0; j <= rows; j++)
+    for (let i = 0; i <= cols; i++)
+      h[j * W + i] = field(i, j) + 0.035 * fbm(seed + 77, i * 0.3, j * 0.3, 2);
+  // Fill the pits (priority flood from the top row, the horizon), so every
+  // drop finds its way out and the channels join into whole trees.
+  {
+    const done = new Uint8Array(n);
+    const heap: number[] = [];
+    const less = (a: number, b: number) => h[heap[a]] < h[heap[b]];
+    const push = (k: number) => {
+      heap.push(k);
+      for (let c = heap.length - 1; c > 0;) {
+        const p = (c - 1) >> 1;
+        if (!less(c, p)) break;
+        [heap[c], heap[p]] = [heap[p], heap[c]];
+        c = p;
+      }
+    };
+    const pop = () => {
+      const top = heap[0];
+      const last = heap.pop()!;
+      if (heap.length) {
+        heap[0] = last;
+        for (let c = 0; ;) {
+          const l = 2 * c + 1;
+          const r = l + 1;
+          let m = c;
+          if (l < heap.length && less(l, m)) m = l;
+          if (r < heap.length && less(r, m)) m = r;
+          if (m === c) break;
+          [heap[c], heap[m]] = [heap[m], heap[c]];
+          c = m;
+        }
+      }
+      return top;
+    };
+    for (let i = 0; i <= cols; i++) {
+      done[i] = 1;
+      push(i);
+    }
+    while (heap.length) {
+      const k = pop();
+      const i = k % W;
+      const j = Math.floor(k / W);
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const x = i + di;
+          const y = j + dj;
+          if (x < 0 || y < 0 || x > cols || y > rows) continue;
+          const m = y * W + x;
+          if (done[m]) continue;
+          done[m] = 1;
+          if (h[m] <= h[k]) h[m] = h[k] + 1e-5;
+          push(m);
+        }
+      }
+    }
+  }
+  const down = new Int32Array(n).fill(-1);
+  for (let j = 0; j <= rows; j++) {
+    for (let i = 0; i <= cols; i++) {
+      const k = j * W + i;
+      let best = 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          if (!di && !dj) continue;
+          const x = i + di;
+          const y = j + dj;
+          if (x < 0 || y < 0 || x > cols || y > rows) continue;
+          const drop = (h[k] - h[y * W + x]) / Math.hypot(di, dj);
+          if (drop > best) {
+            best = drop;
+            down[k] = y * W + x;
+          }
+        }
+      }
+    }
+  }
+  const order = Array.from({ length: n }, (_, k) => k).sort((a, b) => h[b] - h[a]);
+  const acc = new Float64Array(n).fill(1);
+  for (const k of order) if (down[k] >= 0) acc[down[k]] += acc[k];
+  // Channels: where enough has gathered. Each gets a size class.
+  const cls = new Int8Array(n).fill(-1);
+  for (let k = 0; k < n; k++) {
+    if (acc[k] >= threshold)
+      cls[k] = Math.min(Math.floor(Math.log(acc[k] / threshold) / Math.log(3)), classes - 1);
+  }
+  const ups = new Int32Array(n);
+  const upOf = new Int32Array(n).fill(-1);
+  for (let k = 0; k < n; k++) {
+    if (cls[k] >= 0 && down[k] >= 0 && cls[down[k]] >= 0) {
+      ups[down[k]]++;
+      upOf[down[k]] = k;
+    }
+  }
+  // A stream starts at a spring, a confluence, or where it grows a size;
+  // it runs downstream to the next such point. Each is smoothed (Chaikin), so
+  // the grid's steps become the curves of water.
+  const starts = (k: number) => ups[k] !== 1 || cls[upOf[k]] !== cls[k];
+  const out: string[] = Array.from({ length: classes }, () => "");
+  for (let k = 0; k < n; k++) {
+    if (cls[k] < 0 || !starts(k)) continue;
+    const pts: Array<[number, number]> = [[k % W, Math.floor(k / W)]];
+    let cur = k;
+    while (down[cur] >= 0 && cls[down[cur]] >= 0) {
+      cur = down[cur];
+      pts.push([cur % W, Math.floor(cur / W)]);
+      if (starts(cur)) break;
+    }
+    if (pts.length < 2) continue;
+    let line = pts;
+    for (let pass = 0; pass < 2; pass++) {
+      const next: Array<[number, number]> = [line[0]];
+      for (let i = 0; i < line.length - 1; i++) {
+        const [ax, ay] = line[i];
+        const [bx, by] = line[i + 1];
+        next.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25]);
+        next.push([ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+      }
+      next.push(line[line.length - 1]);
+      line = next;
+    }
+    // Bend the course by a smooth field, as real streams wander.
+    const bend = (x: number, y: number): [number, number] => [
+      x + 1.1 * noise(seed + 91, x * 0.11, y * 0.11),
+      y + 0.6 * noise(seed + 97, x * 0.11, y * 0.11),
+    ];
+    out[cls[k]] += line
+      .map(([x0, y0], i) => {
+        const [x, y] = bend(x0, y0);
+        return `${i ? "L" : "M"}${(x * scale).toFixed(1)} ${(y * scale).toFixed(1)}`;
+      })
+      .join("");
+  }
+  return out;
 }
