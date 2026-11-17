@@ -12,7 +12,11 @@ export default function Home({ searchParams }: PageProps<"/">) {
   return (
     // Dark while the page loads: the server can't know yet whether it's night, and a
     // flash of bright paper in a dark room is the worse mistake (DOCTRINE §4).
-    <Suspense fallback={<div data-surface="tv" data-mood="night" className="paper h-dvh" />}>
+    <Suspense
+      fallback={
+        <div data-surface="tv" data-mood="night" data-design="almanac" className="paper h-dvh" />
+      }
+    >
       <Snapshot searchParams={searchParams} />
     </Suspense>
   );
