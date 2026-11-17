@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
-import { dayKey, moodOf, parts, twilightOf, veilOf, type Mood, type Twilight } from "@/lib/time";
+import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -14,9 +14,9 @@ import { NotebookPage } from "@/views/NotebookPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
-import { bodyAt } from "@/views/designs/arc";
 import { glowsAt } from "@/views/designs/living";
 import { DESIGNS, type Design } from "@/views/designs/registry";
+import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
 import { useVoice } from "./useVoice";
@@ -95,10 +95,19 @@ export function Screen({
     setInside(insideOf(snapshot.indoor, inside));
   }
 
+  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 2500);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home by day is a slow carousel (Almanac only): each piece turns like a page.
   // It counts from the moment home appears, so it always opens on the weather.
   const base = viewOf(page, mood);
+  // At dusk and dawn the paper turns between the two (Dusk.tsx).
+  const { paper, turning } = useTurn(mood, settled && page === "home");
   const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
@@ -119,10 +128,10 @@ export function Screen({
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {
-    if (!leaving) return;
+    if (!leaving || turning) return;
     const t = window.setTimeout(() => setView(target), leaveMs());
     return () => window.clearTimeout(t);
-  }, [leaving, target]);
+  }, [leaving, target, turning]);
 
   const show = useCallback((p: Page, v?: WeatherView) => {
     pageSince.current = Date.now();
@@ -243,13 +252,6 @@ export function Screen({
     return () => window.removeEventListener("keydown", onKey);
   }, [page, show, voice, snapshot.voice]);
 
-  // ---- Waking up: the paper takes its mood at once; only later changes are slow.
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setSettled(true), 2500);
-    return () => window.clearTimeout(t);
-  }, []);
-
   // ---- Protect the screen: the page drifts a few pixels, too slowly to see.
   const [drift, setDrift] = useState({ x: 0, y: 0 });
   useEffect(() => {
@@ -276,10 +278,10 @@ export function Screen({
   return (
     <div
       data-surface="tv"
-      data-mood={mood}
+      data-mood={paper}
       data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
-      data-twilight={twilight ? twilight.side : undefined}
+      data-turning={turning ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -297,7 +299,7 @@ export function Screen({
             hidden={!drawn}
             w={snapshot.weather}
             now={now}
-            mood={mood}
+            mood={paper}
             arc={view === "home" || view === "night" || slide?.kind === "passage"}
             quiet={(slide?.kind === "weather" ? slide.view : (asked ?? "now")) !== "now"}
             seed={seed}
@@ -319,37 +321,18 @@ export function Screen({
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>
+        <Dusk
+          twilight={twilight}
+          paper={paper}
+          turning={turning}
+          on={page === "home"}
+          clear={glowsAt(snapshot.weather)}
+          glow={view === "home" || view === "night" || slide?.kind === "passage"}
+        />
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
-      <Dusk twilight={twilight} glow={glowsAt(snapshot.weather) && twilight !== null} />
       <Fps />
     </div>
-  );
-}
-
-/**
- * The light of dusk and dawn: one veil of the night's paper over the whole
- * sheet, words and all, so the room's light falls without the ink losing the
- * page. Where the sun has gone down (or is coming up) the veil is thinner, an
- * afterglow on the horizon, unless cloud or smoke hides it. Its opacity is set
- * once a minute and glides there on the compositor; nothing repaints.
- */
-function Dusk({ twilight, glow }: { twilight: Twilight | null; glow: boolean }) {
-  const x = bodyAt(twilight?.side === "dawn" ? 0 : 1).x;
-  return (
-    <div
-      className="dusk"
-      aria-hidden
-      data-on={twilight ? "1" : "0"}
-      data-glow={glow ? "" : undefined}
-      style={
-        {
-          opacity: veilOf(twilight),
-          // The sheet's horizon, measured from the screen's center.
-          "--glow-x": `calc(50% + ${(x - 60).toFixed(1)}rem)`,
-        } as CSSProperties
-      }
-    />
   );
 }
 

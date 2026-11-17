@@ -73,7 +73,7 @@ body {
   --ink-faint: #8a7d69;
   --rule: #2b241c;
   --accent: #7d2e24;
-  /* The night's own paper: the veil that falls over the page at dusk. */
+  /* The dark of the room: the veil that falls over the day's paper at dusk. */
   --shade: #080807;
   position: relative;
   isolation: isolate;
@@ -159,37 +159,62 @@ body {
 }
 
 /*
- * Dusk and dawn: the night's paper laid over the whole sheet, words and all,
- * deepening and lifting a minute at a time (Screen's Dusk). Its opacity
- * glides on the compositor; it is painted once. Where the sun went down, the
- * veil is thinner: the afterglow on the horizon (the sheet's horizon sits
- * 7.25 rem above the screen's middle).
+ * Dusk and dawn (components/Dusk.tsx): the room's dark laid over the day's
+ * paper, words and all, deepening and lifting a minute at a time. Painted
+ * once; only its opacity moves, on the compositor. Under a clear sky the
+ * veil is deeper away from the sun, so the dusk crosses the sky rather than
+ * coming down like a dimmer; under cloud it's even.
  */
 .dusk {
   position: absolute;
-  inset: 0;
-  z-index: 3;
+  inset: -3rem;
+  z-index: 2;
   pointer-events: none;
   background: var(--shade);
   transition:
     opacity 60s linear,
     display 60s allow-discrete;
 }
-.dusk[data-glow] {
-  background: radial-gradient(
-    ellipse 56rem 14rem at var(--glow-x) calc(50% - 8.75rem),
-    color-mix(in srgb, var(--shade) 64%, transparent),
-    color-mix(in srgb, var(--shade) 84%, transparent) 50%,
-    var(--shade)
+.dusk[data-sky="clear"][data-side="dusk"] {
+  background: linear-gradient(
+    to bottom right,
+    var(--shade),
+    color-mix(in srgb, var(--shade) 72%, transparent)
   );
+}
+.dusk[data-sky="clear"][data-side="dawn"] {
+  background: linear-gradient(
+    to bottom left,
+    var(--shade),
+    color-mix(in srgb, var(--shade) 72%, transparent)
+  );
+}
+/* At the turn, over empty paper: quickly. */
+.dusk[data-quick] {
+  transition-duration: 1.2s;
 }
 .dusk[data-on="0"] {
   display: none;
 }
-/* At the turn, under the veil, the paper changes quickly: while the day's
-   words sink out, before the night's ink in, so no word is ever caught
-   halfway, its ink the color of its paper. */
-.paper[data-twilight] {
+/* The sky just above the horizon where the sun went down holds its light
+   longest: half of a flat glow of the day's paper, inside the veil (so it
+   lifts the veil there by a third, and goes with it). */
+.dusk-glow {
+  position: absolute;
+  width: 48rem;
+  height: 7rem;
+  background: radial-gradient(
+    ellipse 50% 100% at 50% 100%,
+    color-mix(in srgb, var(--paper) 32%, transparent),
+    transparent
+  );
+  transition: opacity 6s ease;
+}
+.dusk-glow[data-on="0"] {
+  opacity: 0;
+}
+/* At the turn the paper changes quickly, with nothing written on it. */
+.paper[data-turning] {
   transition:
     --paper 3s ease,
     --ink 3s ease,
@@ -198,7 +223,8 @@ body {
     --rule 3s ease,
     --accent 3s ease;
 }
-.paper:not([data-settled]) .dusk {
+.paper:not([data-settled]) .dusk,
+.paper:not([data-settled]) .dusk-glow {
   transition: none;
 }
 
@@ -209,7 +235,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .paper,
-  .dusk {
+  .dusk,
+  .dusk-glow {
     transition: none;
   }
 }
