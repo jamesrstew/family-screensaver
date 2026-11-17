@@ -85,6 +85,9 @@
 [data-mood="night"] .sky-land-night {
   opacity: 1;
 }
+[data-twilight] .sky-land-img {
+  transition-duration: 3s;
+}
 .paper:not([data-settled]) .sky-land-img {
   transition: none;
 }
@@ -177,6 +180,26 @@
   to {
     opacity: 1;
   }
+}
+
+/* After the turn, the last light on the horizon where the sun went down: half
+   a wide, flat glow (the sky above clips the rest), fading a minute at a
+   time. Under the first stars. */
+.sky-afterglow-at {
+  width: 72rem;
+  height: 26rem;
+}
+.sky-afterglow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ink-faint) 55%, transparent),
+    color-mix(in srgb, var(--ink-faint) 22%, transparent) 40%,
+    transparent
+  );
+  transition: opacity 60s linear;
 }
 
 /* The clearing: paper behind the words, painted once, never moving. */

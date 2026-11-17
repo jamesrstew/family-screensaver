@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Weather } from "@/lib/types";
 import { ARC, placeOf, skyNow } from "./arc";
 import { ClockFace } from "./common";
-import { bodyLook, nearNewMoon, skyOf, smokeOf, starsOf } from "./living";
+import { bodyLook, glowsAt, nearNewMoon, skyOf, smokeOf, starsOf, starsOut } from "./living";
 
 const TZ = "America/Los_Angeles";
 
@@ -145,5 +145,26 @@ describe("smokeOf", () => {
     expect(bodyLook(3, false, "thick")).toBe("dot");
     expect(starsOf(0, "haze")).toBe("few");
     expect(starsOf(0, "smoke")).toBe("none");
+  });
+});
+
+describe("twilight", () => {
+  it("brings the stars out in five steps after the turn, brightest first", () => {
+    const at = (depth: number) => starsOut({ side: "dusk", depth });
+    expect(at(0.3)).toBe(0);
+    expect(at(0.5)).toBe(1);
+    expect(at(0.65)).toBe(2);
+    expect(at(0.95)).toBe(5);
+    expect(starsOut(null)).toBe(5);
+    // Dawn by the same depth: the dust goes out first, the evening star last.
+    expect(starsOut({ side: "dawn", depth: 0.85 })).toBe(4);
+  });
+
+  it("draws an afterglow only through a clear or thin sky", () => {
+    expect(glowsAt(day(0))).toBe(true);
+    expect(glowsAt(day(2))).toBe(true);
+    expect(glowsAt(day(3))).toBe(false);
+    expect(glowsAt(day(61))).toBe(false);
+    expect(glowsAt(null)).toBe(false);
   });
 });

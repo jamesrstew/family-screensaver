@@ -2,11 +2,11 @@ import { memo, type CSSProperties, type ReactNode } from "react";
 import { LAND_H, LAND_TOP, landOf } from "@/lib/land";
 import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
-import type { Mood } from "@/lib/time";
+import { TURN, type Mood, type Twilight } from "@/lib/time";
 import { smokeOf as smokeOfNow, type Smoke } from "@/lib/smoke";
 import type { Weather } from "@/lib/types";
 import { CLOUD, CLOUD_BOX, Cloud, Moon, Star, moonAge } from "../Engraving";
-import { ARC, arcAt, placeOf, type Place } from "./arc";
+import { ARC, arcAt, bodyAt, placeOf, type Place } from "./arc";
 
 /*
  * The living sky: the Almanac's sheet is a window onto an engraved country.
@@ -19,6 +19,13 @@ import { ARC, arcAt, placeOf, type Place } from "./arc";
  * breathe (a few shimmer), rain in fine streaks, snow as dots with a few big
  * crystals, mist, now and then birds or a shooting star, and at the day's
  * ends the sun swelling and sinking behind long horizontal strokes.
+ *
+ * Dusk and dawn: after sunset the strokes linger on the horizon where the sun
+ * went down while the light falls (the veil over the sheet is Screen's); at
+ * the turn the paper becomes night, an afterglow lingers on that horizon and
+ * fades, and the stars come out one by one, brightest first. Dawn runs it
+ * backward: the faint stars go out first, the horizon pales on the sunrise
+ * side, mist lies on the low air until the sun has cleared.
  *
  * The sky tells the truth: under overcast or rain there is no blazing sun
  * (a dot on the arc keeps the hour), and no stars through snow. Under smoke
@@ -50,6 +57,8 @@ export type LivingSkyProps = {
   epoch: number;
   /** Week and Ideas draw no sky: it fades out and waits. */
   hidden?: boolean;
+  /** Dusk or dawn, if it's now (lib/time.ts). */
+  twilight?: Twilight | null;
 };
 
 /** Where a cycle of `dur` seconds stands at the wall clock, offset by `phase0` (0..1). */
@@ -116,6 +125,25 @@ export function nearNewMoon(now: Date): boolean {
   return days < 1.5 || days > 29.530588853 - 1.5;
 }
 
+/**
+ * Whether the sky is clear enough for an afterglow: no glow colors through
+ * solid cloud, rain, snow, fog, or smoke.
+ */
+export const glowsAt = (w: Weather | null) =>
+  w !== null && ["full", "soft"].includes(bodyLook(w.now.code, false, smokeOf(w)));
+
+/**
+ * How many of the stars are out: in five steps from the turn to civil night,
+ * the brightest first; at dawn they go out in reverse. All of them at night.
+ */
+export const starsOut = (t: Twilight | null | undefined) =>
+  t
+    ? Math.max(
+        0,
+        Math.min(STAR_TIERS, Math.floor((t.depth - TURN) / ((1 - TURN) / STAR_TIERS)) + 1),
+      )
+    : STAR_TIERS;
+
 /** The look of whatever rides the arc right now. */
 export const lookOf = (w: Weather, place: Place, now: Date) =>
   bodyLook(w.now.code, place.body.body === "moon" && nearNewMoon(now), smokeOf(w));
@@ -141,6 +169,7 @@ export function LivingSky({
   seed,
   epoch,
   hidden = false,
+  twilight = null,
 }: LivingSkyProps) {
   const sky = skyOf(w ? w.now.code : null);
   const smoke = smokeOf(w);
@@ -150,9 +179,15 @@ export function LivingSky({
   const night = mood === "night";
   const sun = place?.body.body === "sun";
   const low = sun ? place!.low : 0;
-  const dawn = sun && place!.body.t < 0.5 && low > 0;
+  const glow = glowsAt(w);
+  // Before the turn, the day's light is still going (or coming).
+  const light = twilight !== null && !night;
+  const dawn = (sun && place!.body.t < 0.5 && low > 0) || (light && twilight.side === "dawn");
   const starsLevel = starsOf(w ? w.now.code : null, smoke);
+  const out = starsOut(twilight);
   const day = !night;
+  // Where the sun went down, or will come up.
+  const edge = twilight ? bodyAt(twilight.side === "dawn" ? 0 : 1).x : (place?.x ?? 60);
 
   return (
     <div
@@ -165,7 +200,7 @@ export function LivingSky({
       {/* What never moves is painted first, into the paper itself. Anything
           static painted above a moving layer would need a layer of its own. */}
       <div className="sky-vignette" />
-      <Still.Stars seed={seed} show={night} level={starsLevel} part="dust" />
+      <Still.Stars seed={seed} show={night} level={starsLevel} out={out} part="dust" />
       <Arc place={place} show={arc && Boolean(place)} />
       {/* Then everything alive, back to front. */}
       <Still.Land seed={seed} />
@@ -177,11 +212,19 @@ export function LivingSky({
       {/* Smoke softens the land: a veil of paper over it, painted once. */}
       <Layer show={smoky} className="sky-fill sky-smoke-veil" data-smoke={smoke} />
       <Light place={place} show={arc && night && look !== "dot"} />
-      <Still.Stars seed={seed} show={night} level={starsLevel} part="twinkle" />
-      <Still.ShootingStar seed={seed} epoch={epoch} show={night && starsLevel === "all"} />
+      <Still.Stars seed={seed} show={night} level={starsLevel} out={out} part="twinkle" />
+      <Still.ShootingStar
+        seed={seed}
+        epoch={epoch}
+        show={night && starsLevel === "all" && out === STAR_TIERS}
+      />
       <Above>
+        <Afterglow x={edge} twilight={twilight} show={night && glow && twilight !== null} />
         <Body place={place} look={look} now={now} show={arc && Boolean(place)} />
-        <Streaks place={place} show={arc && low > 0 && look !== "dot"} />
+        <Streaks
+          x={sun && low > 0 ? place!.x : edge}
+          show={arc && ((sun && low > 0 && look !== "dot") || (light && glow))}
+        />
       </Above>
       {/* Smoke hides the high wisps. */}
       <Still.Wisps seed={seed} epoch={epoch} count={smoky && smoke !== "haze" ? 0 : sky.wisps} />
@@ -326,6 +369,28 @@ function Light({ place, show }: { place: Place | null; show: boolean }) {
   return (
     <Layer show={show} className="sky-glow-at" style={at}>
       <div className="sky-glow sky-glow-moon" />
+    </Layer>
+  );
+}
+
+/**
+ * After the turn, the last of the light on the horizon where the sun went
+ * down, fading as the dusk deepens (at dawn, the first, growing). Half of a
+ * wide, flat glow, the half above the horizon. Its strength is set once a
+ * minute and glides there.
+ */
+function Afterglow({ x, twilight, show }: { x: number; twilight: Twilight | null; show: boolean }) {
+  const left = twilight ? 1 - (twilight.depth - TURN) / (1 - TURN) : 0;
+  return (
+    <Layer
+      show={show}
+      className="sky-afterglow-at"
+      style={{ left: rem(x - 36), top: rem(ARC.cy - 13) }}
+    >
+      <div
+        className="sky-afterglow"
+        style={{ opacity: Math.min(Math.max(left, 0), 1).toFixed(2) }}
+      />
     </Layer>
   );
 }
@@ -541,8 +606,7 @@ function MoonBody({ size, now, ring }: { size: number; now: Date; ring: boolean 
  * At the day's ends: long horizontal strokes along the horizon, fanning from
  * the low sun toward the middle of the sheet, as an engraver draws a sunset.
  */
-function Streaks({ place, show }: { place: Place | null; show: boolean }) {
-  const x = place?.x ?? 60;
+function Streaks({ x, show }: { x: number; show: boolean }) {
   const left = x < 60;
   const strokes = [
     [0.8, 68, 0.8],
@@ -842,6 +906,12 @@ function starSpots(seed: number): { twinkle: StarSpot[]; dust: Array<[number, nu
   return { twinkle, dust };
 }
 
+// The stars come out in this many steps, brightest first; the faint dust last.
+const STAR_TIERS = 5;
+// How many of the twinkling stars (ranked brightest first) come out at each
+// step before the dust: the evening star alone, then a few, then the rest.
+const TIER_ENDS = [1, 4, 9, 20];
+
 // Five stars scintillate: mostly steady, with a brief shimmer, staggered so
 // at most one shimmers at a time. The rest only breathe.
 const SCINTILLATE = 5;
@@ -851,17 +921,20 @@ function Stars({
   seed,
   show,
   level,
+  out,
   part,
 }: {
   seed: number;
   show: boolean;
   level: "all" | "few" | "none";
+  /** How many steps of stars are out (STAR_TIERS: all). */
+  out: number;
   part: "dust" | "twinkle";
 }) {
   const { twinkle, dust } = starSpots(seed);
   if (part === "dust") {
     return (
-      <Layer show={show && level === "all"} className="sky-fill">
+      <Layer show={show && level === "all" && out >= STAR_TIERS} className="sky-fill">
         <svg viewBox="0 0 1200 675" className="sky-fill text-ink-faint" fill="currentColor">
           {dust.map(([x, y, s], i) => (
             <circle
@@ -878,31 +951,45 @@ function Stars({
   }
   // Through thin cloud, only the brightest few.
   const shown = level === "all" ? twinkle : twinkle.filter((s) => s.bright).slice(0, 5);
+  // Brightest first: the order they come out at dusk.
+  const rank = shown
+    .map((s, i) => ({ i, b: (s.bright ? 2 : 0) + s.s }))
+    .sort((a, b) => b.b - a.b)
+    .map((r) => r.i);
+  const tierOf = (i: number) => TIER_ENDS.findIndex((end) => rank.indexOf(i) < end);
   return (
-    <Layer show={show && level !== "none"} className="sky-fill">
-      {shown.map((s, i) => {
-        const sci = level === "all" && i < SCINTILLATE;
-        return (
-          <svg
-            key={i}
-            viewBox="-5 -5 10 10"
-            className={`sky-star ${sci ? "sky-star-sci" : ""} ${s.bright || sci ? "text-ink-soft" : "text-ink-faint"}`}
-            style={{
-              left: rem(s.x),
-              top: rem(s.y),
-              width: rem(s.s * 1.6),
-              height: rem(s.s * 1.6),
-              animationDuration: sci ? `${SCI_PERIOD}s` : `${s.dur.toFixed(2)}s`,
-              animationDelay: sci
-                ? `${(-((i * SCI_PERIOD) / SCINTILLATE + 3)).toFixed(1)}s`
-                : `${s.delay.toFixed(2)}s`,
-            }}
-          >
-            <Star x={0} y={0} s={1.3} />
-          </svg>
-        );
-      })}
-    </Layer>
+    <>
+      {TIER_ENDS.map((_, tier) => (
+        <Layer key={tier} show={show && level !== "none" && out > tier} className="sky-fill">
+          {shown.map((s, i) =>
+            tierOf(i) === tier ? <TwinkleStar key={i} s={s} i={i} level={level} /> : null,
+          )}
+        </Layer>
+      ))}
+    </>
+  );
+}
+
+/** One star: most breathe; a few scintillate. */
+function TwinkleStar({ s, i, level }: { s: StarSpot; i: number; level: "all" | "few" | "none" }) {
+  const sci = level === "all" && i < SCINTILLATE;
+  return (
+    <svg
+      viewBox="-5 -5 10 10"
+      className={`sky-star ${sci ? "sky-star-sci" : ""} ${s.bright || sci ? "text-ink-soft" : "text-ink-faint"}`}
+      style={{
+        left: rem(s.x),
+        top: rem(s.y),
+        width: rem(s.s * 1.6),
+        height: rem(s.s * 1.6),
+        animationDuration: sci ? `${SCI_PERIOD}s` : `${s.dur.toFixed(2)}s`,
+        animationDelay: sci
+          ? `${(-((i * SCI_PERIOD) / SCINTILLATE + 3)).toFixed(1)}s`
+          : `${s.delay.toFixed(2)}s`,
+      }}
+    >
+      <Star x={0} y={0} s={1.3} />
+    </svg>
   );
 }
 
