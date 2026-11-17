@@ -77,8 +77,8 @@ export function leadAt(today: NotebookItem[], n: number): NotebookItem | null {
 
 /** Passages the snapshot carries: the next 45 minutes or more, refreshed every few minutes. */
 export const PASSAGE_WINDOW = 60;
-/** The afternoon's question comes round once in this many passages: every four and a half minutes. */
-export const QUESTION_EVERY = 6;
+/** The afternoon's question comes round once in this many passages: every nine minutes. */
+export const QUESTION_EVERY = 12;
 
 /** The carousel's deck: every short idea and quote (that `fits` its rooms), in a fixed shuffled order. */
 export function leadDeck(

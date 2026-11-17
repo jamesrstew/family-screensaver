@@ -73,7 +73,7 @@ describe("heroOf on the carousel", () => {
     timeZone: TZ,
   } as unknown as Snapshot;
 
-  it("asks the question every four and a half minutes, 2 to 6 p.m., and never after", () => {
+  it("asks the question every nine minutes, 2 to 6 p.m., and never after", () => {
     const tz = snapshot.timeZone;
     const at = (iso: string, hours: number) => {
       const since = Date.parse(iso);
@@ -87,10 +87,10 @@ describe("heroOf on the carousel", () => {
       return times;
     };
     const asked = at("2026-11-18T14:00:00-08:00", 4);
-    // Four hours of two passages every 90 seconds: about 53 times.
-    expect(asked.length).toBeGreaterThanOrEqual(52);
-    expect(asked.length).toBeLessThanOrEqual(54);
-    asked.slice(1).forEach((t, i) => expect(t - asked[i]).toBe(270_000));
+    // Four hours of two passages every 90 seconds: about 27 times.
+    expect(asked.length).toBeGreaterThanOrEqual(26);
+    expect(asked.length).toBeLessThanOrEqual(27);
+    asked.slice(1).forEach((t, i) => expect(t - asked[i]).toBe(540_000));
     expect(at("2026-11-18T18:00:00-08:00", 2)).toEqual([]);
   });
   it("reads the deck's passage n, and borrows from the day's run when one won't fit", () => {
