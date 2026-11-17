@@ -156,6 +156,7 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       label: days[0].label,
       sunrise: new Date(midnight + (6 * 60 + 52) * 60_000).toISOString(),
       sunset: new Date(midnight + (16 * 60 + 48) * 60_000).toISOString(),
+      nextSunrise: new Date(midnight + (24 * 60 + 6 * 60 + 53) * 60_000).toISOString(),
     },
     days,
     hours,

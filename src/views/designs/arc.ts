@@ -26,8 +26,9 @@ export function skyNow(w: Weather, now: Date): SkyBody {
   const t = sunProgress(w, now);
   const DAY = 86_400_000;
   if (t >= 0 && t <= 1) return { t, body: "sun", from: new Date(rise), to: new Date(set) };
-  // Night: from last sunset to next sunrise.
-  const [from, to] = t > 1 ? [set, rise + DAY] : [set - DAY, rise];
+  // Night: from last sunset to next sunrise (tomorrow's real one, if known).
+  const next = w.today.nextSunrise ? Date.parse(w.today.nextSunrise) : rise + DAY;
+  const [from, to] = t > 1 ? [set, next] : [set - DAY, rise];
   return {
     t: (now.getTime() - from) / (to - from),
     body: "moon",

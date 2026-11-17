@@ -92,11 +92,33 @@ export function skyOf(code: number | null): SkyState {
 }
 
 /** How the sun or moon shows through the cover: whole, softened, or only a dot on the arc. */
-export const bodyLook = (code: number | null) => {
+export const bodyLook = (code: number | null, newMoon = false) => {
   const { cover, fall, fog } = skyOf(code);
-  if (fall || fog || cover === "over") return "dot" as const;
+  if (newMoon || fall || fog || cover === "over") return "dot" as const;
   return cover === "partly" ? ("soft" as const) : ("full" as const);
 };
+
+/** Within a day and a half of new moon there's no moon to draw: only the dot. */
+export function nearNewMoon(now: Date): boolean {
+  const days = moonAge(now) * 29.530588853;
+  return days < 1.5 || days > 29.530588853 - 1.5;
+}
+
+/** The look of whatever rides the arc right now. */
+export const lookOf = (w: Weather, place: Place, now: Date) =>
+  bodyLook(w.now.code, place.body.body === "moon" && nearNewMoon(now));
+
+/**
+ * How many stars: all on a clear or fair night, the brightest few through
+ * partly cloudy skies, none through overcast, fog, rain, or snow, and none
+ * when there's no report at all (a quiet sky).
+ */
+export function starsOf(code: number | null): "all" | "few" | "none" {
+  if (code === null) return "none";
+  const { cover, fall, fog } = skyOf(code);
+  if (fall || fog || cover === "over") return "none";
+  return cover === "partly" ? "few" : "all";
+}
 
 export function LivingSky({
   w,
@@ -110,16 +132,12 @@ export function LivingSky({
 }: LivingSkyProps) {
   const sky = skyOf(w ? w.now.code : null);
   const place = w ? placeOf(w, now) : null;
-  const look = bodyLook(w ? w.now.code : null);
+  const look = w && place ? lookOf(w, place, now) : bodyLook(null);
   const night = mood === "night";
   const sun = place?.body.body === "sun";
   const low = sun ? place!.low : 0;
   const dawn = sun && place!.body.t < 0.5 && low > 0;
-  const starsLevel = sky.fall
-    ? "none"
-    : sky.cover === "clear" || sky.cover === "fair"
-      ? "all"
-      : "few";
+  const starsLevel = starsOf(w ? w.now.code : null);
   const day = !night;
 
   return (

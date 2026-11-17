@@ -332,13 +332,16 @@
 [data-heavy] .sky-stratus {
   color: var(--ink-soft);
 }
-[data-mood="night"] .sky-cloud-far,
-[data-mood="night"] .sky-cloud-near,
-[data-mood="night"] .sky-stratus {
+/* Scoped to shown clouds, so a cloud leaving at night still fades out. */
+[data-mood="night"] .sky-cloud-far[data-on="1"],
+[data-mood="night"] .sky-cloud-near[data-on="1"],
+[data-mood="night"] .sky-stratus[data-on="1"] {
   color: var(--ink-faint);
   opacity: 0.8;
 }
-/* Sheet lightning: the cloud lit from within, briefly, once in a long while. */
+/* Sheet lightning, by day in storms: once in a long while, one slow glow
+   (about 3 s up and down, peak 0.35) as a cloud is lit from within. Never a
+   flicker, never the whole sheet. */
 .sky-flash {
   position: absolute;
   left: 0;
@@ -349,17 +352,13 @@
 }
 @keyframes sky-flash {
   0%,
-  99.55% {
+  98.6% {
     opacity: 0;
+    animation-timing-function: ease-in-out;
   }
-  99.7% {
-    opacity: 0.7;
-  }
-  99.8% {
-    opacity: 0.2;
-  }
-  99.88% {
-    opacity: 0.6;
+  99.3% {
+    opacity: 0.35;
+    animation-timing-function: ease-in-out;
   }
   100% {
     opacity: 0;
@@ -415,14 +414,17 @@
   transform-origin: 100% 50%;
   animation: sky-meteor 431s linear infinite;
 }
+/* The meteor glides (about 1.4 s, easing out) rather than flashes. */
 @keyframes sky-meteor {
   0%,
-  99.55% {
+  99.67% {
     opacity: 0;
     transform: rotate(-17deg) translateX(0);
+    animation-timing-function: ease-out;
   }
-  99.7% {
+  99.75% {
     opacity: 0.85;
+    animation-timing-function: ease-out;
   }
   100% {
     opacity: 0;

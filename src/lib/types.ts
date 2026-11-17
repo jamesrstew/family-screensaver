@@ -12,6 +12,8 @@ export type Weather = {
     label: string;
     sunrise: string; // ISO
     sunset: string; // ISO
+    /** Tomorrow's sunrise, when the forecast has it: the night's real end. */
+    nextSunrise?: string; // ISO
   };
   days: Array<{
     date: string; // YYYY-MM-DD in the family's time zone

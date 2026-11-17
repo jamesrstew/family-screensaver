@@ -26,7 +26,7 @@ import {
  * passage, set large.
  */
 
-import { bodyLook } from "./living";
+import { lookOf } from "./living";
 
 export { LivingSky as Sky } from "./living";
 
@@ -52,7 +52,7 @@ function SkyWords({
 }) {
   const p = placeOf(w, now);
   const sky = p.body;
-  const look = bodyLook(w.now.code);
+  const look = lookOf(w, p, now);
   // Clear of the body as drawn: the sun's rays, the moon, or the dot under cover.
   const radius = look === "dot" ? 2 : sky.body === "sun" ? p.size * 0.55 : 6.6;
   // High in the sky, the words hang beneath the body; low, they sit beside it,
