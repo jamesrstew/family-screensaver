@@ -28,6 +28,8 @@ import {
   nextLens,
   precipFigure,
   restOfDay,
+  turning,
+  type Lens,
   uvFigure,
   uvWord,
   windFigure,
@@ -524,5 +526,48 @@ describe("the air, in words", () => {
     const hazy = { aqi: 70, haze: 1 };
     expect(lensesFor([hazy, hazy])).not.toContain("air");
     expect(lensesFor([hazy, hazy, hazy])).toContain("air");
+  });
+});
+
+describe("turning: a view's lenses over time", () => {
+  const all: Lens[] = ["sky", "precip", "wind", "uv"];
+  const t0 = Date.parse("2026-11-18T10:00:00Z");
+  /** Tick the way the screen does, every ten seconds, from t0 to t0 + ms. */
+  const run = (
+    ms: number,
+    lenses: (t: number) => readonly Lens[] = () => all,
+    after: Lens | null = null,
+  ) => {
+    let state = turning(null, t0, lenses(t0), after);
+    const seen = [state.lens];
+    for (let t = t0 + 10_000; t <= t0 + ms; t += 10_000) {
+      // The interval lands a few milliseconds late or early.
+      state = turning(state, t + ((t / 10_000) % 3) - 1, lenses(t), after);
+      if (state.lens !== seen.at(-1)) seen.push(state.lens);
+    }
+    return { state, seen };
+  };
+
+  it("opens on the sky and turns every half minute, on the tick", () => {
+    expect(run(0).state.lens).toBe("sky");
+    expect(run(20_000).state.lens).toBe("sky");
+    expect(run(30_000).state.lens).toBe("precip");
+    expect(run(120_000).seen).toEqual(["sky", "precip", "wind", "uv", "sky"]);
+  });
+  it("starts over on the sky when the clock jumps", () => {
+    const { state } = run(60_000);
+    expect(state.lens).toBe("wind");
+    expect(turning(state, state.last + 5 * 60_000, all, null).lens).toBe("sky");
+    expect(turning(state, state.last - 1000, all, null).lens).toBe("sky");
+  });
+  it("lets the lens showing keep its time when the list changes mid-turn", () => {
+    // UV goes quiet 40 s in, while precip is showing: precip keeps its turn, and
+    // after wind the turn goes round to the sky, past the UV that's gone.
+    const dusk = (t: number) => (t - t0 >= 40_000 ? (["sky", "precip", "wind"] as Lens[]) : all);
+    const { seen } = run(120_000, dusk);
+    expect(seen).toEqual(["sky", "precip", "wind", "sky", "precip"]);
+  });
+  it("carries on after the lens last seen in an earlier visit", () => {
+    expect(run(60_000, () => all, "precip").seen).toEqual(["sky", "wind", "uv"]);
   });
 });

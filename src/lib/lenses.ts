@@ -51,6 +51,32 @@ export function lensOrder(lenses: readonly Lens[], after?: Lens | null): Lens[] 
   return ["sky", ...rest.slice(k), ...rest.slice(0, k)];
 }
 
+/** Where a view's turning stands: when it began, the last tick, which turn, and its lens. */
+export type Turning = { since: number; last: number; turn: number; lens: Lens };
+
+/**
+ * One tick of a view's turning (useLens keeps it). It opens on the sky and
+ * steps to the next lens every half minute, counted to the second (the
+ * screen's ten-second tick lands a hair short of each turn). A clock that
+ * jumps (the page waking, or catching up from the server's time) starts over
+ * on the sky. A lens changes only at a turn, so a list that changes mid-turn
+ * (UV gone at dusk) leaves the lens showing its time; the next turn steps on
+ * from it, after the lens last seen in an earlier visit (`after`).
+ */
+export function turning(
+  prev: Turning | null,
+  t: number,
+  lenses: readonly Lens[],
+  after: Lens | null,
+): Turning {
+  if (!prev || t < prev.last || t - prev.last > 60_000)
+    return { since: t, last: t, turn: 0, lens: "sky" };
+  const turn = Math.floor((Math.round((t - prev.since) / 1000) * 1000) / LENS_MS);
+  if (turn === prev.turn) return t === prev.last ? prev : { ...prev, last: t };
+  const lens = turn === 0 ? "sky" : nextLens(lensOrder(lenses, after), prev.lens);
+  return { since: prev.since, last: t, turn, lens };
+}
+
 /** One hour, slot, or day, as far as the lenses care. */
 export type Sample = {
   precip?: number;

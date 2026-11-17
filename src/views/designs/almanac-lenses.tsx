@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import {
-  LENSES,
-  LENS_MS,
-  hourKind,
-  lensOrder,
-  nextLens,
-  type Figure,
-  type Lens,
-} from "@/lib/lenses";
+import { hourKind, LENSES, turning, type Figure, type Lens } from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -53,21 +45,12 @@ const lastSeen = new Map<string, Lens>();
 export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens {
   const forced = useForced();
   const t = now.getTime();
-  // When the view appeared. A clock that jumps (the page waking, or catching
-  // up from the server's time) starts the count again, on the sky.
-  const [clock, setClock] = useState({ since: t, last: t });
-  if (t !== clock.last) {
-    const jumped = t < clock.last || t - clock.last > 60_000;
-    setClock({ since: jumped ? t : clock.since, last: t });
-  }
   const [after] = useState(() => lastSeen.get(view) ?? null);
-  // To the second: the screen's ten-second tick lands a hair short of each turn.
-  const turn = Math.floor((Math.round((t - clock.since) / 1000) * 1000) / LENS_MS);
-  const [shown, setShown] = useState<{ turn: number; lens: Lens }>({ turn: 0, lens: "sky" });
-  if (turn !== shown.turn) {
-    setShown({ turn, lens: turn === 0 ? "sky" : nextLens(lensOrder(lenses, after), shown.lens) });
-  }
-  const lens = forced ?? shown.lens;
+  // The turning itself is lenses.ts's `turning`: here it's only kept.
+  const [state, setState] = useState(() => turning(null, t, lenses, after));
+  const next = turning(state, t, lenses, after);
+  if (next !== state) setState(next);
+  const lens = forced ?? next.lens;
   useEffect(() => {
     if (lens !== "sky") lastSeen.set(view, lens);
   }, [lens, view]);

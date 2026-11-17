@@ -59,3 +59,22 @@ export const ShowBody = z
 
 /** Requests older than this are ignored by a TV that just woke up. */
 export const SHOW_TTL_MS = 2 * 60_000;
+
+/** The weather view a request carries: only the weather has views; any other page (or the arrows) clears it. */
+export const viewAsked = (page: Page, view?: WeatherView): WeatherView | null =>
+  page === "weather" ? (view ?? null) : null;
+
+/**
+ * What the screen draws: home's carousel slide (Almanac by day), the weather
+ * in the view asked for (by request, else ?weather=), or the page itself.
+ */
+export function targetOf(o: {
+  base: Page | "night";
+  slide: string | null;
+  asked: WeatherView | null;
+  fromUrl: WeatherView;
+}): string {
+  if (o.slide) return `home:${o.slide}`;
+  if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
+  return o.base;
+}

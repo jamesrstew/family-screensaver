@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SHOW_TTL_MS } from "@/lib/show";
+import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
@@ -96,11 +96,12 @@ export function Screen({
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
-  const target: View = carousel
-    ? `home:${slideKey(slideOf(now, homeSince, Boolean(snapshot.weather)))}`
-    : base === "weather"
-      ? `weather:${view0 ?? fromUrl}`
-      : base;
+  const target = targetOf({
+    base,
+    slide: carousel ? slideKey(slideOf(now, homeSince, Boolean(snapshot.weather))) : null,
+    asked: view0,
+    fromUrl,
+  }) as View;
   const [view, setView] = useState<View>(target);
   const leaving = target !== view;
   useEffect(() => {
@@ -112,7 +113,7 @@ export function Screen({
   const show = useCallback((p: Page, v?: WeatherView) => {
     pageSince.current = Date.now();
     setPage(p);
-    setView0(v ?? null);
+    setView0(viewAsked(p, v));
   }, []);
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
