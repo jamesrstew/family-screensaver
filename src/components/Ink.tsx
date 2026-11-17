@@ -24,8 +24,10 @@ import {
  *
  * `k` is the content's identity: change it and the block re-inks (out with
  * the old, in with the new). `order` staggers blocks on a page, top to bottom.
- * `lag` holds the old ink a while before it sinks, so blocks that change
- * together turn one after another and the page is never blank.
+ * `lag` holds the old ink a while before it sinks, and `rest` leaves the
+ * paper bare a while before the new ink comes, so blocks that change
+ * together turn in an order (a plate's figures never sit under another
+ * lens's sentence) and the page is never blank.
  * Inside a leaving <InkStage>, every block bleeds out.
  */
 
@@ -104,6 +106,8 @@ type Props = {
   mode?: InkMode;
   /** Milliseconds to hold the old ink before it sinks, when `k` changes. */
   lag?: number;
+  /** Milliseconds the paper stays bare before the new ink, when `k` changes. */
+  rest?: number;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -146,6 +150,7 @@ export function Ink({
   order = 0,
   mode: asked,
   lag = 0,
+  rest = 0,
   className,
   style,
   children,
@@ -331,7 +336,7 @@ export function Ink({
 
   // Ink in on arrival, and again whenever new content takes the page.
   useEffect(() => {
-    const delay = firstIn.current ? order * STAGGER_MS : 0;
+    const delay = firstIn.current ? order * STAGGER_MS : rest;
     firstIn.current = false;
     play("in", delay);
     return () => {
