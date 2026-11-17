@@ -21,7 +21,7 @@ The Stewart family's living-room screen (Google TV). Enchanted paper, like the m
 - `src/components/Ink.tsx`: the only way content appears. Wrap every block of TV type in `<Ink>`; give it `k` (content identity) and `order` (stagger).
 - `src/views/*Page.tsx`: one file per page, pure functions of `{ snapshot, now, mood }`. To add a page: add it to `PAGES` in `src/lib/types.ts`, write the view, add it to `Screen`, the remote, the voice tool enum, and `HOLD_MS`.
 - `src/views/Sky.tsx`: the engraved weather symbols.
-- `src/views/designs/living.tsx` (+ `living.css`): Almanac's living sky behind home, night, and weather: the land as breathing contour lines, the sun or moon on its arc, drifting clouds, stars, rain, snow, mist, birds. Drawn once, seeded (`src/lib/organic.ts`); only transform and opacity animate, on few layers (the TV's GPU is weak). `?fps=1` shows the frame rate in a corner.
+- `src/views/designs/living.tsx` (+ `living.css`): Almanac's living sky behind home, night, and weather: the land (rivers and contours in perspective, cloud shadows), the sun or moon on its arc, wisps, cumulus, stratus, stars, rain, snow, mist, birds, all following the real weather. Drawn once, seeded (`src/lib/organic.ts`); only transform and opacity animate, on few layers (the TV's GPU is weak: keep each scene under about 6 screens of compositing). `?fps=1` shows the frame rate in a corner; in dev, `?at=` sets the whole clock.
 - `src/lib/time.ts`: every date and time, always in `snapshot.timeZone`, AP style.
 - `src/lib/auth.ts`: one secret (`FAMILY_KEY`); devices hold an HMAC cookie; scripts send `Authorization: Bearer <key>`. Every family-data route checks `isFamily()`.
 
