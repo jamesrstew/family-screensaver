@@ -39,7 +39,8 @@ const tools = [
   {
     type: "function",
     name: "read_weather",
-    description: "Current conditions and the seven-day forecast.",
+    description:
+      "Current conditions, the seven-day forecast, and the temperature inside the house.",
     parameters: { type: "object", properties: {} },
   },
   {

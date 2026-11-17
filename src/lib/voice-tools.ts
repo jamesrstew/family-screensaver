@@ -29,8 +29,17 @@ export async function runTool(
     }
     case "read_weather": {
       const w = snapshot.weather;
-      if (!w) return { available: false };
+      // Inside the house, from the thermostats, when they've answered.
+      const inside = snapshot.indoor
+        ? snapshot.indoor.rooms.map((r) => ({
+            room: r.name,
+            temperature: `${r.temp}°F`,
+            ...(r.humidity !== undefined ? { humidity: `${r.humidity}%` } : {}),
+          }))
+        : undefined;
+      if (!w) return { available: false, inside };
       return {
+        inside,
         summary: forecastLine(w, now, tz),
         now: `${w.now.temp}°F, ${w.now.label}`,
         days: w.days.map((d, i) => ({
