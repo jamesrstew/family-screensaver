@@ -32,8 +32,10 @@ describe("a forecast that's run out", () => {
     const html = renderToStaticMarkup(
       createElement(Weather, { snapshot, now: at(30), mood: "morning", view: "hours" }),
     );
-    expect(html).not.toContain("NaN");
-    expect(html).not.toContain("Feels like");
+    // Nothing at all (the server draws only the sky lens, so asserting "no
+    // NaN" alone would pass even without the guard; the plate's own test
+    // below covers the other lenses).
+    expect(html).toBe("");
   });
   it("draws a plate with no hours or no columns as nothing", () => {
     for (const lens of ["precip", "air", "feels", "wind", "humidity", "uv"] as const) {
