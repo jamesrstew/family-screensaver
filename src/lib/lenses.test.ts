@@ -438,8 +438,8 @@ describe("how it feels, in words", () => {
     );
   });
   it("sets a day's feel from the end that strays, in plain words", () => {
-    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({ big: "15°", sub: "coldest", quiet: false });
-    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({ big: "108°", sub: "hottest", quiet: false });
+    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({ big: "15°", sub: "", quiet: false });
+    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({ big: "108°", sub: "", quiet: false });
     expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true, sub: "" });
   });
 });

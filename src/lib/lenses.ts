@@ -679,7 +679,8 @@ export function feelsFigure(feels: number, temp: number): Figure {
 
 /**
  * What a day feels like, from whichever end of it strays further from the
- * thermometer: "11°" over "coldest", or "104°" over "hottest".
+ * thermometer: its coldest feel ("11°") or its hottest ("104°"). The line
+ * above says which; a caption under every day would only repeat it.
  */
 export function feelsDayFigure(
   high: number,
@@ -690,8 +691,7 @@ export function feelsDayFigure(
   const chill = low - feelsLow;
   const heat = feelsHigh - high;
   const [feels, air] = chill >= heat ? [feelsLow, low] : [feelsHigh, high];
-  const quiet = !feelsSays(air, feels);
-  return { big: `${feels}°`, sub: quiet ? "" : chill >= heat ? "coldest" : "hottest", quiet };
+  return { big: `${feels}°`, sub: "", quiet: !feelsSays(air, feels) };
 }
 
 /** "Feels like 12° tonight.": plain words, never how far from the thermometer. */
