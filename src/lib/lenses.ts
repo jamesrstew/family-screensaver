@@ -692,7 +692,7 @@ export function daysFeelsLine(
  * its own it misleads (a cold night is "100%" and feels like nothing). The
  * dew point is the honest measure of how the air feels: muggy from 65°,
  * oppressive from 70°. So the figures carry both, and the words follow the
- * dew point when it's muggy. Dry air alone isn't news in the high desert;
+ * dew point when it's muggy. Dry air alone isn't news (many places are dry);
  * dry air with strong gusts is, and the words say so plainly (not "fire
  * weather", which sounds like the weather service's own warning).
  */
