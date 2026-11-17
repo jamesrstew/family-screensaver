@@ -2,6 +2,7 @@
 // Times are spelled out so the model never does time-zone math.
 
 import { forecastLine } from "./forecast";
+import { freshIndoor } from "./indoor";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
 import { PAGES, type Snapshot, type Page } from "./types";
 
@@ -29,9 +30,10 @@ export async function runTool(
     }
     case "read_weather": {
       const w = snapshot.weather;
-      // Inside the house, from the thermostats, when they've answered.
-      const inside = snapshot.indoor
-        ? snapshot.indoor.rooms.map((r) => ({
+      // Inside the house, room by room, when the thermostats answered recently.
+      const indoor = freshIndoor(snapshot, now);
+      const inside = indoor
+        ? indoor.rooms.map((r) => ({
             room: r.name,
             temperature: `${r.temp}°F`,
             ...(r.humidity !== undefined ? { humidity: `${r.humidity}%` } : {}),

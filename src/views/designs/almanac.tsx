@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { insideShape, insideWithin, type Inside as InsideNote } from "@/lib/indoor";
+import { insideTemp } from "@/lib/indoor";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -120,10 +120,11 @@ export function Home(props: ViewProps) {
   const next = nextUp(props);
   const w = snapshot.weather;
   const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
-  const inside = insideWithin(snapshot.indoor, cornerRoom(nextLine));
+  // The house's temperature, in the corner, when what's next leaves it room.
+  const inside = cornerRoom(nextLine) >= "68° inside".length ? insideTemp(snapshot, now) : null;
   const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
   const boxFor = (item: NotebookItem) =>
-    heroBox({ sky: Boolean(w), next: Boolean(next || inside), ask: asks(item), item });
+    heroBox({ sky: Boolean(w), next: Boolean(next) || inside !== null, ask: asks(item), item });
   const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
   // The first of the day's passages that fits its space; a longer one waits
   // for the Ideas page, which has room for anything.
@@ -169,7 +170,7 @@ export function Home(props: ViewProps) {
           </article>
         ) : null}
       </Ink>
-      {next || inside ? (
+      {next || inside !== null ? (
         // The foot of the page: what's next in the middle, the house in the corner.
         <div className="relative pt-[1rem] text-center">
           <Ink order={2} mode="seep">
@@ -184,14 +185,9 @@ export function Home(props: ViewProps) {
               )}
             </p>
           </Ink>
-          {inside ? (
-            <Ink
-              k={insideShape(inside)}
-              order={3}
-              mode="seep"
-              className="absolute right-0 bottom-[0.7rem]"
-            >
-              <Inside inside={inside} />
+          {inside !== null ? (
+            <Ink order={3} mode="seep" className="absolute right-0 bottom-[0.7rem]">
+              <Inside temp={inside} />
             </Ink>
           ) : null}
         </div>
@@ -217,40 +213,17 @@ function cornerRoom(nextLine: string): number {
 }
 
 /**
- * Inside the house, a note in the corner, like the ends of the day at the
- * horizon: "68° inside", or each room when they differ. Part of the paper's
- * furniture, in faint ink; it stays put while the sun moves.
+ * Inside the house, a note in the corner, written as the ends of the day are
+ * at the horizon: "68° inside". Part of the paper's furniture; it stays put
+ * while the sun moves, and comes and goes with the passages.
  */
-function Inside({ inside }: { inside: InsideNote }) {
-  const word = (s: string) => <span className="italic">{s}</span>;
-  const dot = <span className="mx-[0.5rem]">·</span>;
+function Inside({ temp }: { temp: number }) {
   return (
     <p
-      className="leading-none whitespace-nowrap text-ink-faint"
+      className="leading-none whitespace-nowrap text-ink-soft"
       style={{ fontSize: `${CORNER}rem` }}
     >
-      {inside.kind === "one" ? (
-        <>
-          <Deg v={inside.temp} /> {word("inside")}
-        </>
-      ) : inside.kind === "range" ? (
-        <>
-          <Deg v={inside.low} /> to <Deg v={inside.high} /> {word("inside")}
-        </>
-      ) : (
-        inside.rooms.map((r, i) => (
-          <span key={r.name}>
-            {i ? dot : null}
-            {word(r.name)} <Deg v={r.temp} />
-          </span>
-        ))
-      )}
-      {inside.air ? (
-        <>
-          {dot}
-          {word(`${inside.air} air`)}
-        </>
-      ) : null}
+      <Deg v={temp} /> <span className="text-ink-faint italic">inside</span>
     </p>
   );
 }
