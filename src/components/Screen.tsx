@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import {
   nextTurnIn,
@@ -24,6 +24,7 @@ import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
 import { glowsAt } from "@/views/designs/living";
 import { DESIGNS, type Design } from "@/views/designs/registry";
+import { freshWeather } from "@/lib/forecast";
 import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
@@ -55,7 +56,6 @@ const HOLD_MS: Record<Page, number> = {
 };
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
-const STALE_WEATHER_MS = 3 * 60 * 60_000;
 // Ask often while people are up; rarely in the small hours (by the clock, not the sun).
 const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 // The clock shows minutes; the carousel's turns get a timer of their own.
@@ -90,9 +90,15 @@ export function Screen({
   design?: Design | null;
 }) {
   const kit = design ? DESIGNS[design] : null;
-  const [snapshot, setSnapshot] = useState(initial);
+  const [latest, setSnapshot] = useState(initial);
   // First render uses the server's clock so hydration matches; then real time.
   const [now, setNow] = useState(() => new Date(initial.issuedAt));
+  // A forecast that no longer speaks of now (offline for hours, a clock far
+  // off) is left out, never shown as fact: the screen turns passages alone.
+  const snapshot = useMemo(() => {
+    const weather = freshWeather(latest.weather, now);
+    return weather === latest.weather ? latest : { ...latest, weather };
+  }, [latest, now]);
   const [page, setPage] = useState<Page>(initialPage);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
@@ -106,9 +112,9 @@ export function Screen({
   // wobbles at the edge doesn't flip its form.
   const [inside, setInside] = useState(() => insideOf(initial.indoor, null));
   const [insideFrom, setInsideFrom] = useState(initial);
-  if (snapshot !== insideFrom) {
-    setInsideFrom(snapshot);
-    setInside(insideOf(snapshot.indoor, inside));
+  if (latest !== insideFrom) {
+    setInsideFrom(latest);
+    setInside(insideOf(latest.indoor, inside));
   }
 
   // ---- Waking up: the paper takes its mood at once; only later changes are slow.
@@ -193,22 +199,18 @@ export function Screen({
 
   // ---- A fresh snapshot every few minutes. A lost pairing shows the lock.
   useEffect(() => {
-    let weatherAt = Date.now();
     const t = window.setInterval(async () => {
       try {
         const res = await fetch("/api/snapshot", { cache: "no-store" });
         if (res.status === 401) return window.location.reload();
         if (!res.ok) return;
         const next: Snapshot = await res.json();
-        // One missed weather report shouldn't wipe the sky; keep the last for a while.
-        if (next.weather) {
-          weatherAt = Date.now();
-          setSun(next.weather.today);
-        }
-        const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
+        // One missed weather report shouldn't wipe the sky: keep the last
+        // until it's stale (freshWeather).
+        if (next.weather) setSun(next.weather.today);
         setSnapshot((prev) => ({
           ...next,
-          weather: keep && prev.weather ? prev.weather : next.weather,
+          weather: next.weather ?? prev.weather,
           // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
           indoor: next.indoor ?? prev.indoor,
         }));

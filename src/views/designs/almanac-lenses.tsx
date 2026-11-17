@@ -210,6 +210,7 @@ type PlateProps = {
 /** One lens's chart across the whole row. */
 export function Plate({ lens, hours, cols, scale, bin = 1 }: PlateProps) {
   const id = `plate-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  if (!hours.length || !cols) return null;
   const past = hours.some((h) => h?.past);
   const ahead = past ? hours.map((h) => (h?.past ? undefined : h)) : hours;
   const values = (pick: (h: PlateHour) => number | null | undefined, gone = false) =>
