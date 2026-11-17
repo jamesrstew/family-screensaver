@@ -1156,12 +1156,14 @@ const RAIN = [
   { th: 23, n: 46, len: 0.9, sw: 1, speed: 6, cls: "sky-rain-mid" },
   { th: 29, n: 26, len: 1.3, sw: 1.25, speed: 8, cls: "sky-rain-near" },
 ];
-const SNOW = [
-  { th: 23, n: 70, size: [0.075, 0.15], ms: 41000, sway: 9000, cls: "sky-snow-far" },
-  { th: 29, n: 40, size: [0.15, 0.225], ms: 29000, sway: 13000, cls: "sky-snow-mid" },
-  { th: 37, n: 2, size: [0.65, 0.9], ms: 19000, sway: 17000, cls: "sky-snow-near" },
-];
-const SLANT = 0.09;
+// Snow is two sheets: fine far dots, and a nearer sheet of larger dots that
+// carries a few big engraved crystals by day (so a still frame says snow)
+// and, at night, soft dots big enough to see from the couch (a crystal would
+// read as a star). Only one of the two near variants shows at a time.
+const SNOW_FAR = { th: 23, n: 70, size: [0.075, 0.15], ms: 41000, sway: 9000 };
+const SNOW_NEAR = { th: 29, n: 40, size: [0.15, 0.225], ms: 29000, sway: 13000 };
+// Rain leans a little, as if there were a wind (shared by every sheet).
+const SLANT = 0.12;
 
 function Fall({
   kind,
@@ -1205,38 +1207,101 @@ function Fall({
           </Layer>
         );
       })}
-      {SNOW.map((L, i) => {
-        const r = rng(7027 + i);
-        const flakes = Array.from({ length: L.n }, (_, k) => {
-          const s = (L.size[0] + r() * (L.size[1] - L.size[0])) * 10;
-          const x = s + 1 + r() * (1200 - 2 * s - 2);
-          const y = s + 1 + r() * (L.th * 10 - 2 * s - 2);
-          if (i < 2)
+      <SnowSheet
+        L={SNOW_FAR}
+        seed={7027}
+        show={kind === "snow"}
+        className="sky-snow-far"
+        id="snowfar"
+      />
+      <SnowSheet
+        L={SNOW_NEAR}
+        seed={7028}
+        show={kind === "snow" && !quiet && !night}
+        className="sky-snow-mid"
+        id="snowday"
+        extra="crystals"
+      />
+      <SnowSheet
+        L={SNOW_NEAR}
+        seed={7028}
+        show={kind === "snow" && !quiet && night}
+        className="sky-snow-mid"
+        id="snownight"
+        extra="dots"
+      />
+    </>
+  );
+}
+
+function SnowSheet({
+  L,
+  seed,
+  show,
+  className,
+  id,
+  extra,
+}: {
+  L: typeof SNOW_FAR;
+  seed: number;
+  show: boolean;
+  className: string;
+  id: string;
+  extra?: "crystals" | "dots";
+}) {
+  const r = rng(seed);
+  const at = (s: number) => [
+    s + 1 + r() * (1200 - 2 * s - 2),
+    s + 1 + r() * (L.th * 10 - 2 * s - 2),
+  ];
+  const flakes = Array.from({ length: L.n }, (_, k) => {
+    const s = (L.size[0] + r() * (L.size[1] - L.size[0])) * 10;
+    const [x, y] = at(s);
+    return (
+      <circle
+        key={k}
+        cx={x.toFixed(1)}
+        cy={y.toFixed(1)}
+        r={s.toFixed(2)}
+        fill="currentColor"
+        opacity={(0.55 + r() * 0.45).toFixed(2)}
+      />
+    );
+  });
+  // About four or five crystals on the sheet at a time by day; at night,
+  // eight or so soft dots of 0.35 to 0.5 rem.
+  const more =
+    extra === "crystals"
+      ? Array.from({ length: 2 }, (_, k) => {
+          const s = (0.65 + r() * 0.25) * 10;
+          const [x, y] = at(s);
+          return <Crystal key={`c${k}`} x={x} y={y} s={s} />;
+        })
+      : extra === "dots"
+        ? Array.from({ length: 4 }, (_, k) => {
+            const s = (0.175 + r() * 0.075) * 10;
+            const [x, y] = at(s);
             return (
               <circle
-                key={k}
+                key={`d${k}`}
                 cx={x.toFixed(1)}
                 cy={y.toFixed(1)}
                 r={s.toFixed(2)}
                 fill="currentColor"
-                opacity={(0.55 + r() * 0.45).toFixed(2)}
+                opacity={0.7}
               />
             );
-          return <Crystal key={k} x={x} y={y} s={s} />;
-        });
-        // At night, dots only: a crystal would read as a star.
-        const show = kind === "snow" && layerOn(i) && !(night && i === 2);
-        return (
-          <Layer key={`s${i}`} show={show} className={`sky-fill ${L.cls}`}>
-            <div className="sky-fill sky-sway" style={{ animationDuration: `${L.sway}ms` }}>
-              <Tiled th={L.th} ms={L.ms} id={`snow${i}`}>
-                {flakes}
-              </Tiled>
-            </div>
-          </Layer>
-        );
-      })}
-    </>
+          })
+        : null;
+  return (
+    <Layer show={show} className={`sky-fill ${className}`}>
+      <div className="sky-fill sky-sway" style={{ animationDuration: `${L.sway}ms` }}>
+        <Tiled th={L.th} ms={L.ms} id={id}>
+          {flakes}
+          {more}
+        </Tiled>
+      </div>
+    </Layer>
   );
 }
 
@@ -1258,7 +1323,7 @@ function Crystal({ x, y, s }: { x: number; y: number; s: number }) {
       }
     }
   }
-  return <path d={d} stroke="currentColor" strokeWidth={0.7} strokeLinecap="round" fill="none" />;
+  return <path d={d} stroke="currentColor" strokeWidth={1.05} strokeLinecap="round" fill="none" />;
 }
 
 function Tiled({
