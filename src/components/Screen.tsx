@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
-import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
+import {
+  sinceAfter,
+  slideFromKey,
+  slideKey,
+  slideOf,
+  turns,
+  type WeatherView,
+} from "@/lib/carousel";
 import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
@@ -27,7 +34,12 @@ import { useVoice } from "./useVoice";
 
 // A page, the night page, one piece of home's carousel ("home:passage-12"),
 // or one view of the weather ("weather:hours").
-type View = Exclude<Page, "weather"> | "night" | `home:${string}` | `weather:${WeatherView}`;
+type View =
+  | Exclude<Page, "weather">
+  | "night"
+  | `home:${string}`
+  | `night:${string}`
+  | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
 const HOLD_MS: Record<Page, number> = {
@@ -101,10 +113,10 @@ export function Screen({
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
     setLastBase(base);
-    // Back from the Weather page, the weather's just been seen: open on a passage.
-    if (base === "home") setHomeSince(now.getTime() - (lastBase === "weather" ? WEATHER_MS : 0));
+    // Day and night are one carousel; back from another page, it starts over.
+    setHomeSince(sinceAfter(lastBase, base, now.getTime(), homeSince));
   }
-  const carousel = base === "home" && design === "almanac";
+  const carousel = turns(base) && design === "almanac";
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
@@ -267,7 +279,9 @@ export function Screen({
   );
 
   const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
-  const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
+  // A carousel slide, by day ("home:…") or by night ("night:…").
+  const [at, key] = view.split(":");
+  const slide = (at === "home" || at === "night") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
@@ -305,7 +319,8 @@ export function Screen({
           <InkStage.Provider value={leaving}>
             <div key={view} className="relative z-[1] h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
-              {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
+              {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&

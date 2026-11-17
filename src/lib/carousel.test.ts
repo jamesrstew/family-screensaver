@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { PASSAGE_MS, WEATHER_MS, WEATHER_VIEWS, slideFromKey, slideKey, slideOf } from "./carousel";
+import {
+  PASSAGE_MS,
+  WEATHER_MS,
+  WEATHER_VIEWS,
+  sinceAfter,
+  slideFromKey,
+  slideKey,
+  slideOf,
+  turns,
+  type Slide,
+} from "./carousel";
+import { targetOf } from "./show";
 
 const turn = WEATHER_MS + PASSAGE_MS;
 const since = 1_000 * turn + 12_345; // home appeared at an odd moment
@@ -50,5 +61,33 @@ describe("slide keys", () => {
     ])
       expect(slideFromKey(slideKey(s))).toEqual(s);
     expect(slideFromKey("weather-tornado")).toBeUndefined();
+  });
+});
+
+describe("night turns as day does", () => {
+  const now = Date.parse("2026-11-18T17:00:00-08:00");
+  it("carries on across sunset and sunrise: day and night are one carousel", () => {
+    const since = now - 95_000;
+    expect(sinceAfter("home", "night", now, since)).toBe(since);
+    expect(sinceAfter("night", "home", now, since)).toBe(since);
+  });
+  it("starts over, on the weather, coming back from another page", () => {
+    expect(sinceAfter("week", "night", now, 0)).toBe(now);
+    expect(sinceAfter("notebook", "home", now, 0)).toBe(now);
+  });
+  it("opens on a passage after the Weather page (the weather's just been seen)", () => {
+    const since = sinceAfter("weather", "night", now, 0);
+    expect(slideOf(new Date(now), since, true).kind).toBe("passage");
+  });
+  it("leaves other pages alone", () => {
+    expect(sinceAfter("home", "week", now, 123)).toBe(123);
+    expect(turns("night")).toBe(true);
+    expect(turns("weather")).toBe(false);
+  });
+  it("draws the night's slides as the night's", () => {
+    const at = (s: Slide) =>
+      targetOf({ base: "night", slide: slideKey(s), asked: null, fromUrl: "now" });
+    expect(at({ kind: "weather", view: "now" })).toBe("night:weather-now");
+    expect(at({ kind: "passage", n: 7 })).toBe("night:passage-7");
   });
 });
