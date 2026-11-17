@@ -670,7 +670,7 @@ function Days({ w, now, snapshot }: Drawn) {
       );
     if (lens === "air") return airFigure(d.aqi);
     if (lens === "feels") return feelsDayFigure(d.feelsHigh ?? d.high, d.feelsLow ?? d.low);
-    if (lens === "humidity") return humidityDayFigure(s.rh ?? 0, hi(d.hourly?.rh) ?? 0, s.dew ?? 0);
+    if (lens === "humidity") return humidityDayFigure(s.rh ?? 0, s.dew ?? 0);
     return uvFigure(d.uv ?? 0);
   };
 

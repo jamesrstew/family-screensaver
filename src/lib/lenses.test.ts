@@ -361,8 +361,10 @@ describe("humidity, in words", () => {
       "Muggiest Saturday, dew point up to 71°.",
     );
   });
-  it("sets a day's range", () => {
-    expect(humidityDayFigure(9, 38, 36)).toMatchObject({ big: "9\u201338%", sub: "dew 36°" });
+  it("sets a day by its driest hour", () => {
+    expect(humidityDayFigure(9, 36)).toEqual({ big: "9%", sub: "dew 36°", quiet: false });
+    expect(humidityDayFigure(40, 66)).toMatchObject({ quiet: false });
+    expect(humidityDayFigure(40, 50)).toMatchObject({ quiet: true });
   });
 });
 

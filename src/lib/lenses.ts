@@ -472,13 +472,9 @@ export function humidityFigure(rh: number, dew: number): Figure {
   return { big: `${rh}%`, sub: `dew ${dew}°`, quiet: dew < MUGGY && rh > PARCHED };
 }
 
-/** A day's humidity, driest to dampest: "12–64%". */
-export function humidityDayFigure(lo: number, hi: number, dew: number): Figure {
-  return {
-    big: lo < hi ? `${lo}\u2013${hi}%` : `${hi}%`,
-    sub: `dew ${dew}°`,
-    quiet: dew < MUGGY && lo > PARCHED,
-  };
+/** A day's humidity: its driest hour (a week's column has no room for a range), and its muggiest dew point. */
+export function humidityDayFigure(driest: number, dew: number): Figure {
+  return { big: `${driest}%`, sub: `dew ${dew}°`, quiet: dew < MUGGY && driest > PARCHED };
 }
 
 /** "Muggy this afternoon, dew point up to 66°." or "Very dry air, down to 9% this afternoon." */
