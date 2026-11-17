@@ -15,15 +15,14 @@ import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { fitType } from "./fit";
 
-/** How far a passage that won't fit looks ahead for one that will: far enough not to show it again soon. */
-const SKIP_STRIDE = 17;
-
 /**
  * Home's one piece: a carousel passage reads the deck's passage n (pick.ts);
  * from 2 to 6 p.m. the question for the table takes about one passage in
  * twelve. Without a carousel, the idea of the quarter hour.
- * `skip` passes over that many candidates, for when one won't fit its space;
- * it looks well ahead, so the one it borrows isn't up again a minute later.
+ * `skip` passes over that many candidates, for when one won't fit its space.
+ * The deck holds only passages that fit everywhere (fitsEverywhere), so that
+ * is rare; then it borrows from the day's own run, never from the deck's
+ * passages still to come, so the deck's no-repeat promise holds.
  */
 export function heroOf({ snapshot, now, slide }: ViewProps, skip = 0): NotebookItem | null {
   const n = slide?.kind === "passage" ? slide.n : null;
@@ -31,14 +30,30 @@ export function heroOf({ snapshot, now, slide }: ViewProps, skip = 0): NotebookI
   const ask = asking && (n === null || n % QUESTION_EVERY === 0);
   const question = ask ? questionFor(snapshot.notebook) : null;
   if (question && skip === 0) return question;
-  const k = (n ?? slotOf(now)) + skip * SKIP_STRIDE;
-  return (n === null ? null : passageAt(snapshot.passages, k)) ?? leadAt(snapshot.notebook, k);
+  const at = n ?? slotOf(now);
+  const deck = n === null || skip > 0 ? null : passageAt(snapshot.passages, at);
+  return deck ?? leadAt(snapshot.notebook, at + skip);
 }
 
 // Home's page inside its margins (67.5 rem less 3.25 top and 3 bottom), and
 // the band the sky's words take at its head (less the top margin).
 const PAGE_H = 61.25;
 const SKY_H = 27.75;
+
+/**
+ * Whether an idea or quote fits Almanac's smallest rooms for a passage:
+ * home's with the sky and what's next, and the night page's with tomorrow's
+ * line. The carousel's deck keeps only these, so a passage rarely skips.
+ */
+export function fitsEverywhere(item: NotebookItem): boolean {
+  const style = { italic: item.kind !== "idea", min: 3.6 };
+  const home = heroBox({ sky: true, next: true, ask: false, item });
+  const night = { w: 100, h: PAGE_H - SKY_H - 3.9 - (item.author ? 6.3 : 0) - 3.5 };
+  return (
+    fitType(item.text, home, { ...style, max: 11 }).fits &&
+    fitType(item.text, night, { ...style, max: 9 }).fits
+  );
+}
 
 /**
  * The room home's piece has, in rem: the page below the sky, less the lines

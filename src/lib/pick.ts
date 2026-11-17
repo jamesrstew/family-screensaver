@@ -80,10 +80,13 @@ export const PASSAGE_WINDOW = 60;
 /** The afternoon's question comes round once in this many passages (about minutes). */
 export const QUESTION_EVERY = 12;
 
-/** The carousel's deck: every short idea and quote, in a fixed shuffled order. */
-export function leadDeck(items: NotebookItem[]): NotebookItem[] {
+/** The carousel's deck: every short idea and quote (that `fits` its rooms), in a fixed shuffled order. */
+export function leadDeck(
+  items: NotebookItem[],
+  fits: (i: NotebookItem) => boolean = () => true,
+): NotebookItem[] {
   const leads = items
-    .filter((i) => i.kind !== "question" && heroFit(i))
+    .filter((i) => i.kind !== "question" && heroFit(i) && fits(i))
     .sort((a, b) => a.id.localeCompare(b.id));
   return shuffled(leads, 3_2_1_2);
 }
