@@ -86,14 +86,13 @@ function useForced(): Lens | null {
   return LENSES.find((l) => l === asked) ?? null;
 }
 
-/** The lens's name, set small over its sentence. The sky needs none. */
+/** The lens's name, set small over its sentence. The sky needs none, nor how it feels ("Feels like 12° tonight." says it). */
 export function captionOf(lens: Lens, kinds: { rain: boolean; snow: boolean }): string | null {
   if (lens === "precip") {
     return kinds.rain && kinds.snow ? "Rain and snow" : kinds.snow ? "Snow" : "Rain";
   }
   if (lens === "wind") return "Wind, mph";
   if (lens === "uv") return "UV index";
-  if (lens === "feels") return "Feels like";
   if (lens === "humidity") return "Humidity and dew point";
   if (lens === "air") return "Air quality, US AQI";
   return null;
