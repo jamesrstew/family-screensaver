@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
+import { SHOW_TTL_MS, pageKey, targetOf, viewAsked } from "@/lib/show";
 import {
   nextTurnIn,
   startAfter,
@@ -153,7 +153,11 @@ export function Screen({
     fromUrl,
   }) as View;
   const [view, setView] = useState<View>(target);
-  const leaving = target !== view;
+  // Passages back to back are one page: the clock and the notes hold still,
+  // and only the piece turns, in its own ink (keyed by the passage).
+  const leaving = pageKey(target) !== pageKey(view);
+  const shown = leaving ? view : target;
+  if (!leaving && target !== view) setView(target);
   // Just after a turn the old page has already sunk: the next takes the paper at once.
   const wasTurning = useRef(false);
   useEffect(() => {
@@ -307,16 +311,16 @@ export function Screen({
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
 
-  const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
+  const asked = shown.startsWith("weather:") ? (shown.slice(8) as WeatherView) : undefined;
   // A carousel slide: a weather view ("carousel:…", the same by day or by
   // night, so sunset doesn't re-ink it), or a passage by day ("home:…") or
   // by night ("night:…").
-  const [at, key] = view.split(":");
+  const [at, key] = shown.split(":");
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
+  const drawn = kit && (shown === "home" || slide || shown === "night" || asked) ? kit : null;
   return (
     <div
       data-surface="tv"
@@ -347,7 +351,7 @@ export function Screen({
             // than a slide, so following the slides would make the sky pulse).
             // A weather slide's words get a short step back instead: no rule
             // or arc dots through them, the body faint behind them.
-            arc={view === "home" || view === "night" || Boolean(slide)}
+            arc={shown === "home" || shown === "night" || Boolean(slide)}
             quiet={!slide && (asked ?? "now") !== "now"}
             words={slide?.kind === "weather"}
             seed={seed}
@@ -360,20 +364,20 @@ export function Screen({
               (and an asked page inks back in afterward). */}
           <InkStage.Provider value={leaving || turning}>
             <div
-              key={view}
+              key={pageKey(shown)}
               className="relative z-[1] h-full"
               // The weather's words, set in night's soft ink after dark (designs.css).
               data-weather-view={slide?.kind === "weather" || asked ? "" : undefined}
             >
-              {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
+              {shown === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
               {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
-              {view === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
+              {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
-              {view === "week" && <WeekPage {...props} />}
-              {view === "notebook" && <NotebookPage {...props} />}
+              {shown === "week" && <WeekPage {...props} />}
+              {shown === "notebook" && <NotebookPage {...props} />}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>

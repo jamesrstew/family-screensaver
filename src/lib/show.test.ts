@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ShowBody, targetOf, viewAsked } from "./show";
+import { ShowBody, pageKey, targetOf, viewAsked } from "./show";
 
 describe("ShowBody", () => {
   it.each([
@@ -56,5 +56,20 @@ describe("what a request turns the screen to", () => {
       "carousel:weather-hours",
     );
     expect(targetOf({ base: "night", slide: null, asked: null, fromUrl: "now" })).toBe("night");
+  });
+});
+
+describe("the page a target draws", () => {
+  const at = (base: "home" | "night", slide: string) =>
+    pageKey(targetOf({ base, slide, asked: null, fromUrl: "now" }));
+  it("keeps passages back to back on one page, so only the piece turns", () => {
+    expect(at("home", "passage-7")).toBe(at("home", "passage-8"));
+    expect(at("night", "passage-7")).toBe(at("night", "passage-8"));
+  });
+  it("turns the page for the weather, and at sunset", () => {
+    expect(at("home", "passage-7")).not.toBe(at("home", "weather-now"));
+    expect(at("home", "passage-7")).not.toBe(at("night", "passage-8"));
+    expect(at("home", "weather-now")).not.toBe(at("home", "weather-hours"));
+    expect(pageKey("week")).toBe("week");
   });
 });
