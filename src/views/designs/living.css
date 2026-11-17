@@ -344,6 +344,13 @@
 .sky[data-quiet] .sky-cloud[data-on="1"] {
   opacity: 0.4;
 }
+/* Its own starting point, or the veil would outrank the fade-in and a cloud
+   arriving on a weather page would pop in. */
+@starting-style {
+  [data-settled] .sky[data-quiet] .sky-cloud[data-on="1"] {
+    opacity: 0;
+  }
+}
 [data-heavy] .sky-cloud-near,
 [data-heavy] .sky-stratus {
   color: var(--ink-soft);
@@ -580,6 +587,12 @@
 .sky[data-quiet] .sky-rain-far[data-on="1"],
 .sky[data-quiet] .sky-snow-far[data-on="1"] {
   opacity: 0.35;
+}
+@starting-style {
+  [data-settled] .sky[data-quiet] .sky-rain-far[data-on="1"],
+  [data-settled] .sky[data-quiet] .sky-snow-far[data-on="1"] {
+    opacity: 0;
+  }
 }
 
 /* The weather pages' small engravings, cut in the sky's fine hand: stroke
