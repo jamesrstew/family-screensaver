@@ -1,12 +1,12 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import { describe } from "./forecast";
-import type { Weather } from "./types";
+import type { DayHours, Weather } from "./types";
 
-// Open-Meteo: free, no key. Fahrenheit, the family's time zone.
+// Open-Meteo: free, no key. Fahrenheit, inches, mph, the family's time zone.
 const API = "https://api.open-meteo.com/v1/forecast";
 
-type OpenMeteo = {
+export type OpenMeteo = {
   current: { temperature_2m: number; weather_code: number; is_day: number };
   hourly: {
     time: string[];
@@ -14,6 +14,12 @@ type OpenMeteo = {
     precipitation_probability: number[];
     weather_code?: number[];
     is_day?: number[];
+    precipitation?: Num[];
+    snowfall?: Num[];
+    wind_speed_10m?: Num[];
+    wind_gusts_10m?: Num[];
+    wind_direction_10m?: Num[];
+    uv_index?: Num[];
   };
   daily: {
     time: string[];
@@ -23,9 +29,18 @@ type OpenMeteo = {
     precipitation_probability_max: number[];
     sunrise: string[];
     sunset: string[];
+    precipitation_sum?: Num[];
+    snowfall_sum?: Num[];
+    wind_speed_10m_max?: Num[];
+    wind_gusts_10m_max?: Num[];
+    wind_direction_10m_dominant?: Num[];
+    uv_index_max?: Num[];
   };
   utc_offset_seconds: number;
 };
+
+// Open-Meteo sends null where a model has no value.
+type Num = number | null;
 
 export async function getWeather(lat: number, lon: number, timeZone: string): Promise<Weather> {
   "use cache";
@@ -36,10 +51,16 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
     longitude: String(lon),
     timezone: timeZone,
     temperature_unit: "fahrenheit",
+    // Snowfall comes in inches of snow; precipitation in inches of water.
+    precipitation_unit: "inch",
+    wind_speed_unit: "mph",
     current: "temperature_2m,weather_code,is_day",
-    hourly: "temperature_2m,precipitation_probability,weather_code,is_day",
+    hourly:
+      "temperature_2m,precipitation_probability,weather_code,is_day," +
+      "precipitation,snowfall,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index",
     daily:
-      "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
+      "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset," +
+      "precipitation_sum,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max",
     // Eight, so the seven days ahead are all there after today drops off at 5 p.m.
     forecast_days: "8",
   });
@@ -58,8 +79,32 @@ function instant(local: string, offsetSeconds: number): string {
   return new Date(`${local}:00${sign}${hh}:${mm}`).toISOString();
 }
 
+/** Hundredths of an inch; whole mph; UV to a tenth. Small numbers travel light. */
+const r2 = (x: Num | undefined) => (x == null ? undefined : Math.round(x * 100) / 100);
+const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
+const r1 = (x: Num | undefined) => (x == null ? undefined : Math.round(x * 10) / 10);
+
+/** Each day's hours, from local midnight, as columns. Missing when any column is. */
+function dayHours(h: OpenMeteo["hourly"]): Map<string, DayHours> {
+  const out = new Map<string, DayHours>();
+  const cols = [h.precipitation, h.snowfall, h.wind_speed_10m, h.wind_gusts_10m, h.uv_index];
+  if (cols.some((c) => !c)) return out;
+  h.time.forEach((t, i) => {
+    const date = t.slice(0, 10);
+    let day = out.get(date);
+    if (!day) out.set(date, (day = { precip: [], snow: [], wind: [], gust: [], uv: [] }));
+    day.precip.push(r2(h.precipitation![i]) ?? 0);
+    day.snow.push(r2(h.snowfall![i]) ?? 0);
+    day.wind.push(r0(h.wind_speed_10m![i]) ?? 0);
+    day.gust.push(r0(h.wind_gusts_10m![i]) ?? 0);
+    day.uv.push(r1(h.uv_index![i]) ?? 0);
+  });
+  return out;
+}
+
 export function shape(d: OpenMeteo, now = new Date()): Weather {
   const off = d.utc_offset_seconds;
+  const strips = dayHours(d.hourly);
   const days = d.daily.time.map((date, i) => ({
     date,
     high: Math.round(d.daily.temperature_2m_max[i]),
@@ -67,6 +112,13 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     precipChance: d.daily.precipitation_probability_max[i] ?? 0,
     code: d.daily.weather_code[i],
     label: describe(d.daily.weather_code[i]),
+    precip: r2(d.daily.precipitation_sum?.[i]),
+    snow: r2(d.daily.snowfall_sum?.[i]),
+    wind: r0(d.daily.wind_speed_10m_max?.[i]),
+    gust: r0(d.daily.wind_gusts_10m_max?.[i]),
+    dir: r0(d.daily.wind_direction_10m_dominant?.[i]),
+    uv: r1(d.daily.uv_index_max?.[i]),
+    hourly: strips.get(date),
   }));
 
   const firstHour = d.hourly.time.findIndex(
@@ -79,6 +131,12 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     precipChance: d.hourly.precipitation_probability[from + i] ?? 0,
     code: d.hourly.weather_code?.[from + i],
     isDay: d.hourly.is_day ? d.hourly.is_day[from + i] === 1 : undefined,
+    precip: r2(d.hourly.precipitation?.[from + i]),
+    snow: r2(d.hourly.snowfall?.[from + i]),
+    wind: r0(d.hourly.wind_speed_10m?.[from + i]),
+    gust: r0(d.hourly.wind_gusts_10m?.[from + i]),
+    dir: r0(d.hourly.wind_direction_10m?.[from + i]),
+    uv: r1(d.hourly.uv_index?.[from + i]),
   }));
 
   return {

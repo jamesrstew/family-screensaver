@@ -3,7 +3,7 @@
 
 import { describe } from "./forecast";
 import { addDays, dayKey, parts } from "./time";
-import type { Weather } from "./types";
+import type { DayHours, Weather } from "./types";
 
 export const SKIES = ["fair", "snow", "storm", "rain"] as const;
 export type FakeSky = (typeof SKIES)[number];
@@ -14,6 +14,9 @@ type HourSpec = { code: number; chance: number };
 type Spec = {
   low: number;
   high: number;
+  /** The wind's calm and peak (mph), where it comes from, and the sun's noon UV. */
+  wind: [calm: number, peak: number, dir: number];
+  uv: number;
   /** The sky for a local hour of a day (0: today, 1: tomorrow). */
   hour: (day: number, h: number) => HourSpec;
   days: Array<[code: number, high: number, low: number, chance: number]>;
@@ -29,6 +32,8 @@ const SPECS: Record<FakeSky, Spec> = {
   fair: {
     low: 36,
     high: 58,
+    wind: [3, 9, 300],
+    uv: 3,
     hour: (_, h) => fair(h),
     days: [
       [1, 58, 36, 0],
@@ -44,6 +49,8 @@ const SPECS: Record<FakeSky, Spec> = {
   snow: {
     low: 24,
     high: 33,
+    wind: [6, 16, 330],
+    uv: 1.4,
     hour: (day, h) => {
       if (day === 0 && h >= 14 && h < 22) {
         const peak = [71, 73, 75, 75, 75, 73, 73, 71][h - 14];
@@ -66,6 +73,8 @@ const SPECS: Record<FakeSky, Spec> = {
   storm: {
     low: 58,
     high: 74,
+    wind: [8, 24, 220],
+    uv: 8.6,
     hour: (day, h) => {
       if (day === 0 && h >= 15 && h < 19) return { code: 95, chance: 85 };
       if (day === 0 && ((h >= 13 && h < 15) || (h >= 19 && h < 21)))
@@ -87,6 +96,8 @@ const SPECS: Record<FakeSky, Spec> = {
   rain: {
     low: 44,
     high: 52,
+    wind: [5, 14, 200],
+    uv: 1.2,
     hour: (day, h) => {
       if (day === 0 && h >= 4 && h < 11) return { code: h < 8 ? 63 : 61, chance: 85 };
       return { code: day === 1 && h >= 10 ? 2 : 3, chance: 10 };
@@ -109,6 +120,69 @@ function tempAt(spec: Spec, h: number): number {
   return Math.round(spec.low + ((x + 1) / 2) * (spec.high - spec.low));
 }
 
+/** Inches of water an hour for a code: drizzle, rain, showers, storms. */
+function waterOf(code: number): number {
+  if (code >= 95) return 0.3;
+  if (code >= 80) return 0.08;
+  if (code === 65) return 0.22;
+  if (code === 63) return 0.09;
+  if (code === 61) return 0.03;
+  if (code >= 51 && code <= 57) return 0.01;
+  return 0;
+}
+
+/** Inches of snow an hour for a snow code. */
+function snowOf(code: number): number {
+  if (code === 75 || code === 86) return 0.8;
+  if (code === 73 || code === 85) return 0.4;
+  if (code === 71 || code === 77) return 0.15;
+  return 0;
+}
+
+/** The sky for any hour of the week: the spec's own hours for two days, then each day's code. */
+function hourAt(spec: Spec, day: number, h: number): HourSpec {
+  if (day < 2) return spec.hour(day, h);
+  const [code, , , chance] = spec.days[day] ?? spec.days.at(-1)!;
+  // A wet day is wet from late morning to evening.
+  return h >= 10 && h < 18 ? { code, chance } : { code: code > 3 ? 3 : code, chance: 10 };
+}
+
+/** One made-up hour, everything the lenses draw. */
+function lensHour(spec: Spec, day: number, h: number) {
+  const s = hourAt(spec, day, h);
+  const sure = s.chance >= 30;
+  const snow = sure ? snowOf(s.code) : 0;
+  const precip = sure ? Math.round((waterOf(s.code) + snow / 7) * 100) / 100 : 0;
+  // The wind rises through the day and falls at night, a little more each day.
+  const [calm, peak, dir] = spec.wind;
+  const x = (Math.cos(((h - 15) / 24) * 2 * Math.PI) + 1) / 2;
+  const wind = Math.round(calm + x * (peak - calm) + ((day * 3) % 5) - 1);
+  // The sun from 7 to 5, highest at noon.
+  const sun = h > 7 && h < 17 ? Math.sin(((h - 7) / 10) * Math.PI) : 0;
+  return {
+    precip,
+    snow,
+    wind,
+    gust: Math.round(wind * 1.6 + 2),
+    dir: (dir + h * 3 + day * 20) % 360,
+    uv: Math.round(spec.uv * sun * (1 - (day % 3) * 0.08) * 10) / 10,
+  };
+}
+
+/** A made-up day's hours as columns, as Open-Meteo's are shaped. */
+function lensDay(spec: Spec, day: number): DayHours {
+  const hours = Array.from({ length: 24 }, (_, h) => lensHour(spec, day, h));
+  return {
+    precip: hours.map((h) => h.precip),
+    snow: hours.map((h) => h.snow),
+    wind: hours.map((h) => h.wind),
+    gust: hours.map((h) => h.gust),
+    uv: hours.map((h) => h.uv),
+  };
+}
+
+const sum = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
+
 /** A whole Weather report for a made-up sky, as Open-Meteo would shape it. */
 export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather {
   const spec = SPECS[sky];
@@ -129,17 +203,28 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       precipChance: s.chance,
       code: s.code,
       isDay,
+      ...lensHour(spec, day, hour),
     };
   });
 
-  const days = spec.days.map(([code, high, low, chance], i) => ({
-    date: addDays(today, i),
-    high,
-    low,
-    precipChance: chance,
-    code,
-    label: describe(code),
-  }));
+  const days = spec.days.map(([code, high, low, chance], i) => {
+    const hourly = lensDay(spec, i);
+    return {
+      date: addDays(today, i),
+      high,
+      low,
+      precipChance: chance,
+      code,
+      label: describe(code),
+      precip: sum(hourly.precip),
+      snow: sum(hourly.snow),
+      wind: Math.max(...hourly.wind),
+      gust: Math.max(...hourly.gust),
+      dir: (spec.wind[2] + i * 20) % 360,
+      uv: Math.max(...hourly.uv),
+      hourly,
+    };
+  });
 
   const nowHour = hours[0];
   return {

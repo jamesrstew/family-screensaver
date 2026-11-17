@@ -24,6 +24,18 @@ export type Weather = {
     precipChance: number;
     label: string;
     code: number;
+    // The lenses (rain and snow, wind, UV). Optional: an older report has none.
+    /** Rain and melted snow, in inches of water. */
+    precip?: number;
+    /** Snow, in inches of snow on the ground (not melted). */
+    snow?: number;
+    /** The strongest wind and gust, mph; where the wind mostly comes from, degrees. */
+    wind?: number;
+    gust?: number;
+    dir?: number;
+    uv?: number;
+    /** The day hour by hour, from midnight, for drawing it. */
+    hourly?: DayHours;
   }>;
   hours: Array<{
     time: string;
@@ -31,7 +43,22 @@ export type Weather = {
     precipChance: number;
     code?: number;
     isDay?: boolean;
+    precip?: number;
+    snow?: number;
+    wind?: number;
+    gust?: number;
+    dir?: number;
+    uv?: number;
   }>; // next 24
+};
+
+/** One day's hours as columns of numbers (they travel to the TV as JSON: kept small). */
+export type DayHours = {
+  precip: number[];
+  snow: number[];
+  wind: number[];
+  gust: number[];
+  uv: number[];
 };
 
 export type Happening = {
