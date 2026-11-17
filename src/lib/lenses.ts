@@ -51,6 +51,16 @@ export function lensOrder(lenses: readonly Lens[], after?: Lens | null): Lens[] 
   return ["sky", ...rest.slice(k), ...rest.slice(0, k)];
 }
 
+/**
+ * A carousel visit's one lens (home's and night's hours and days slides,
+ * half a minute each): the lens after the one last seen, round the whole
+ * turn, the sky included, so successive visits show every lens without
+ * anyone asking. The first visit opens on the sky.
+ */
+export function visitLens(lenses: readonly Lens[], after: Lens | null): Lens {
+  return after ? nextLens(lenses, after) : "sky";
+}
+
 /** Where a view's turning stands: when it began, the last tick, which turn, and its lens. */
 export type Turning = { since: number; last: number; turn: number; lens: Lens };
 

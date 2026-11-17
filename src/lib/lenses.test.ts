@@ -29,6 +29,7 @@ import {
   precipFigure,
   restOfDay,
   turning,
+  visitLens,
   type Lens,
   uvFigure,
   uvWord,
@@ -569,5 +570,25 @@ describe("turning: a view's lenses over time", () => {
   });
   it("carries on after the lens last seen in an earlier visit", () => {
     expect(run(60_000, () => all, "precip").seen).toEqual(["sky", "wind", "uv"]);
+  });
+});
+
+describe("visitLens: one lens a carousel visit", () => {
+  const visits = (lenses: Lens[], n: number) => {
+    let last: Lens | null = null;
+    return Array.from({ length: n }, () => (last = visitLens(lenses, last)));
+  };
+  it("opens on the sky, then shows the next lens each visit, round the whole turn", () => {
+    const all: Lens[] = ["sky", "precip", "air", "feels", "wind", "humidity", "uv"];
+    expect(visits(all, 9)).toEqual([...all, "sky", "precip"]);
+  });
+  it("skips the lenses with nothing to say", () => {
+    expect(visits(["sky", "wind", "uv"], 4)).toEqual(["sky", "wind", "uv", "sky"]);
+    // A calm, dry, low-sun day: the sky every visit.
+    expect(visits(["sky"], 3)).toEqual(["sky", "sky", "sky"]);
+  });
+  it("finds its place when the lens last seen has gone quiet", () => {
+    expect(visitLens(["sky", "precip", "wind"], "air")).toBe("wind");
+    expect(visitLens(["sky", "precip"], "uv")).toBe("sky");
   });
 });

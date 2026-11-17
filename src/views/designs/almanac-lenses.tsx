@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { hourKind, LENSES, turning, type Figure, type Lens } from "@/lib/lenses";
+import { hourKind, LENSES, turning, visitLens, type Figure, type Lens } from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -37,22 +37,26 @@ const BASE = 126;
 const lastSeen = new Map<string, Lens>();
 
 /**
- * The lens to show: the sky first, then the next lens every half minute
- * from the moment the view appeared, carrying on after the one last seen.
- * A lens only ever changes at a turn: if the snapshot refreshes mid-turn
- * and the list changes (UV gone at dusk), the lens showing stays its time.
+ * The lens to show. On the Weather page someone asked for: the sky first,
+ * then the next lens every half minute from the moment the view appeared,
+ * carrying on after the one last seen. A lens only ever changes at a turn:
+ * if the snapshot refreshes mid-turn and the list changes (UV gone at dusk),
+ * the lens showing stays its time. On a carousel slide (`visit`, half a
+ * minute on home or the night page), one lens for the whole visit: the next
+ * one after the last seen, so the family sees every lens over a few visits.
  */
-export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens {
+export function useLens(now: Date, lenses: readonly Lens[], view: string, visit = false): Lens {
   const forced = useForced();
   const t = now.getTime();
   const [after] = useState(() => lastSeen.get(view) ?? null);
+  const [visiting] = useState(() => visitLens(lenses, after));
   // The turning itself is lenses.ts's `turning`: here it's only kept.
   const [state, setState] = useState(() => turning(null, t, lenses, after));
   const next = turning(state, t, lenses, after);
   if (next !== state) setState(next);
-  const lens = forced ?? next.lens;
+  const lens = forced ?? (visit ? visiting : next.lens);
   useEffect(() => {
-    if (lens !== "sky") lastSeen.set(view, lens);
+    lastSeen.set(view, lens);
   }, [lens, view]);
   return lens;
 }

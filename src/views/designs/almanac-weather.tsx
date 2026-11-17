@@ -639,7 +639,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /* ------------------------------------------------------------------ d */
 
-function Days({ w, now, snapshot }: Drawn) {
+function Days({ w, now, snapshot, slide }: Drawn) {
   const tz = snapshot.timeZone;
   const today = dayKey(now, tz);
   // After 5 p.m. today is done: the week starts tomorrow, as the sentence does.
@@ -688,7 +688,8 @@ function Days({ w, now, snapshot }: Drawn) {
         }
       : {},
   );
-  const lens = useLens(now, lensesFor(samples), "days");
+  // On a carousel slide, one lens a visit; asked for, the lenses turn.
+  const lens = useLens(now, lensesFor(samples), "days", Boolean(slide));
   const cols: Column[] = days.map((d) => ({
     key: d.date,
     label: labelOf(d.date),
@@ -850,7 +851,7 @@ const STEP = 3;
 const COLS = 8;
 
 /** Hours: Days' sibling. The next day every three hours, the night marked. */
-function Hours({ w, now, snapshot }: Drawn) {
+function Hours({ w, now, snapshot, slide }: Drawn) {
   const tz = snapshot.timeZone;
   // How each hour feels is figured here from its readings (the snapshot doesn't carry it).
   const hours = w.hours
@@ -875,7 +876,7 @@ function Hours({ w, now, snapshot }: Drawn) {
     aqi: h.aqi,
     haze: hazeOf(h.pm),
   }));
-  const lens = useLens(now, lensesFor(samples), "hours");
+  const lens = useLens(now, lensesFor(samples), "hours", Boolean(slide));
   const cols: Column[] = slots.map((slot, i) => {
     const night = !(i === 0 ? w.now.isDay : (slot[0].isDay ?? true));
     return {
