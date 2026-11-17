@@ -107,7 +107,7 @@ export function Screen({
   // It counts from the moment home appears, so it always opens on the weather.
   const base = viewOf(page, mood);
   // At dusk and dawn the paper turns between the two (Dusk.tsx).
-  const { paper, turning } = useTurn(mood, settled && page === "home");
+  const { paper, turning } = useTurn(mood, settled);
   const [homeSince, setHomeSince] = useState(() => Date.parse(initial.issuedAt));
   const [lastBase, setLastBase] = useState(base);
   if (base !== lastBase) {
@@ -308,7 +308,9 @@ export function Screen({
           />
         ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
-          <InkStage.Provider value={leaving}>
+          {/* At the turn, whatever is up sinks, so the paper turns empty
+              (and an asked page inks back in afterward). */}
+          <InkStage.Provider value={leaving || turning}>
             <div key={view} className="relative z-[1] h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
               {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
@@ -327,7 +329,11 @@ export function Screen({
           turning={turning}
           on={page === "home"}
           clear={glowsAt(snapshot.weather)}
-          glow={view === "home" || view === "night" || slide?.kind === "passage"}
+          glow={
+            target === "home" ||
+            target === "night" ||
+            (target.startsWith("home:") && slideFromKey(target.slice(5))?.kind === "passage")
+          }
         />
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>

@@ -208,7 +208,9 @@ body {
     color-mix(in srgb, var(--paper) 32%, transparent),
     transparent
   );
-  transition: opacity 6s ease;
+  /* The sky layers' own pace, so it follows the arc rather than pulsing
+     with home's turning pieces. */
+  transition: opacity 24s ease;
 }
 .dusk-glow[data-on="0"] {
   opacity: 0;

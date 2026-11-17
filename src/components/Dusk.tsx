@@ -15,9 +15,9 @@ export const PAPER_MS = 3000;
 
 /**
  * The paper's mood, held back at the turn so it never changes under words:
- * home's old page sinks, the paper turns (empty, under the veil), and only then
- * may the new page ink in (`turning` is true until it may). Away from home, or
- * waking up, the paper takes the mood at once.
+ * whatever is up sinks, the paper turns (empty; on home, under the veil), and
+ * only then may the page ink in again (`turning` is true until it may). Waking
+ * up, the paper takes the mood at once.
  */
 export function useTurn(mood: Mood, slow: boolean) {
   const [paper, setPaper] = useState(mood);
@@ -66,7 +66,7 @@ export function Dusk({
   on: boolean;
   /** No cloud or smoke between the family and the sun's side of the sky. */
   clear: boolean;
-  /** Home's own piece is up (not a weather view): the horizon may glow. */
+  /** Home's own piece is up, or coming (not a weather view): the horizon may glow. */
   glow: boolean;
 }) {
   const side = twilight?.side ?? "dusk";
