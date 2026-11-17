@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   amountOf,
-  aqiShort,
-  aqiWord,
   airFigure,
   compass,
   daysAirLine,
@@ -11,6 +9,7 @@ import {
   daysPrecipLine,
   daysUvLine,
   daysWindLine,
+  feelsDayFigure,
   hourKind,
   hoursAirLine,
   hoursFeelsLine,
@@ -228,38 +227,61 @@ describe("rain and snow", () => {
     ).toEqual({ rain: true, snow: true });
     expect(kindsIn([{ precip: 0.06, snow: 0.4 }])).toEqual({ rain: false, snow: true });
   });
-  it("says how much over the next day, and when it's heaviest", () => {
-    const slot = (from: string, to: string, precip: number, snow: number, chance = 80) => ({
-      from: at(from).toISOString(),
-      to: at(to).toISOString(),
-      precip,
-      snow,
-      chance,
-    });
+  it("says how much over the next day, and when, from the hours themselves", () => {
+    // Hours from 10 a.m.: [water, snow, chance] each.
+    const hours = (xs: Array<[number, number, number?]>) =>
+      xs.map(([precip, snow, chance = 80], i) => ({
+        time: new Date(at("10:00").getTime() + i * 3_600_000).toISOString(),
+        precip,
+        snow,
+        chance,
+      }));
+    // Snow from 1 p.m. to 10 p.m., heaviest 4 to 7 p.m.
+    const storm = hours([
+      [0, 0, 10],
+      [0, 0, 10],
+      [0, 0, 10],
+      [0.02, 0.15],
+      [0.03, 0.2],
+      [0.03, 0.2],
+      [0.1, 0.7],
+      [0.12, 0.8],
+      [0.1, 0.7],
+      [0.04, 0.3],
+      [0.03, 0.2],
+      [0.02, 0.15],
+    ]);
+    expect(hoursPrecipLine(storm, at("09:30"), tz)).toBe(
+      "About 3½ inches of snow, heaviest from 4 to 7 p.m.",
+    );
+    // A short spell: its own hours, not the column's edges.
     expect(
       hoursPrecipLine(
-        [
-          slot("14:00", "17:00", 0.1, 0.6),
-          slot("17:00", "20:00", 0.4, 2.8),
-          slot("20:00", "23:00", 0.15, 1),
-        ],
-        at("10:00"),
+        hours([
+          [0, 0, 10],
+          [0.04, 0],
+          [0.06, 0],
+          [0, 0, 10],
+        ]),
+        at("09:30"),
         tz,
       ),
-    ).toBe("About 4½ inches of snow, heaviest from 5 to 8 p.m.");
-    expect(hoursPrecipLine([slot("11:00", "14:00", 0.42, 0)], at("10:00"), tz)).toBe(
-      "About four-tenths of an inch of rain, from 11 a.m. to 2 p.m.",
-    );
-    expect(hoursPrecipLine([slot("11:00", "14:00", 0.04, 0)], at("10:00"), tz)).toBe(
-      "A little rain, under a tenth of an inch, from 11 a.m. to 2 p.m.",
-    );
+    ).toBe("About a tenth of an inch of rain, from 11 a.m. to 1 p.m.");
+    // Already falling: until when, never a start in the past.
+    expect(
+      hoursPrecipLine(
+        hours([
+          [0.02, 0],
+          [0.03, 0],
+          [0, 0, 10],
+        ]),
+        at("10:30"),
+        tz,
+      ),
+    ).toBe("A little rain, under a tenth of an inch, until noon.");
     // A slim chance, or nothing measurable: no promise.
-    expect(hoursPrecipLine([slot("11:00", "14:00", 0.4, 0, 10)], at("10:00"), tz)).toBe(
-      "Little if any.",
-    );
-    expect(hoursPrecipLine([slot("11:00", "14:00", 0.002, 0)], at("10:00"), tz)).toBe(
-      "Little if any.",
-    );
+    expect(hoursPrecipLine(hours([[0.4, 0, 10]]), at("09:30"), tz)).toBe("Little if any.");
+    expect(hoursPrecipLine(hours([[0.002, 0]]), at("09:30"), tz)).toBe("Little if any.");
   });
   it("names only the days with a fair chance over the week", () => {
     const day = (name: string, precip: number, snow: number, chance = 80) => ({
@@ -392,7 +414,7 @@ describe("how it feels, in words", () => {
       "Feels about like the thermometer says.",
     );
   });
-  it("finds a chill at either end of the day", () => {
+  it("compares like with like: the low's chill, the high's heat", () => {
     const day = (name: string, high: number, feelsHigh: number, low: number, feelsLow: number) => ({
       name,
       high,
@@ -400,12 +422,21 @@ describe("how it feels, in words", () => {
       low,
       feelsLow,
     });
-    expect(daysFeelsLine([day("today", 33, 24, 24, 21), day("Friday", 30, 26, 15, 8)])).toBe(
-      "Feels up to 9° colder than the air; coldest Friday, 8°.",
+    expect(daysFeelsLine([day("today", 33, 33, 24, 15), day("Friday", 30, 30, 15, 4)])).toBe(
+      "Feels up to 11° colder than the air; coldest Friday, 4°.",
     );
     expect(daysFeelsLine([day("Saturday", 95, 103, 60, 60)])).toBe(
       "Feels up to 8° warmer than the air; hottest Saturday, 103°.",
     );
+    // A dry, hot day with a cold-feeling night is never "colder" by its high.
+    expect(daysFeelsLine([day("today", 95, 95, 58, 58)])).toBe(
+      "Feels about like the thermometer all week.",
+    );
+  });
+  it("sets a day's feel beside the air it strays from", () => {
+    expect(feelsDayFigure(33, 24, 33, 15)).toEqual({ big: "15°", sub: "air 24°", quiet: false });
+    expect(feelsDayFigure(96, 70, 108, 70)).toEqual({ big: "108°", sub: "air 96°", quiet: false });
+    expect(feelsDayFigure(60, 45, 60, 43)).toMatchObject({ quiet: true });
   });
 });
 
@@ -424,12 +455,14 @@ describe("humidity, in words", () => {
       "Muggiest Saturday, dew point up to 71°.",
     );
   });
-  it("calls dry air with strong gusts fire weather", () => {
+  it("says plainly when dry air meets strong gusts", () => {
     expect(
       hoursHumidityLine([hour("15:00", 9, 24, 31), hour("04:00", 40, 30)], at("10:00"), tz),
-    ).toBe("Fire weather this afternoon: humidity 9%, gusts to 31 mph.");
+    ).toBe(
+      "Very dry and gusty this afternoon: humidity 9%, gusts to 31 mph. Careful with anything that sparks.",
+    );
     expect(daysHumidityLine([{ name: "Friday", rhLow: 8, dew: 30, gust: 32 }])).toBe(
-      "Fire weather Friday: humidity down to 8%, gusts to 32 mph.",
+      "Very dry and gusty Friday: humidity down to 8%, gusts to 32 mph. Careful with anything that sparks.",
     );
   });
   it("sets a day by its driest hour", () => {
@@ -440,35 +473,39 @@ describe("humidity, in words", () => {
 });
 
 describe("the air, in words", () => {
-  it("uses the EPA's words, shortened only to fit a column", () => {
-    expect([50, 51, 101, 151, 201, 301].map(aqiWord)).toEqual([
-      "good",
-      "moderate",
-      "unhealthy for sensitive groups",
-      "unhealthy",
-      "very unhealthy",
-      "hazardous",
-    ]);
-    expect(aqiShort(120)).toBe("sensitive");
-    expect(aqiShort(160)).toBe("unhealthy");
-  });
-  it("sets a column, with the fine particles when they matter", () => {
+  it("sets a column in the EPA's words, two lines for sensitive groups", () => {
     expect(airFigure(undefined)).toMatchObject({ big: "", sub: "" });
-    expect(airFigure(30, 7)).toMatchObject({
-      big: "30",
-      sub: "good",
-      quiet: true,
-      note: undefined,
-    });
-    expect(airFigure(168, 76)).toMatchObject({ sub: "unhealthy", note: "PM2.5 76", act: true });
+    expect(airFigure(30)).toMatchObject({ big: "30", sub: "good", quiet: true });
+    expect(airFigure(130)).toMatchObject({ sub: "sensitive", note: "groups", act: false });
+    expect(airFigure(168)).toMatchObject({ sub: "unhealthy", note: undefined, act: true });
   });
-  it("says when it's worst, and what to do", () => {
-    const hour = (t: string, aqi?: number) => ({ time: at(t).toISOString(), aqi });
-    expect(hoursAirLine([hour("10:00", 120), hour("15:00", 168)], at("10:00"), tz)).toBe(
-      "The air is unhealthy this afternoon, AQI up to 168. Best to stay inside.",
+  it("leads with now when the air is already bad", () => {
+    const hour = (t: string, aqi?: number, pm?: number) => ({ time: at(t).toISOString(), aqi, pm });
+    expect(hoursAirLine([hour("10:00", 168, 76), hour("15:00", 160)], at("10:00"), tz)).toBe(
+      "Unhealthy air now, AQI 168: keep time outside short and easy.",
     );
-    expect(hoursAirLine([hour("15:00", 120), hour("16:00")], at("10:00"), tz)).toBe(
-      "The air is unhealthy for sensitive groups this afternoon, AQI up to 120. Go easy outside if you're sensitive.",
+    expect(
+      hoursAirLine(
+        [hour("10:00", 168, 76), { time: "2026-11-19T17:00:00Z", aqi: 205 }],
+        at("10:00"),
+        tz,
+      ),
+    ).toBe("Unhealthy air now, AQI 168; worst tomorrow morning, AQI 205: best to stay inside.");
+    // The index lags arriving smoke; the hour's particles say it first.
+    expect(hoursAirLine([hour("10:00", 70, 60), hour("15:00", 90)], at("10:00"), tz)).toBe(
+      "Unhealthy air now: keep time outside short and easy.",
+    );
+  });
+  it("names smoke when it's what makes a day moderate", () => {
+    const hour = (t: string, aqi?: number, pm?: number) => ({ time: at(t).toISOString(), aqi, pm });
+    expect(hoursAirLine([hour("10:00", 60, 20), hour("15:00", 92, 30)], at("10:00"), tz)).toBe(
+      "Smoky, moderate air this afternoon, AQI up to 92. Fine for most; sensitive people may want to take it easy.",
+    );
+    expect(hoursAirLine([hour("15:00", 62, 5)], at("10:00"), tz)).toBe(
+      "Moderate air this afternoon, AQI up to 62.",
+    );
+    expect(hoursAirLine([hour("15:00", 130, 20)], at("10:00"), tz)).toBe(
+      "Air unhealthy for sensitive groups this afternoon, AQI up to 130: sensitive groups should take it easy outside.",
     );
   });
   it("says how far the air forecast reaches", () => {
@@ -480,5 +517,13 @@ describe("the air, in words", () => {
         { name: "Monday" },
       ]),
     ).toBe("Worst air tomorrow: AQI 182, unhealthy. Forecast through Sunday.");
+    expect(daysAirLine([{ name: "Saturday", aqi: 88, haze: 6 }])).toBe(
+      "Smoky, moderate air Saturday, AQI up to 88. Fine for most; sensitive people may want to take it easy.",
+    );
+  });
+  it("shows the lens for a few hours of haze, as the sky draws it", () => {
+    const hazy = { aqi: 70, haze: 1 };
+    expect(lensesFor([hazy, hazy])).not.toContain("air");
+    expect(lensesFor([hazy, hazy, hazy])).toContain("air");
   });
 });

@@ -31,6 +31,7 @@ import {
   hoursHumidityLine,
   humidityDayFigure,
   humidityFigure,
+  hazeOf,
   hourNow,
   lensesFor,
   restOfDay,
@@ -43,6 +44,7 @@ import {
   type Figure,
   type Lens,
 } from "@/lib/lenses";
+import { AQI_SENSITIVE, smokeOf } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
@@ -57,7 +59,7 @@ import { fitStyle, hourWord } from "./common";
  *
  * Every view answers in the same words (from `forecast.ts`). The oxblood
  * accent marks the one thing to act on: rain or snow when it's coming,
- * otherwise what to wear.
+ * otherwise bad air when there is some, otherwise what to wear.
  *
  *  now:    the sky that matters, engraved; what it's like and what to wear.
  *  ribbon: the next 24 hours as one band of time; night shaded, rain falling in it.
@@ -149,7 +151,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
           {o.timing ? (
             <span className={act ? "text-accent" : "text-ink-soft"}>{nb(o.timing)} </span>
           ) : null}
-          <span className={act ? "text-ink-soft" : "text-accent"}>{o.wear}</span>
+          <span className={act ? "text-ink-soft" : "text-accent"}>{o.air ?? o.wear}</span>
         </p>
       </Ink>
       {o.ahead ? (
@@ -429,9 +431,10 @@ function Now({ o }: Drawn) {
         ) : null}
         <Ink order={3} className={o.timing ? "mt-[1.2rem]" : "mt-[2.2rem]"}>
           <p
-            className={`text-[3.8rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
+            className={`text-[3.8rem] leading-[1.2] text-balance italic ${act ? "text-ink-soft" : "text-accent"}`}
           >
-            {o.wear}
+            {/* Bad air takes the coat's place: it's the thing to act on. */}
+            {o.air ?? o.wear}
           </p>
         </Ink>
       </div>
@@ -479,12 +482,16 @@ const nb = (s: string) =>
  * Days and Hours turn slowly through their lenses (lenses.ts): the sky, then
  * rain and snow, the air, how it feels, wind, humidity, and UV, each for half
  * a minute, skipping any with nothing to say. The row's labels stay put, and
- * so does the lens's name when it doesn't change; the sentence sinks first
- * and the plate a beat later, so the page is never blank.
+ * so does the lens's name when it doesn't change. A turn goes in order, so
+ * one lens's sentence never sits over another's figures: the plate sinks,
+ * leaving the old sentence over a bare row; then the sentence turns; then
+ * the new plate soaks in under it. The page is never blank.
  */
 
-/** How long the plate holds its old ink after the sentence starts to sink. */
-const PLATE_LAG_MS = 1500;
+/** The sentence holds this long after the plate starts to sink. */
+const SENTENCE_LAG_MS = 1200;
+/** The plate's paper stays bare this long, so the new sentence comes first. */
+const PLATE_REST_MS = 1600;
 
 type Column = { key: string; label: string; rule: boolean; strong: boolean };
 
@@ -518,14 +525,14 @@ function Labels({ cols }: { cols: Column[] }) {
 function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: string | null }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center">
-      <Ink k={caption ?? ""} order={0}>
+      <Ink k={caption ?? ""} lag={SENTENCE_LAG_MS} order={0}>
         {caption ? (
           <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic in-data-[mood=night]:text-ink-soft">
             {caption}
           </p>
         ) : null}
       </Ink>
-      <Ink k={lens} order={0}>
+      <Ink k={lens} lag={SENTENCE_LAG_MS} order={0}>
         <p
           className="max-w-[102rem] text-balance"
           style={headline(line, 102, caption ? 16.5 : 20.5)}
@@ -586,6 +593,7 @@ const plateHour = (
     aqi?: number | null;
   },
   sure: boolean,
+  past = false,
 ): PlateHour => ({
   precip: h.precip ?? 0,
   snow: h.snow ?? 0,
@@ -597,6 +605,7 @@ const plateHour = (
   rh: h.rh,
   aqi: h.aqi,
   sure,
+  past,
 });
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -648,6 +657,7 @@ function Days({ w, now, snapshot }: Drawn) {
           rh: lo(left(d, d.hourly.rh)),
           dew: hi(left(d, d.hourly.dew)),
           aqi: d.aqi,
+          haze: left(d, d.hourly.pm).reduce<number>((a, pm) => a + hazeOf(pm), 0),
         }
       : {},
   );
@@ -684,7 +694,7 @@ function Days({ w, now, snapshot }: Drawn) {
         : lens === "uv"
           ? daysUvLine(named.map(({ d, name }) => ({ name, uv: d.uv ?? 0 })))
           : lens === "air"
-            ? daysAirLine(named.map(({ d, name }) => ({ name, aqi: d.aqi })))
+            ? daysAirLine(named.map(({ d, s, name }) => ({ name, aqi: d.aqi, haze: s.haze })))
             : lens === "feels"
               ? daysFeelsLine(
                   named.map(({ d, name }) => ({
@@ -717,7 +727,8 @@ function Days({ w, now, snapshot }: Drawn) {
         d.dir,
       );
     if (lens === "air") return airFigure(d.aqi);
-    if (lens === "feels") return feelsDayFigure(d.feelsHigh ?? d.high, d.feelsLow ?? d.low);
+    if (lens === "feels")
+      return feelsDayFigure(d.high, d.low, d.feelsHigh ?? d.high, d.feelsLow ?? d.low);
     if (lens === "humidity") return humidityDayFigure(s.rh ?? 0, s.dew ?? 0);
     return uvFigure(d.uv ?? 0);
   };
@@ -727,7 +738,7 @@ function Days({ w, now, snapshot }: Drawn) {
       <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(ahead))} />
       <div className="pb-[3rem]">
         <Labels cols={cols} />
-        <Ink k={lens} lag={PLATE_LAG_MS} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Ink k={lens} rest={PLATE_REST_MS} order={2} mode="seep" className="relative h-[26.4rem]">
           {lens === "sky" ? (
             <div className="grid" style={gridOf(days.length)}>
               {days.map((d) => {
@@ -738,6 +749,8 @@ function Days({ w, now, snapshot }: Drawn) {
                       code={p.code}
                       isDay
                       date={now}
+                      // A smoky day's sun is veiled, as the living sky draws it.
+                      veil={(d.aqi ?? 0) > AQI_SENSITIVE ? "smoke" : undefined}
                       className="fine-ink my-[0.8rem] size-[12rem] text-ink"
                     />
                     <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
@@ -759,7 +772,7 @@ function Days({ w, now, snapshot }: Drawn) {
               hours={ahead.flatMap((d) =>
                 Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
                   const day = d.hourly;
-                  if (!day || h >= day.wind.length || h < d.from) return undefined;
+                  if (!day || h >= day.wind.length) return undefined;
                   return plateHour(
                     {
                       precip: day.precip[h],
@@ -773,6 +786,7 @@ function Days({ w, now, snapshot }: Drawn) {
                       aqi: day.aqi?.[h],
                     },
                     d.precipChance >= CHANCE,
+                    h < d.from,
                   );
                 }),
               )}
@@ -811,6 +825,7 @@ function Hours({ w, now, snapshot }: Drawn) {
     rh: h.rh,
     dew: h.dew,
     aqi: h.aqi,
+    haze: hazeOf(h.pm),
   }));
   const lens = useLens(now, lensesFor(samples), "hours");
   const cols: Column[] = slots.map((slot, i) => {
@@ -843,7 +858,16 @@ function Hours({ w, now, snapshot }: Drawn) {
 
   const line =
     lens === "precip"
-      ? hoursPrecipLine(wet, now, tz)
+      ? hoursPrecipLine(
+          span.map((h) => ({
+            time: h.time,
+            precip: h.precip ?? 0,
+            snow: h.snow ?? 0,
+            chance: h.precipChance,
+          })),
+          now,
+          tz,
+        )
       : lens === "wind"
         ? hoursWindLine(span.map(known), now, tz)
         : lens === "uv"
@@ -889,11 +913,7 @@ function Hours({ w, now, snapshot }: Drawn) {
     }
     if (lens === "air") {
       const aqis = slot.flatMap((h) => (h.aqi == null ? [] : [h.aqi]));
-      const pms = slot.flatMap((h) => (h.pm == null ? [] : [h.pm]));
-      return airFigure(
-        aqis.length ? Math.max(...aqis) : undefined,
-        pms.length ? Math.max(...pms) : undefined,
-      );
+      return airFigure(aqis.length ? Math.max(...aqis) : undefined);
     }
     // How it feels and the air's water: as the slot begins, like its temperature.
     const first = slot[0];
@@ -911,7 +931,7 @@ function Hours({ w, now, snapshot }: Drawn) {
       <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(span))} />
       <div className="pb-[3rem]">
         <Labels cols={cols} />
-        <Ink k={lens} lag={PLATE_LAG_MS} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Ink k={lens} rest={PLATE_REST_MS} order={2} mode="seep" className="relative h-[26.4rem]">
           {lens === "sky" ? (
             <div className="grid" style={gridOf(slots.length)}>
               {slots.map((slot, i) => {
@@ -924,12 +944,23 @@ function Hours({ w, now, snapshot }: Drawn) {
                 const falls = slot.map(hourFall).filter((f) => f && f.sure !== "slight");
                 const chance = falls.length ? Math.max(...slot.map((h) => h.precipChance)) : 0;
                 const kind = falls[0]?.kind;
+                // Smoke or haze veils the sun, as the living sky draws it.
+                const smoke = smokeOf(
+                  i === 0
+                    ? w.now
+                    : {
+                        aqi: Math.max(...slot.map((h) => h.aqi ?? 0)),
+                        pm: Math.max(...slot.map((h) => h.pm ?? 0)),
+                      },
+                );
+                const veil = smoke === "haze" ? "haze" : smoke === "none" ? undefined : "smoke";
                 return (
                   <div key={first.time} className="flex flex-col items-center text-center">
                     <Engraving
                       code={code}
                       isDay={isDay}
                       date={now}
+                      veil={veil}
                       className="fine-ink my-[0.8rem] size-[12rem] text-ink"
                     />
                     <p className="text-[5rem] leading-none text-ink">{temp}°</p>

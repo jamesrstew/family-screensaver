@@ -194,6 +194,8 @@ export type PlateHour = {
   aqi?: number | null;
   /** A fair chance (30% or more) of what falls: drawn in full; otherwise faint. */
   sure?: boolean;
+  /** Already past (today's morning, on Days): left bare, or a faint lead-in to a hill. */
+  past?: boolean;
 };
 
 type PlateProps = {
@@ -210,8 +212,11 @@ type PlateProps = {
 /** One lens's chart across the whole row. */
 export function Plate({ lens, hours, cols, scale, bin = 1 }: PlateProps) {
   const id = `plate-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const values = (pick: (h: PlateHour) => number | null | undefined) =>
-    hours.map((h) => (h ? (pick(h) ?? undefined) : undefined));
+  const past = hours.some((h) => h?.past);
+  const ahead = past ? hours.map((h) => (h?.past ? undefined : h)) : hours;
+  const values = (pick: (h: PlateHour) => number | null | undefined, gone = false) =>
+    hours.map((h) => (h && Boolean(h.past) === gone ? (pick(h) ?? undefined) : undefined));
+  const hill = (h: PlateHour) => (lens === "uv" ? h.uv : lens === "air" ? h.aqi : h.rh);
   return (
     <svg
       viewBox={`0 0 ${PW} ${PH}`}
@@ -224,14 +229,15 @@ export function Plate({ lens, hours, cols, scale, bin = 1 }: PlateProps) {
     >
       <Fills id={id} scale={scale} />
       <Frame cols={cols} />
-      {lens === "precip" ? <Precip id={id} hours={binned(hours, bin)} /> : null}
-      {lens === "wind" ? <Wind id={id} hours={hours} /> : null}
-      {lens === "feels" ? <Feels id={id} hours={hours} /> : null}
+      {lens === "precip" ? <Precip id={id} hours={binned(ahead, bin)} /> : null}
+      {lens === "wind" ? <Wind id={id} hours={ahead} /> : null}
+      {lens === "feels" ? <Feels id={id} hours={ahead} /> : null}
       {lens === "uv" || lens === "air" || lens === "humidity" ? (
         <Hill
           id={id}
           lens={lens}
-          values={values((h) => (lens === "uv" ? h.uv : lens === "air" ? h.aqi : h.rh))}
+          values={values(hill)}
+          before={past ? values(hill, true) : undefined}
           dots={lens === "uv"}
         />
       ) : null}
@@ -353,10 +359,15 @@ function Feels({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
   const y = (v: number) => BASE - 4 - ((v - lo) / span) * (BASE - TOP - 8);
   const air = known.map(({ i, h }) => [xOf(i, n), y(h.temp!)] as [number, number]);
   const feel = known.map(({ i, h }) => [xOf(i, n), y(h.feels!)] as [number, number]);
+  // Where the feel is within 2° of the air, nothing to hatch (no stray ticks).
+  const gap = known.map(
+    ({ i, h }) =>
+      [xOf(i, n), y(Math.abs(h.feels! - h.temp!) < 2 ? h.temp! : h.feels!)] as [number, number],
+  );
   return (
     <g>
       <path
-        d={bandPath(air, feel)}
+        d={bandPath(air, gap)}
         fill={`url(#${id}-hatch)`}
         stroke="none"
         className="text-ink-soft"
@@ -387,11 +398,14 @@ function Hill({
   id,
   lens,
   values,
+  before,
   dots,
 }: {
   id: string;
   lens: "uv" | "air" | "humidity";
   values: Array<number | undefined>;
+  /** Today's hours already past: a faint lead-in, so the hill doesn't start as a wall. */
+  before?: Array<number | undefined>;
   dots: boolean;
 }) {
   const n = values.length;
@@ -405,6 +419,10 @@ function Hill({
   const pts = known.map((k) => [xOf(k.i, n), y(k.v)] as [number, number]);
   const line = smooth(pts);
   const area = `${line} L${r1(pts.at(-1)![0])} ${BASE} L${r1(pts[0][0])} ${BASE} Z`;
+  const gone = (before ?? []).flatMap((v, i) =>
+    v == null ? [] : [[xOf(i, n), y(v)] as [number, number]],
+  );
+  const lead = gone.length ? smooth([...gone, pts[0]]) : null;
   // Each day's peak, where it rises above nothing (not where the forecast simply ends).
   const peaks = dots
     ? known.filter((k, j) => {
@@ -425,6 +443,7 @@ function Hill({
         className="text-ink-faint"
       />
       <path d={area} fill={`url(#${id}-hatch)`} stroke="none" className="text-ink-soft" />
+      {lead ? <path d={lead} strokeWidth={1} className="text-ink-faint" /> : null}
       <path d={line} strokeWidth={2.2} />
       {peaks.map((k) => (
         <circle

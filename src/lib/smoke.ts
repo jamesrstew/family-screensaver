@@ -1,0 +1,107 @@
+// The air in words: the EPA's names for the US AQI, smoke and haze, and what
+// to do about them. Shared by the weather's sentences (home's "Smoky and 91°
+// now"), the Air lens, the voice, and the living sky, so they always agree.
+//
+// Open-Meteo's us_aqi for fine particles is a trailing 24-hour mean (checked
+// against its hourly pm2_5 and the EPA's breakpoints): it lags arriving smoke
+// by hours. So what the air is like *now* comes from the hourly PM2.5 as
+// well, read on the same EPA scale; the AQI figures stay Open-Meteo's own.
+
+/** The EPA's words for the US AQI. */
+export function aqiWord(aqi: number): string {
+  if (aqi <= 50) return "good";
+  if (aqi <= 100) return "moderate";
+  if (aqi <= 150) return "unhealthy for sensitive groups";
+  if (aqi <= 200) return "unhealthy";
+  if (aqi <= 300) return "very unhealthy";
+  return "hazardous";
+}
+
+/** The top of "good", and of "moderate": past it, the air is worth a word. */
+export const AQI_GOOD = 50;
+export const AQI_SENSITIVE = 100;
+/** From here up, everyone should take care (the EPA's "unhealthy"). */
+export const AQI_UNHEALTHY = 151;
+/** From here up, stay inside (the EPA's "very unhealthy"). */
+export const AQI_VERY = 201;
+
+/** Fine particles (µg/m³) at which the air turns hazy, smoky, and thick: the EPA's 2024 lines. */
+export const HAZE_PM = 15;
+export const SMOKE_PM = 35.5;
+export const THICK_PM = 55.5;
+
+// The EPA's 2024 PM2.5 breakpoints: concentration to index.
+const BREAKS: Array<[lo: number, hi: number, a: number, b: number]> = [
+  [0, 9, 0, 50],
+  [9.1, 35.4, 51, 100],
+  [35.5, 55.4, 101, 150],
+  [55.5, 125.4, 151, 200],
+  [125.5, 225.4, 201, 300],
+  [225.5, 500, 301, 500],
+];
+
+/** An hour's fine particles on the AQI scale (an instant reading, not the 24-hour mean). */
+export function pmAqi(pm: number): number {
+  const c = Math.floor(Math.max(pm, 0) * 10) / 10;
+  const [lo, hi, a, b] = BREAKS.find(([, top]) => c <= top) ?? BREAKS.at(-1)!;
+  return Math.round(((b - a) / (hi - lo)) * (Math.min(c, hi) - lo) + a);
+}
+
+/** "Air unhealthy for sensitive groups", "Unhealthy air": the category as a subject. */
+export function airPhrase(aqi: number): string {
+  if (aqi <= 50) return "Good air";
+  if (aqi <= 100) return "Moderate air";
+  if (aqi <= 150) return "Air unhealthy for sensitive groups";
+  if (aqi <= 200) return "Unhealthy air";
+  if (aqi <= 300) return "Very unhealthy air";
+  return "Hazardous air";
+}
+
+/** What to do, in the EPA's spirit; nothing while the air is fine for everyone. */
+export function airAdvice(aqi: number): string {
+  if (aqi >= AQI_VERY) return "best to stay inside";
+  if (aqi >= AQI_UNHEALTHY) return "keep time outside short and easy";
+  if (aqi > AQI_SENSITIVE) return "sensitive groups should take it easy outside";
+  return "";
+}
+
+/** The air right now: the worse of the index and the hour's fine particles. */
+export function airNow(a: { aqi?: number; pm?: number }): { n: number; aqi?: number } | null {
+  if (a.aqi == null && a.pm == null) return null;
+  const n = Math.max(a.aqi ?? 0, a.pm == null ? 0 : pmAqi(a.pm));
+  // Quote the index only when it says the same thing the particles do.
+  const same = a.aqi != null && aqiWord(a.aqi) === aqiWord(n);
+  return { n, aqi: same ? a.aqi : undefined };
+}
+
+/**
+ * The air, as home and the voice say it, when it isn't fine for everyone:
+ * "Unhealthy air, AQI 168: keep time outside short and easy." Null otherwise.
+ */
+export function airLine(a: { aqi?: number; pm?: number }): string | null {
+  const now = airNow(a);
+  if (!now || now.n <= AQI_SENSITIVE) return null;
+  const quoted = now.aqi != null ? `, AQI ${now.aqi}` : "";
+  return `${airPhrase(now.n)}${quoted}: ${airAdvice(now.n)}.`;
+}
+
+/**
+ * Smoke and haze, from the air itself: the hour's fine particles (µg/m³)
+ * and the US AQI, or, with no word from the air, a short view on a dry day.
+ *  haze:  fine particles from 15, or visibility under 8 km with no fog or rain.
+ *  smoke: the air unhealthy for sensitive groups (AQI over 100, or 35.5 µg/m³).
+ *  thick: the air unhealthy for everyone (AQI over 150, or 55.5 µg/m³).
+ */
+export type Smoke = "none" | "haze" | "smoke" | "thick";
+export function smokeOf(
+  now: { aqi?: number; pm?: number; visibility?: number; code?: number } | null,
+): Smoke {
+  if (!now) return "none";
+  const { aqi, pm, visibility, code } = now;
+  if ((aqi ?? 0) > 150 || (pm ?? 0) >= THICK_PM) return "thick";
+  if ((aqi ?? 0) > AQI_SENSITIVE || (pm ?? 0) >= SMOKE_PM) return "smoke";
+  // Fog and rain cut the view too; that isn't haze.
+  const murky = code != null && (code === 45 || code === 48 || code >= 51);
+  if ((pm ?? 0) >= HAZE_PM || (visibility != null && visibility < 8000 && !murky)) return "haze";
+  return "none";
+}

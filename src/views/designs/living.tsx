@@ -3,6 +3,7 @@ import { LAND_H, LAND_TOP, landOf } from "@/lib/land";
 import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import type { Mood } from "@/lib/time";
+import { smokeOf as smokeOfNow, type Smoke } from "@/lib/smoke";
 import type { Weather } from "@/lib/types";
 import { CLOUD, CLOUD_BOX, Cloud, Moon, Star, moonAge } from "../Engraving";
 import { ARC, arcAt, placeOf, type Place } from "./arc";
@@ -94,23 +95,9 @@ export function skyOf(code: number | null): SkyState {
   };
 }
 
-/**
- * Smoke and haze, from the air itself: fine particles (µg/m³) and the US AQI,
- * or, with no word from the air, a short view on a dry, clear day.
- *  haze:  fine particles from 15, or visibility under 8 km with no fog or rain.
- *  smoke: the air unhealthy for sensitive groups (AQI over 100, or 35 µg/m³).
- *  thick: the air unhealthy for everyone (AQI over 150, or 55 µg/m³).
- */
-export type Smoke = "none" | "haze" | "smoke" | "thick";
-export function smokeOf(w: Weather | null): Smoke {
-  if (!w) return "none";
-  const { aqi, pm, visibility, code } = w.now;
-  if ((aqi ?? 0) > 150 || (pm ?? 0) >= 55.5) return "thick";
-  if ((aqi ?? 0) > 100 || (pm ?? 0) >= 35.5) return "smoke";
-  const { fall, fog } = skyOf(code);
-  if ((pm ?? 0) >= 15 || (visibility != null && visibility < 8000 && !fall && !fog)) return "haze";
-  return "none";
-}
+/** Smoke and haze over the family's sky now (`lib/smoke.ts` says how much). */
+export type { Smoke };
+export const smokeOf = (w: Weather | null): Smoke => smokeOfNow(w?.now ?? null);
 
 /**
  * How the sun or moon shows through the cover: whole, softened, veiled by

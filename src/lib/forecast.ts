@@ -5,6 +5,7 @@
 // what later days look like (the daily forecast). The daily label is the worst
 // hour of the whole day, past hours included, so it never describes "now".
 
+import { airLine, smokeOf } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
 
@@ -188,6 +189,8 @@ export type Outlook = {
   timing: string | null;
   /** Do I need a coat? Always an answer. */
   wear: string;
+  /** The air, when it isn't fine for everyone: it takes the coat's place. */
+  air: string | null;
   /** Beyond the next day: the next wet day, or how long it stays dry. */
   ahead: string | null;
   /** Whether we're talking about today or, after the day is done, tomorrow. */
@@ -398,7 +401,14 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
   const partsList = ps.filter((p): p is Part => p !== null);
 
   // One sentence: the sky now, and where the temperature goes from here.
-  const nowSky = skyWords(w.now.code, w.now.isDay);
+  // Smoke and haze are the sky too: no "Mostly sunny" under a veiled sun.
+  const smoke = smokeOf(w.now);
+  const nowSky =
+    (smoke === "smoke" || smoke === "thick") && w.now.code <= 3
+      ? "Smoky"
+      : smoke === "haze" && w.now.code <= 1
+        ? "Hazy"
+        : skyWords(w.now.code, w.now.isDay);
   let line: string;
   if (focus === "today") {
     const rest = hoursIn(w, now, tz, today, hour, 17);
@@ -506,6 +516,7 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
     line: tidy(line),
     timing: timing && tidy(timing),
     wear,
+    air: airLine(w.now),
     ahead,
     focus,
     parts: partsList,
@@ -575,11 +586,12 @@ export function hoursLine(w: Weather, now: Date, tz: string): string {
 
 /**
  * Two or three sentences for the voice and the other designs:
- * "Cloudy and 45° now, down to 32° tonight. Snow likely Wednesday."
+ * "Cloudy and 45° now, down to 32° tonight. Snow likely Wednesday." When the
+ * air isn't fine for everyone, it's said too.
  */
 export function forecastLine(w: Weather, now: Date, tz: string): string {
   const o = outlook(w, now, tz);
-  return [o.line, o.timing ?? o.ahead].filter(Boolean).join(" ");
+  return [o.line, o.timing ?? o.ahead, o.air].filter(Boolean).join(" ");
 }
 
 /** "until about 10 p.m.." reads as a typo: one period ends both. */

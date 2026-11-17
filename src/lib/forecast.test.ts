@@ -219,3 +219,21 @@ describe("weekLine", () => {
     );
   });
 });
+
+describe("smoke in the sky's words", () => {
+  const tz = "America/Los_Angeles";
+  const now = new Date("2026-08-18T13:00:00-07:00");
+  it("calls a smoky day smoky, and puts the air where the coat would go", () => {
+    const w = fakeWeather("smoke", now, tz);
+    const o = outlook(w, now, tz);
+    expect(o.line).toMatch(/^Smoky and \d+° now/);
+    expect(o.air).toMatch(/^Unhealthy air, AQI \d+: keep time outside short and easy\.$/);
+    // The voice says it too.
+    expect(forecastLine(w, now, tz)).toContain(o.air!);
+  });
+  it("says nothing of the air on a clear day", () => {
+    const w = fakeWeather("fair", now, tz);
+    expect(outlook(w, now, tz).air).toBeNull();
+    expect(outlook(w, now, tz).line).not.toMatch(/Smoky|Hazy/);
+  });
+});
