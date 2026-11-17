@@ -9,9 +9,9 @@ import type { Indoor } from "./types";
 const SDM = "https://smartdevicemanagement.googleapis.com/v1";
 
 type Device = {
-  type: string;
-  traits: Record<string, Record<string, unknown> | undefined>;
-  parentRelations?: Array<{ displayName?: string }>;
+  type?: string;
+  traits?: Record<string, Record<string, unknown> | undefined>;
+  parentRelations?: Array<{ displayName?: unknown }>;
 };
 
 export function nestConfig() {
@@ -24,10 +24,18 @@ export function nestConfig() {
     : null;
 }
 
-/** An access token lasts an hour; trade the refresh token for one a little less often. */
-async function accessToken(): Promise<string> {
+/** Each call to Google gets this long; the snapshot bounds the whole read (snapshot.ts). */
+const CALL_MS = 5000;
+
+/**
+ * An access token lasts an hour; trade the refresh token for one a little
+ * less often. `epoch` is part of the cache key: when Google turns a token
+ * down early, the next epoch fetches a new one instead of waiting out the hour.
+ */
+async function accessToken(epoch: number): Promise<string> {
   "use cache";
   cacheLife({ stale: 1800, revalidate: 2700, expire: 3300 });
+  void epoch;
   const c = nestConfig();
   if (!c) throw new Error("nest not configured");
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -39,7 +47,7 @@ async function accessToken(): Promise<string> {
       refresh_token: c.refreshToken,
       grant_type: "refresh_token",
     }),
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(CALL_MS),
   });
   if (!res.ok) throw new Error(`nest token ${res.status}`);
   const { access_token } = (await res.json()) as { access_token?: string };
@@ -47,50 +55,78 @@ async function accessToken(): Promise<string> {
   return access_token;
 }
 
-/** The thermostats' readings, every few minutes (the API allows only a few calls a minute). */
+// This server instance's token epoch; bumped when Google refuses the token.
+let tokenEpoch = 0;
+
+/** The device list, once more with a fresh token if Google refused the cached one. */
+async function devicesOf(project: string): Promise<unknown> {
+  const list = (token: string) =>
+    fetch(`${SDM}/enterprises/${project}/devices`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(CALL_MS),
+    });
+  let res = await list(await accessToken(tokenEpoch));
+  if (res.status === 401) {
+    tokenEpoch++;
+    res = await list(await accessToken(tokenEpoch));
+  }
+  if (!res.ok) throw new Error(`nest devices ${res.status}`);
+  return ((await res.json()) as { devices?: unknown }).devices;
+}
+
+/**
+ * The thermostats' readings, every few minutes. A good reading expires well
+ * inside the TV's 30 minutes (indoor.ts), so whatever is handed out has most
+ * of its life left. A failure is remembered briefly, so an outage costs one
+ * slow call every couple of minutes rather than one per request.
+ */
 export async function getIndoor(): Promise<Indoor | null> {
   "use cache";
-  cacheLife({ stale: 120, revalidate: 300, expire: 1800 });
   const c = nestConfig();
-  if (!c) return null;
-  const res = await fetch(`${SDM}/enterprises/${c.project}/devices`, {
-    headers: { Authorization: `Bearer ${await accessToken()}` },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`nest devices ${res.status}`);
-  // Stamped here, inside the cache, so a cached reading keeps its true age.
-  const devices = ((await res.json()) as { devices?: Device[] }).devices ?? [];
-  return indoorOf(devices, new Date().toISOString());
+  if (!c) {
+    cacheLife({ stale: 120, revalidate: 300, expire: 900 });
+    return null;
+  }
+  try {
+    const devices = await devicesOf(c.project);
+    cacheLife({ stale: 120, revalidate: 300, expire: 900 });
+    // Stamped here, inside the cache, so a cached reading keeps its true age.
+    return indoorOf(Array.isArray(devices) ? devices : [], new Date().toISOString());
+  } catch (err) {
+    cacheLife({ stale: 60, revalidate: 120, expire: 120 });
+    console.error("[nest] unavailable", err instanceof Error ? err.message : "");
+    return null;
+  }
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const fahrenheit = (c: number) => Math.round((c * 9) / 5 + 32);
 
+const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
 /**
  * Each thermostat's room, temperature (°F), and humidity. Pure. A thermostat
  * that's offline is left out: Google keeps answering with its last reading,
- * which may be hours old.
+ * which may be hours old. Anything malformed is skipped, never the whole list.
  */
 export function indoorOf(devices: Device[], at: string): Indoor | null {
-  const rooms = devices
-    .filter((d) => d.type === "sdm.devices.types.THERMOSTAT")
-    .filter((d) => d.traits["sdm.devices.traits.Connectivity"]?.status !== "OFFLINE")
-    .flatMap((d) => {
-      const celsius = num(d.traits["sdm.devices.traits.Temperature"]?.ambientTemperatureCelsius);
-      if (celsius === undefined) return [];
-      const humidity = num(d.traits["sdm.devices.traits.Humidity"]?.ambientHumidityPercent);
-      return [
-        {
-          name:
-            String(d.traits["sdm.devices.traits.Info"]?.customName ?? "").trim() ||
-            d.parentRelations?.[0]?.displayName?.trim() ||
-            "",
-          temp: fahrenheit(celsius),
-          ...(humidity !== undefined ? { humidity: Math.round(humidity) } : {}),
-        } satisfies Indoor["rooms"][number],
-      ];
-    });
-  if (!rooms.length) return null;
-  const temp = Math.round(rooms.reduce((s, r) => s + r.temp, 0) / rooms.length);
-  return { at, temp, rooms };
+  const read = devices.flatMap((d) => {
+    const t = d?.traits;
+    if (d?.type !== "sdm.devices.types.THERMOSTAT" || !t) return [];
+    if (t["sdm.devices.traits.Connectivity"]?.status === "OFFLINE") return [];
+    const celsius = num(t["sdm.devices.traits.Temperature"]?.ambientTemperatureCelsius);
+    if (celsius === undefined) return [];
+    const humidity = num(t["sdm.devices.traits.Humidity"]?.ambientHumidityPercent);
+    const room = {
+      name:
+        text(t["sdm.devices.traits.Info"]?.customName) || text(d.parentRelations?.[0]?.displayName),
+      temp: fahrenheit(celsius),
+      ...(humidity !== undefined ? { humidity: Math.round(humidity) } : {}),
+    } satisfies Indoor["rooms"][number];
+    return [{ celsius, room }];
+  });
+  if (!read.length) return null;
+  // The house's average from the raw readings, rounded once.
+  const temp = fahrenheit(read.reduce((s, r) => s + r.celsius, 0) / read.length);
+  return { at, temp, rooms: read.map((r) => r.room) };
 }

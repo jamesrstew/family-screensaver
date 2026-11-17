@@ -57,4 +57,43 @@ describe("indoorOf", () => {
     ).toEqual({ at: AT, temp: 68, rooms: [{ name: "Hall", temp: 68 }] });
     expect(indoorOf([thermostat(reading(20, "OFFLINE"))])).toBeNull();
   });
+
+  it("skips a malformed device without losing the others", () => {
+    const good = thermostat({
+      "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: 20 },
+    });
+    const odd = [
+      null,
+      { type: "sdm.devices.types.THERMOSTAT" },
+      {
+        type: "sdm.devices.types.THERMOSTAT",
+        traits: {
+          "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: "warm" },
+        },
+      },
+      thermostat(
+        {
+          "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: 22 },
+          "sdm.devices.traits.Info": { customName: { not: "a name" } },
+        },
+        "Loft",
+      ),
+    ] as unknown as Parameters<typeof read>[0];
+    expect(indoorOf([good, ...odd])).toEqual({
+      at: AT,
+      temp: 70,
+      rooms: [
+        { name: "Hall", temp: 68 },
+        { name: "Loft", temp: 72 },
+      ],
+    });
+  });
+
+  it("averages the raw readings, rounding once", () => {
+    const at = (c: number) =>
+      thermostat({ "sdm.devices.traits.Temperature": { ambientTemperatureCelsius: c } });
+    // 20.25 °C and 20.3 °C read 68° and 69°, which would round to 69°;
+    // together they're 68.5° less a hair, so 68°.
+    expect(indoorOf([at(20.25), at(20.3)])?.temp).toBe(68);
+  });
 });

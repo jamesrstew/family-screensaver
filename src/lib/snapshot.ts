@@ -48,7 +48,8 @@ export async function getSnapshot(): Promise<Snapshot> {
         )
       : null,
     quietly("notebook", getNotebook()),
-    quietly("nest", getIndoor()),
+    // The thermostats get a few seconds in all; the rest of the paper doesn't wait on them.
+    quietly("nest", within(getIndoor(), NEST_MS)),
   ]);
 
   return {
@@ -61,6 +62,21 @@ export async function getSnapshot(): Promise<Snapshot> {
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
+}
+
+const NEST_MS = 6000;
+
+/** The promise, or a refusal after `ms` (the work carries on and fills the cache). */
+async function within<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, no) => {
+    timer = setTimeout(() => no(new Error(`took over ${ms} ms`)), ms);
+  });
+  try {
+    return await Promise.race([p, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function quietly<T>(what: string, p: Promise<T>): Promise<T | null> {
