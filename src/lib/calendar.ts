@@ -19,6 +19,9 @@ export async function getHappenings(urls: string[], from: Date, to: Date): Promi
       if (url.startsWith("file:")) return readFile(fileURLToPath(url), "utf8");
       const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`calendar ${res.status}`);
+      if (Number(res.headers.get("content-length") ?? 0) > MAX_ICS) {
+        throw new Error("calendar too large");
+      }
       const text = await res.text();
       if (text.length > MAX_ICS) throw new Error(`calendar too large (${text.length})`);
       return text;
@@ -30,7 +33,14 @@ export async function getHappenings(urls: string[], from: Date, to: Date): Promi
   }
   // Every calendar failed: let the snapshot leave the calendar out, as before.
   if (!ok.length && urls.length) throw new Error("calendar unavailable");
-  return ok.flatMap((t) => expand(t, from, to));
+  return ok.flatMap((t) => {
+    try {
+      return expand(t, from, to);
+    } catch (err) {
+      console.error("[calendar] one calendar unreadable", err);
+      return [];
+    }
+  });
 }
 
 /** A family calendar is far smaller; past this, something is wrong. */

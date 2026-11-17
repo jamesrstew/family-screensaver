@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { COOKIE, COOKIE_MAX_AGE, familyKey, tokenFor, tryKey } from "@/lib/auth";
+import { COOKIE, COOKIE_MAX_AGE, addressOf, familyKey, tokenFor, tryKey } from "@/lib/auth";
 
 // Pair a device: the TV or a phone types the family key once on the locked
 // page, and gets a cookie for a year. The key is only ever posted, never put
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const key = form.get("key")?.toString() ?? "";
   const next = form.get("next")?.toString() ?? "";
   const to = new URL(PLACES.has(next) ? next : "/", request.url);
-  const tried = key ? await tryKey(key) : "wrong";
+  const tried = key ? await tryKey(key, addressOf(request.headers)) : "wrong";
   if (tried !== "ok") {
     to.searchParams.set(tried === "wait" ? "wait" : "nope", "1");
     return NextResponse.redirect(to, 303);
