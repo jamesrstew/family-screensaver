@@ -1,0 +1,354 @@
+/*
+ * The living sky (living.tsx). Only transform and opacity ever animate, on
+ * whole layers drawn once. Durations are set inline (prime-ish, seeded).
+ */
+
+.sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  z-index: 0;
+}
+.sky-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A layer that comes and goes with the weather and the hour. */
+.sky-layer {
+  position: absolute;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete;
+}
+.sky-layer[data-on="0"] {
+  opacity: 0;
+  display: none;
+}
+@starting-style {
+  [data-settled] .sky-layer[data-on="1"] {
+    opacity: 0;
+  }
+}
+
+/* ---- The land: contour lines in the paper, breathing. */
+.sky-land {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  color: var(--ink-faint);
+  opacity: 0.45;
+}
+[data-mood="night"] .sky-land {
+  opacity: 0.3;
+}
+.sky-land-sheet {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sky-land-b {
+  opacity: 0;
+  animation: sky-swap 61s ease-in-out infinite alternate;
+}
+@keyframes sky-swap {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  88%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ---- Light. */
+.sky-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 75% 70% at 50% 46%,
+    transparent 55%,
+    color-mix(in srgb, var(--ink-faint) 13%, transparent) 100%
+  );
+}
+[data-mood="night"] .sky-vignette {
+  display: none;
+}
+.sky-glow-at {
+  left: 0;
+  top: 0;
+  width: 50rem;
+  height: 50rem;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete,
+    transform 10s linear;
+}
+.sky-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: sky-pulse 23s ease-in-out infinite alternate;
+}
+.sky-glow-warm {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--accent) 13%, transparent),
+    color-mix(in srgb, var(--accent) 5%, transparent) 45%,
+    transparent
+  );
+}
+.sky-glow-moon {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ink-faint) 22%, transparent),
+    color-mix(in srgb, var(--ink-faint) 6%, transparent) 30%,
+    transparent 70%
+  );
+}
+.sky-horizon-warm {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 40rem;
+}
+.sky-horizon-warm > div {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 30%,
+    color-mix(in srgb, var(--accent) 6%, transparent) 66%,
+    transparent
+  );
+  animation: sky-pulse 37s ease-in-out infinite alternate;
+}
+@keyframes sky-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- Sun and moon. */
+.sky-body {
+  left: 0;
+  top: 0;
+  transition:
+    opacity 24s ease,
+    display 24s allow-discrete,
+    transform 10s linear;
+}
+.sky-halo {
+  animation: sky-spin 557s linear infinite;
+}
+.sky-rays {
+  animation:
+    sky-spin-back 1213s linear infinite,
+    sky-pulse 13s ease-in-out infinite alternate;
+}
+.sky-moon-halo {
+  animation: sky-pulse 17s ease-in-out infinite alternate;
+}
+@keyframes sky-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sky-spin-back {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+/* ---- Clouds: two depths. Far ones are smaller, paler, slower. */
+.sky-cloud {
+  left: 0;
+}
+.sky-drift {
+  animation-name: sky-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes sky-drift {
+  from {
+    transform: translateX(-50rem);
+  }
+  to {
+    transform: translateX(125rem);
+  }
+}
+.sky-cloud-far {
+  color: var(--ink-faint);
+  opacity: 0.85;
+}
+.sky-cloud-near {
+  color: var(--ink-faint);
+}
+.sky-cloud-hatch {
+  opacity: 0.55;
+}
+.sky-cloud-far .sky-cloud-hatch {
+  opacity: 0.4;
+}
+/* Behind the weather pages, whose words sit high, the clouds draw back to a veil. */
+.sky[data-quiet] .sky-cloud[data-on="1"] {
+  opacity: 0.4;
+}
+[data-heavy] .sky-cloud-near {
+  color: var(--ink-soft);
+}
+[data-heavy] .sky-cloud-hatch {
+  opacity: 0.9;
+}
+[data-mood="night"] .sky-cloud-far,
+[data-mood="night"] .sky-cloud-near {
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+
+/* ---- Stars breathe, each to its own slow count. The faint dust between them
+   is painted with the paper and never moves (a moving full-sheet layer
+   would cost the TV a whole screen of drawing every frame). */
+.sky-star {
+  position: absolute;
+  margin: -0.8rem 0 0 -0.8rem;
+  animation-name: sky-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes sky-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.25;
+  }
+  60% {
+    opacity: 0.4;
+  }
+}
+.sky-meteor {
+  position: absolute;
+  opacity: 0;
+  transform-origin: 100% 50%;
+  animation: sky-meteor 431s linear infinite;
+}
+@keyframes sky-meteor {
+  0%,
+  99.55% {
+    opacity: 0;
+    transform: rotate(-17deg) translateX(0);
+  }
+  99.7% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-17deg) translateX(-26rem);
+  }
+}
+
+/* ---- Birds: a few cross now and then, gliding. */
+.sky-flock {
+  position: absolute;
+  left: 0;
+  animation: sky-flock 677s linear infinite;
+  transform: translateX(-12rem);
+}
+@keyframes sky-flock {
+  0% {
+    transform: translate(-12rem, 0);
+  }
+  8% {
+    transform: translate(132rem, -4rem);
+  }
+  100% {
+    transform: translate(132rem, -4rem);
+  }
+}
+.sky-bob {
+  animation: sky-bob 4.3s ease-in-out infinite alternate;
+}
+@keyframes sky-bob {
+  to {
+    transform: translateY(0.7rem) scaleY(0.82);
+  }
+}
+
+/* ---- Mist: long engraved strokes drifting on the low air. */
+.sky-mist-band {
+  left: -10rem;
+}
+.sky-mist {
+  animation: sky-mist ease-in-out infinite alternate;
+}
+@keyframes sky-mist {
+  from {
+    transform: translateX(0);
+    opacity: 0.45;
+  }
+  to {
+    transform: translateX(-24rem);
+    opacity: 1;
+  }
+}
+
+/* ---- Rain and snow. */
+.sky-tile {
+  position: absolute;
+  animation: sky-fall linear infinite;
+}
+@keyframes sky-fall {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(var(--tx), var(--ty));
+  }
+}
+.sky-sway {
+  animation: sky-sway ease-in-out infinite alternate;
+}
+@keyframes sky-sway {
+  from {
+    transform: translateX(-1.2rem);
+  }
+  to {
+    transform: translateX(1.2rem);
+  }
+}
+.sky-rain-far,
+.sky-snow-far {
+  color: var(--ink-faint);
+  opacity: 0.5;
+}
+.sky-rain-mid,
+.sky-snow-mid {
+  color: var(--ink-faint);
+  opacity: 0.75;
+}
+.sky-rain-near,
+.sky-snow-near {
+  color: var(--ink-soft);
+  opacity: 0.55;
+}
+
+/* Still, for those who ask for less motion: the sky as a drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .sky *,
+  .sky-layer {
+    animation: none !important;
+    transition: none !important;
+  }
+}

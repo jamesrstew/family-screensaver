@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { InkMode } from "@/components/Ink";
 import type { WeatherView } from "@/lib/carousel";
 import type { ViewProps } from "../parts";
+import type { LivingSkyProps } from "./living";
 import * as almanac from "./almanac";
 import * as bookplate from "./bookplate";
 import * as plate from "./plate";
@@ -21,6 +22,8 @@ type Kit = {
   Home: ComponentType<ViewProps>;
   Night: ComponentType<ViewProps>;
   Weather: ComponentType<ViewProps & { view?: WeatherView }>;
+  /** The living sky behind the pages, if the design draws one. */
+  Sky?: ComponentType<LivingSkyProps>;
 };
 
 export const DESIGNS: Record<Design, Kit> = {

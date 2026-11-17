@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf } from "@/lib/carousel";
-import { moodOf, parts, type Mood } from "@/lib/time";
+import { hashOf } from "@/lib/organic";
+import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
@@ -13,6 +14,7 @@ import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { DESIGNS, type Design } from "@/views/designs/registry";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
+import { Fps } from "./Fps";
 import { useVoice } from "./useVoice";
 
 /*
@@ -214,6 +216,12 @@ export function Screen({
     return () => window.clearInterval(t);
   }, []);
 
+  // The living sky's shapes and phases, fixed for the session (and the same on
+  // the server), so the sky never jumps when the snapshot refreshes.
+  const [seed] = useState(
+    () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
+  );
+
   const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
   const props = { snapshot, now, mood, slide };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
@@ -235,9 +243,18 @@ export function Screen({
           transition: "transform 180s linear",
         }}
       >
+        {drawn?.Sky ? (
+          <drawn.Sky
+            w={snapshot.weather}
+            now={now}
+            mood={mood}
+            arc={view === "home" || view === "night" || slide?.kind === "passage"}
+            seed={seed}
+          />
+        ) : null}
         <InkModeContext.Provider value={drawn?.ink ?? "blots"}>
           <InkStage.Provider value={leaving}>
-            <div key={view} className="h-full">
+            <div key={view} className="relative z-[1] h-full">
               {view === "home" && (drawn ? <drawn.Home {...props} /> : <HomePage {...props} />)}
               {drawn && slide?.kind === "passage" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
@@ -251,6 +268,7 @@ export function Screen({
         </InkModeContext.Provider>
         <VoiceLine state={voice.state} caption={voice.caption} />
       </main>
+      <Fps />
     </div>
   );
 }
@@ -267,9 +285,9 @@ function VoiceLine({ state, caption }: { state: string; caption: string }) {
   if (state === "idle") return null;
   const words = state === "speaking" && caption ? caption : VOICE_WORDS[state];
   return (
-    <div className="pointer-events-none absolute inset-x-[5.5rem] bottom-[1.4rem] flex justify-center">
+    <div className="pointer-events-none absolute inset-x-[5.5rem] bottom-[1.4rem] z-[2] flex justify-center">
       <Ink k={state === "speaking" ? "speaking" : state} className="max-w-[90rem] text-center">
-        <p className="bg-paper px-6 text-[2.1rem] leading-snug text-ink italic">{words}</p>
+        <p className="bg-paper px-6 text-[2.8rem] leading-snug text-ink italic">{words}</p>
       </Ink>
     </div>
   );
