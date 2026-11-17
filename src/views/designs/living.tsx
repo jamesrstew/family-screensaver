@@ -73,6 +73,8 @@ type SkyState = {
   wisps: number;
 };
 
+const tenth = (n: number) => Math.round(n * 10) / 10;
+
 export function skyOf(code: number | null): SkyState {
   if (code === null)
     return { cover: "fair", fall: null, hard: false, fog: false, cumulus: 3, stratus: 0, wisps: 3 };
@@ -644,11 +646,12 @@ function Clouds({
         const H = c.h * 10;
         // The cloud's true extent (billows can reach past its nominal box),
         // so nothing is cut off by the edge of its drawing.
-        const x0 = Math.min(...billows.map((b) => b.x - b.r)) - 4;
-        const x1 = Math.max(...billows.map((b) => b.x + b.r)) + 4;
-        const y0 = Math.min(...billows.map((b) => b.y - b.r)) - 4;
-        const bow = H * 0.08;
-        const y1 = base + bow + 4;
+        // Rounded, so the server and the TV agree to the last digit (hydration).
+        const x0 = tenth(Math.min(...billows.map((b) => b.x - b.r)) - 4);
+        const x1 = tenth(Math.max(...billows.map((b) => b.x + b.r)) + 4);
+        const y0 = tenth(Math.min(...billows.map((b) => b.y - b.r)) - 4);
+        const bow = tenth(H * 0.08);
+        const y1 = tenth(base + bow + 4);
         const vb = `${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`;
         const box = {
           width: rem((x1 - x0) / 10),
@@ -716,9 +719,9 @@ function Clouds({
                   {/* The shadow is darkest under the crown, fading to both ends. */}
                   <radialGradient
                     id={`${c.id}g`}
-                    cx={crown}
-                    cy={base}
-                    r={W * 0.6}
+                    cx={tenth(crown)}
+                    cy={tenth(base)}
+                    r={tenth(W * 0.6)}
                     gradientUnits="userSpaceOnUse"
                   >
                     <stop offset={0} stopColor="#fff" />
