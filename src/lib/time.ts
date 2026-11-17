@@ -81,20 +81,25 @@ export const TURN = 0.5;
 export function twilightOf(date: Date, timeZone: string, sun?: Sun | null): Twilight | null {
   if (!sun?.twilight) return null;
   const m = minuteOfDay(date, timeZone);
-  const since = (m - minuteOfDay(new Date(sun.sunset), timeZone) + 1440) % 1440;
-  const until = (minuteOfDay(new Date(sun.sunrise), timeZone) - m + 1440) % 1440;
-  const long = sun.twilight;
+  const set = minuteOfDay(new Date(sun.sunset), timeZone);
+  const rise = minuteOfDay(new Date(sun.sunrise), timeZone);
+  const since = (m - set + 1440) % 1440;
+  const until = (rise - m + 1440) % 1440;
+  // Far north in summer the night is shorter than two dusks: each side gets
+  // half of it, so the paper still turns dark in the middle.
+  const long = Math.min(sun.twilight, Math.floor(((rise - set + 1440) % 1440) / 2));
+  if (long <= 0) return null;
   if (since < long) return { side: "dusk", depth: since / long };
   if (until > 0 && until <= long) return { side: "dawn", depth: until / long };
   return null;
 }
 
 /**
- * How far the day's paper dims by the turn: the veil over the sheet. The same
- * at both ends, so the corner notes stay readable as the morning comes up
- * (when someone is leaving for school).
+ * How far the day's paper dims by the turn: the veil over the sheet, words
+ * and all. Held where the day's ink still reads at least as well as the
+ * night's does on its own paper (the hero, the credits, the corner notes).
  */
-export const DUSK_PEAK = { dusk: 0.6, dawn: 0.6 } as const;
+export const DUSK_PEAK = { dusk: 0.45, dawn: 0.45 } as const;
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 

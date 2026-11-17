@@ -144,6 +144,25 @@ describe("twilight", () => {
     expect(moodOf(at("2026-06-22T02:30:00-07:00"), TZ, north)).toBe("morning");
   });
 
+  it("gives each side half the night when the night is shorter than two dusks", () => {
+    // Sunset 12:30 a.m., sunrise 2 a.m., 90 minutes of civil twilight each:
+    // 45 minutes each way, and night in the middle.
+    const white = {
+      sunrise: "2026-06-21T02:00:00-07:00",
+      sunset: "2026-06-21T00:30:00-07:00",
+      twilight: 90,
+    };
+    expect(twilightOf(at("2026-06-21T00:50:00-07:00"), TZ, white)).toEqual({
+      side: "dusk",
+      depth: 20 / 45,
+    });
+    expect(moodOf(at("2026-06-21T01:10:00-07:00"), TZ, white)).toBe("night");
+    expect(twilightOf(at("2026-06-21T01:20:00-07:00"), TZ, white)).toEqual({
+      side: "dawn",
+      depth: 40 / 45,
+    });
+  });
+
   it("isn't drawn without a forecast's twilight", () => {
     const bare = { sunrise: sun.sunrise, sunset: sun.sunset };
     expect(twilightOf(at("2026-11-16T16:50:00-08:00"), TZ, bare)).toBeNull();
