@@ -47,6 +47,7 @@ import {
 } from "@/lib/lenses";
 import { AQI_SENSITIVE, airNow, smokeOf } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
+import type { Hold } from "@/lib/wear";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
@@ -108,7 +109,13 @@ export function Weather({ view, ...props }: ViewProps & { view?: WeatherStyle })
       </Ink>
     );
   }
-  const o = outlook(w, props.now, props.snapshot.timeZone);
+  // The day's advice is held on the TV (not on the server, which renders afresh).
+  const o = outlook(
+    w,
+    props.now,
+    props.snapshot.timeZone,
+    typeof window === "undefined" ? undefined : HOLD,
+  );
   if (style === "ribbon") return <Ribbon {...props} w={w} o={o} />;
   if (style === "days") return <Days {...props} w={w} o={o} />;
   if (style === "hours") return <Hours {...props} w={w} o={o} />;
@@ -116,6 +123,13 @@ export function Weather({ view, ...props }: ViewProps & { view?: WeatherStyle })
 }
 
 type Drawn = ViewProps & { w: Sky; o: Outlook };
+
+/**
+ * What the day's coat line was chosen for, kept for the session so it can't
+ * flip back and forth on a forecast hovering at a line (wear.ts). Empty at
+ * first load, so the TV's first drawing matches the server's.
+ */
+const HOLD: Hold = new Map();
 
 /** Rain or snow on the way: that's the news. Otherwise, what to wear. */
 const urgent = (o: Outlook) => Boolean(o.spell);
@@ -432,7 +446,9 @@ function Now({ o }: Drawn) {
         ) : null}
         <Ink order={3} className={o.timing ? "mt-[1.2rem]" : "mt-[2.2rem]"}>
           <p
-            className={`text-[3.8rem] leading-[1.2] text-balance italic ${act ? "text-ink-soft" : "text-accent"}`}
+            className={`leading-[1.2] text-balance italic ${act ? "text-ink-soft" : "text-accent"}`}
+            // As large as keeps it to one line across the page (3.8 rem at most).
+            style={{ ...fitStyle(o.air ?? o.wear, { w: 94, h: 4.8 }, ADVICE), lineHeight: 1.2 }}
           >
             {/* Bad air takes the coat's place: it's the thing to act on. */}
             {o.air ?? o.wear}
@@ -465,6 +481,9 @@ function Now({ o }: Drawn) {
 }
 
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
+
+/** The advice line: one line across the page, 3.8 rem when it fits, never under 2.8. */
+const ADVICE = { max: 3.8, min: 2.8, italic: true };
 
 /**
  * Each view's sentence, as large as its space allows (fit.ts): a short answer
