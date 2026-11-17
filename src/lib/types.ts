@@ -6,6 +6,8 @@ export const PAGES = ["home", "weather", "week", "notebook"] as const;
 export type Page = (typeof PAGES)[number];
 
 export type Weather = {
+  /** When the report was fetched (ISO), stamped inside the cache: its true age. */
+  at?: string;
   now: {
     temp: number;
     label: string;
@@ -121,6 +123,7 @@ export type NotebookItem = {
 export type Indoor = {
   /** When the thermostats were read (ISO): the server may hand out a cached reading. */
   at: string;
+  /** The house's one number: NEST_ROOM's thermostat, else the average. */
   temp: number;
   rooms: Array<{
     name: string; // the thermostat's room; never shown in the repo or logs

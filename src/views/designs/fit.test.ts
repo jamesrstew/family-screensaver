@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LEAD_CHARS } from "@/lib/pick";
 import type { NotebookItem, Snapshot } from "@/lib/types";
 import { heroBox, heroFitting } from "./common";
-import { fitType, heightAt, linesAt } from "./fit";
+import { fitType, heightAt, linesAt, widthEm } from "./fit";
 
 const box = { w: 102, h: 20 };
 const o = { max: 11, min: 3.6, italic: true };
@@ -101,5 +101,12 @@ describe("heroFitting", () => {
 
   it("takes the first passage when it fits", () => {
     expect(heroFitting(props, () => true)?.id).toBe("long");
+  });
+});
+
+describe("widthEm", () => {
+  it("counts a true minus sign as wide as a digit", () => {
+    expect(widthEm("\u22125°")).toBeCloseTo(widthEm("15°"));
+    expect(widthEm("\u22125°")).toBeGreaterThan(widthEm("-5°"));
   });
 });

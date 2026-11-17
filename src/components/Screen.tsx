@@ -12,7 +12,7 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshIndoor, insideOf } from "@/lib/indoor";
+import { freshIndoor } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
@@ -110,16 +110,6 @@ export function Screen({
   const [sun, setSun] = useState(initial.weather?.today ?? null);
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
   const twilight = twilightOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
-
-  // ---- Inside the house. Each snapshot's note is decided against the last
-  // one decided (before the corner narrows it for room), so a reading that
-  // wobbles at the edge doesn't flip its form.
-  const [inside, setInside] = useState(() => insideOf(initial.indoor, null));
-  const [insideFrom, setInsideFrom] = useState(initial);
-  if (latest !== insideFrom) {
-    setInsideFrom(latest);
-    setInside(insideOf(latest.indoor, inside));
-  }
 
   // ---- Waking up: the paper takes its mood at once; only later changes are slow.
   const [settled, setSettled] = useState(false);
@@ -321,7 +311,7 @@ export function Screen({
   const [at, key] = shown.split(":");
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
-  const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
+  const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (shown === "home" || slide || shown === "night" || asked) ? kit : null;
   return (

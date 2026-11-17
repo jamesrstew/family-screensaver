@@ -716,3 +716,17 @@ export function freshWeather(w: Weather | null, now: Date): Weather | null {
   const t = now.getTime();
   return t - first > WEATHER_STALE_MS + HOUR || t >= last + HOUR ? null : w;
 }
+
+// Two clocks on one report: freshWeather asks whether the forecast still
+// speaks of today (three hours, by its own hours); nowIsFresh asks the
+// stricter question, whether its "now" (the temperature this minute) is
+// still now (one hour, by when it was fetched). WEA-2 would join them.
+
+/** A report older than this no longer says what it's like outside right now. */
+export const NOW_STALE_MS = HOUR;
+
+/** Whether the report's "now" is still now: fetched within the hour. */
+export function nowIsFresh(w: Weather, now: Date): boolean {
+  const at = w.at ? Date.parse(w.at) : NaN;
+  return Number.isFinite(at) && now.getTime() - at < NOW_STALE_MS;
+}

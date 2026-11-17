@@ -218,8 +218,11 @@ export function sunProgress(w: Weather, now: Date): number {
 
 /** A temperature: the face's own degree sign, no fuss. */
 export function Deg({ v }: { v: number }) {
-  return <>{v}°</>;
+  return <>{degrees(v)}</>;
 }
+
+/** "68°", and below zero a true minus sign ("−5°"), never a hyphen. */
+export const degrees = (v: number) => `${v < 0 ? "\u2212" : ""}${Math.abs(v)}°`;
 
 /**
  * The time as a clock face with its a.m. or p.m., AP style ("6:30 p.m.",

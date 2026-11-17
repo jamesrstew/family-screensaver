@@ -179,4 +179,17 @@ describe("shape, across a clock change", () => {
     expect(temp("2026-11-01")).toHaveLength(24);
     expect(temp("2026-11-02").every((x) => x != null)).toBe(true);
   });
+
+  it("never reports a made-up temperature now", () => {
+    const now = new Date("2026-11-18T10:20:00Z");
+    // No current reading: this hour's forecast stands in.
+    const noCurrent = { ...base, current: { ...base.current, temperature_2m: null } };
+    expect(shape(noCurrent as unknown as OpenMeteo, now).now.temp).toBe(30);
+    // Neither: the report is left out rather than saying 0°.
+    const none = {
+      ...noCurrent,
+      hourly: { ...base.hourly, temperature_2m: fill(() => null) },
+    } as unknown as OpenMeteo;
+    expect(() => shape(none, now)).toThrow();
+  });
 });

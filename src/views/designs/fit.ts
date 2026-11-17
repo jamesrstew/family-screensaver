@@ -31,7 +31,7 @@ const PARA_GAP = 0.45; // em, as Words sets it
  */
 export function widthEm(text: string): number {
   let w = 0;
-  for (const ch of text) w += /[A-Z]/.test(ch) ? 0.68 : /[0-9]/.test(ch) ? 0.55 : 0.45;
+  for (const ch of text) w += /[A-Z]/.test(ch) ? 0.68 : /[0-9\u2212]/.test(ch) ? 0.55 : 0.45;
   return w;
 }
 

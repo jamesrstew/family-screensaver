@@ -15,10 +15,10 @@ const house = (...rooms: Room[]): Omit<Indoor, "at"> => ({
 });
 
 export const FAKE_INDOORS = {
-  one: house(room("Hallway", 68)),
-  close: house(room("Hallway", 68), room("Upstairs", 70)),
-  apart: house(room("Hallway", 66), room("Upstairs", 71)),
-  dry: house(room("Hallway", 67, 24), room("Upstairs", 68, 27)),
+  one: house(room("Den", 68)),
+  close: house(room("Den", 68), room("Upstairs", 70)),
+  apart: house(room("Den", 66), room("Upstairs", 71)),
+  dry: house(room("Den", 67, 24), room("Upstairs", 68, 27)),
   none: null,
 } satisfies Record<string, Omit<Indoor, "at"> | null>;
 

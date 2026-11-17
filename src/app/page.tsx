@@ -41,7 +41,9 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   const sky = String(params.sky ?? "") as FakeSky;
   if (dev) {
     const when = new Date(snapshot.issuedAt);
-    if (SKIES.includes(sky)) snapshot.weather = fakeWeather(sky, when, snapshot.timeZone);
+    if (SKIES.includes(sky)) {
+      snapshot.weather = { ...fakeWeather(sky, when, snapshot.timeZone), at: snapshot.issuedAt };
+    }
     const indoor = String(params.indoor ?? "");
     if (isFakeIndoor(indoor)) {
       const fake = FAKE_INDOORS[indoor];

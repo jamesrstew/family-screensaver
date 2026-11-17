@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { describe as label, forecastLine, hoursLine, outlook, weekLine } from "./forecast";
+import {
+  NOW_STALE_MS,
+  describe as label,
+  forecastLine,
+  hoursLine,
+  nowIsFresh,
+  outlook,
+  weekLine,
+} from "./forecast";
 import type { Weather } from "./types";
 import { fakeWeather, SKIES } from "./weather-fixtures";
 
@@ -269,5 +277,18 @@ describe("an ozone day", () => {
     expect(o.air).toBe(
       "Ozone unhealthy for sensitive groups, AQI 118: take it easy outside if you’re sensitive.",
     );
+  });
+});
+
+describe("nowIsFresh", () => {
+  const at = "2026-11-17T18:00:00.000Z";
+  const w = { at } as Weather;
+  const after = (ms: number) => new Date(Date.parse(at) + ms);
+  it("trusts the report's now for an hour after it was fetched", () => {
+    expect(nowIsFresh(w, after(59 * 60_000))).toBe(true);
+    expect(nowIsFresh(w, after(NOW_STALE_MS))).toBe(false);
+  });
+  it("doesn't trust a report with no stamp", () => {
+    expect(nowIsFresh({} as Weather, after(0))).toBe(false);
   });
 });
