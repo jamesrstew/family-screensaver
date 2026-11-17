@@ -190,10 +190,10 @@ export function Screen({
   useEffect(() => {
     if (!carousel) return;
     const at = clockNow();
-    const wait = nextTurnIn(at, homeStart.since);
+    const wait = nextTurnIn(at, homeStart.since, Boolean(snapshot.weather));
     const t = window.setTimeout(() => setNow(new Date(clockNow())), wait + 50);
     return () => window.clearTimeout(t);
-  }, [carousel, homeStart, now]);
+  }, [carousel, homeStart, now, snapshot.weather]);
 
   // ---- Everything returns home.
   useEffect(() => {

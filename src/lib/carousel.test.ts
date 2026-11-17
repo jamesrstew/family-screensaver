@@ -103,11 +103,16 @@ describe("home's carousel", () => {
     }
   });
 
-  it("without a weather report, stays on passages, each up a minute or half a minute", () => {
-    const s = kinds(afternoon, 6, false);
-    expect(letters(s)).toBe("PPPPPP");
-    expect(slideKey(s[0])).toBe(slideKey(s[1]));
-    expect(slideKey(s[1])).not.toBe(slideKey(s[2]));
+  it("without a weather report, stays on passages, each up 45 seconds", () => {
+    const at = (ms: number) => slideOf(new Date(afternoon + ms), { since: afternoon }, false, tz);
+    const keys = [0, 44_999, 45_000, 89_999, 90_000].map((ms) => slideKey(at(ms)));
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[1]);
+    expect(keys[3]).toBe(keys[2]);
+    expect(keys[4]).not.toBe(keys[3]);
+    expect(new Set(keys).size).toBe(3);
+    expect(nextTurnIn(afternoon + 10_000, afternoon, false)).toBe(35_000);
+    expect(nextTurnIn(afternoon + 50_000, afternoon, false)).toBe(40_000);
   });
 });
 

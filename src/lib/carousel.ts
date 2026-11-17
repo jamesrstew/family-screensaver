@@ -81,7 +81,9 @@ export function slideOf(now: Date, start: Start, hasWeather: boolean, timeZone: 
   const at = since + c * CYCLE_MS;
   const w = weathersIn(at, timeZone);
   const base = 2 * Math.floor(at / CYCLE_MS);
-  if (!hasWeather) return { kind: "passage", n: base + (pos === 2 ? 1 : 0) };
+  // No weather: the cycle's two passages, 45 seconds each.
+  if (!hasWeather)
+    return { kind: "passage", n: base + (elapsed % CYCLE_MS < CYCLE_MS / 2 ? 0 : 1) };
   if (pos < w) {
     // Back from the Weather page, the first cycle's views were never shown:
     // the next one is "now" again.
@@ -111,8 +113,9 @@ export function startAfter(from: string, to: string, now: number, start: Start):
 }
 
 /** Milliseconds until the carousel's next turn (a slide boundary). */
-export function nextTurnIn(now: number, since: number): number {
-  return SLIDE_MS - (Math.max(now - since, 0) % SLIDE_MS);
+export function nextTurnIn(now: number, since: number, hasWeather = true): number {
+  const step = hasWeather ? SLIDE_MS : CYCLE_MS / 2;
+  return step - (Math.max(now - since, 0) % step);
 }
 
 export const slideKey = (s: Slide) =>
