@@ -1,6 +1,6 @@
 import { family } from "@/config";
 import { Ink } from "@/components/Ink";
-import { questionFor } from "@/lib/pick";
+import { leadFor, questionFor } from "@/lib/pick";
 import {
   addDays,
   asksQuestion,
@@ -12,10 +12,11 @@ import {
   parts,
   whenOf,
 } from "@/lib/time";
-import type { ViewProps } from "./parts";
+import { NightPiece, type ViewProps } from "./parts";
 
 // After the evening: dark paper, faint ink, almost nothing on it.
-// The clock, what tomorrow holds, and (until 6 p.m.) the afternoon's question.
+// The clock, what tomorrow holds, and one quiet piece: the afternoon's
+// question until 6 p.m., then an idea or a quote.
 
 export function NightPage({ snapshot, now }: ViewProps) {
   const tz = snapshot.timeZone;
@@ -26,7 +27,9 @@ export function NightPage({ snapshot, now }: ViewProps) {
     ? (happeningsOn(snapshot.happenings, nextDay, tz).find((h) => !h.allDay) ??
       happeningsOn(snapshot.happenings, nextDay, tz)[0])
     : undefined;
-  const question = asksQuestion(now, tz) ? questionFor(snapshot.notebook) : null;
+  const piece =
+    (asksQuestion(now, tz) ? questionFor(snapshot.notebook) : null) ??
+    leadFor(snapshot.notebook, now);
   const suffix = clock(now, tz).split(" ").at(-1);
 
   return (
@@ -49,9 +52,9 @@ export function NightPage({ snapshot, now }: ViewProps) {
           </p>
         </Ink>
       ) : null}
-      {question ? (
+      {piece ? (
         <Ink order={3} className="mt-14 max-w-[70rem]">
-          <p className="text-[1.9rem] leading-snug text-ink-soft italic">{question.text}</p>
+          <NightPiece item={piece} className="text-[1.9rem] leading-snug" />
         </Ink>
       ) : null}
     </div>

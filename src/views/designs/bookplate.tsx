@@ -3,7 +3,7 @@ import { family } from "@/config";
 import { forecastLine } from "@/lib/forecast";
 import { clock, clockFace } from "@/lib/time";
 import { Engraving, Moon, Star, moonAge } from "../Engraving";
-import type { ViewProps } from "../parts";
+import { NightPiece, type ViewProps } from "../parts";
 import {
   Credit,
   Words,
@@ -151,7 +151,8 @@ export function Night(props: ViewProps) {
   const { snapshot, now } = props;
   const tz = snapshot.timeZone;
   const tomorrow = firstTomorrow(props);
-  const question = heroOf(props);
+  // One quiet piece (§4): the question until 6 p.m., then an idea or a quote.
+  const piece = heroOf(props);
   return (
     <div className="relative h-full">
       <Frame faint />
@@ -175,9 +176,9 @@ export function Night(props: ViewProps) {
         <Ink order={1}>
           <p className="text-[8rem] leading-none text-ink">{clockFace(now, tz)}</p>
         </Ink>
-        {question?.kind === "question" ? (
+        {piece ? (
           <Ink order={2} className="mt-[3rem] max-w-[64rem]">
-            <p className="text-[2.6rem] leading-[1.25] text-ink-soft italic">{question.text}</p>
+            <NightPiece item={piece} className="text-[2.6rem] leading-[1.25]" />
           </Ink>
         ) : null}
       </div>
