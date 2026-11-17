@@ -183,23 +183,34 @@
   }
 }
 
-/* After the turn, the last light on the horizon where the sun went down: half
-   a wide, flat glow (the sky above clips the rest), fading a minute at a
-   time. Under the first stars. */
+/* After the turn, the last light on the horizon where the sun went down,
+   fading a minute at a time, under the first stars. Above the horizon, half
+   a flat glow 7 rem tall; below it, the same glow feathered into the land
+   over 5 rem, near enough the fade above that no ridge shows under the
+   rule (the two agree along the horizon, so they meet without a seam, and
+   no edge shows where no rule is drawn). */
 .sky-afterglow-at {
   width: 60rem;
-  height: 14rem;
+  height: 12rem;
 }
 .sky-afterglow {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    color-mix(in srgb, var(--ink-faint) 55%, transparent),
-    color-mix(in srgb, var(--ink-faint) 22%, transparent) 40%,
-    transparent
-  );
+  background:
+    radial-gradient(
+        ellipse 50% 100% at 50% 100%,
+        color-mix(in srgb, var(--ink-faint) 55%, transparent),
+        color-mix(in srgb, var(--ink-faint) 22%, transparent) 40%,
+        transparent
+      )
+      top / 100% 7rem no-repeat,
+    radial-gradient(
+        ellipse 50% 100% at 50% 0%,
+        color-mix(in srgb, var(--ink-faint) 55%, transparent),
+        color-mix(in srgb, var(--ink-faint) 22%, transparent) 40%,
+        transparent
+      )
+      bottom / 100% 5rem no-repeat;
   transition: opacity 60s linear;
 }
 
