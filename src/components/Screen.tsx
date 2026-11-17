@@ -82,7 +82,8 @@ export function Screen({
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
   // ---- Inside the house. Each snapshot's note is decided against the last
-  // one shown, so a reading that wobbles at the edge doesn't flip its form.
+  // one decided (before the corner narrows it for room), so a reading that
+  // wobbles at the edge doesn't flip its form.
   const [inside, setInside] = useState(() => insideOf(initial.indoor, null));
   const [insideFrom, setInsideFrom] = useState(initial);
   if (snapshot !== insideFrom) {
@@ -153,7 +154,12 @@ export function Screen({
           setSun(next.weather.today);
         }
         const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
-        setSnapshot((prev) => (keep && prev.weather ? { ...next, weather: prev.weather } : next));
+        setSnapshot((prev) => ({
+          ...next,
+          weather: keep && prev.weather ? prev.weather : next.weather,
+          // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
+          indoor: next.indoor ?? prev.indoor,
+        }));
       } catch {
         // Offline: keep printing what we have.
       }
