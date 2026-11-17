@@ -99,7 +99,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="pt-[2rem] text-center">
-        <p className="mx-auto max-w-[96rem] text-[4.4rem] leading-[1.18] text-balance">
+        <p className="mx-auto max-w-[104rem] text-[5.6rem] leading-[1.14] text-balance">
           {nb(o.line)}
         </p>
       </Ink>
@@ -111,7 +111,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
         ) : null}
       </div>
       <Ink order={2} className="text-center">
-        <p className="text-[3rem] leading-[1.25] italic">
+        <p className="text-[3.6rem] leading-[1.22] text-balance italic">
           {o.timing ? (
             <span className={act ? "text-accent" : "text-ink-soft"}>{nb(o.timing)} </span>
           ) : null}
@@ -120,7 +120,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
       </Ink>
       {o.ahead ? (
         <Ink order={3} mode="seep" className="mt-[1.4rem] text-center">
-          <p className="text-[1.85rem] text-ink-faint italic">{o.ahead && nb(o.ahead)}</p>
+          <p className="text-[2.6rem] text-ink-faint italic">{o.ahead && nb(o.ahead)}</p>
         </Ink>
       ) : null}
     </div>
@@ -272,7 +272,7 @@ function Band({ w, hours, now, tz }: { w: Sky; hours: Sky["hours"]; now: Date; t
       {kept.map((i) => (
         <p
           key={i}
-          className="absolute -translate-x-1/2 -translate-y-full pb-[1.2rem] text-[2.6rem] leading-none text-ink"
+          className="absolute -translate-x-1/2 -translate-y-full pb-[1.2rem] text-[3.6rem] leading-none text-ink"
           style={{ left: pctX(Math.min(Math.max(pts[i][0], 30), RW - 30)), top: pctY(pts[i][1]) }}
         >
           {temps[i]}°
@@ -285,7 +285,7 @@ function Band({ w, hours, now, tz }: { w: Sky; hours: Sky["hours"]; now: Date; t
         return (
           <p
             key={h.time}
-            className="absolute -translate-x-1/2 pt-[1rem] text-[1.6rem] whitespace-nowrap text-ink-soft italic"
+            className="absolute -translate-x-1/2 pt-[1rem] text-[2.5rem] whitespace-nowrap text-ink-soft italic"
             style={{ left: pctX(Math.max(xc(i), 24)), top: pctY(BAND.bottom) }}
           >
             {label}
@@ -405,16 +405,16 @@ function Now({ w, o, now }: Drawn) {
             code={sky.code}
             isDay={sky.isDay}
             date={now}
-            className="size-[14rem] text-ink"
+            className="size-[16rem] text-ink"
           />
         </Ink>
         <Ink order={1}>
-          <p className="max-w-[88rem] text-[4.6rem] leading-[1.16] text-balance">{nb(o.line)}</p>
+          <p className="max-w-[104rem] text-[6rem] leading-[1.12] text-balance">{nb(o.line)}</p>
         </Ink>
         {o.timing ? (
           <Ink order={2} className="mt-[2.2rem]">
             <p
-              className={`text-[3.1rem] leading-[1.2] text-balance italic ${act ? "text-accent" : "text-ink-soft"}`}
+              className={`text-[3.8rem] leading-[1.2] text-balance italic ${act ? "text-accent" : "text-ink-soft"}`}
             >
               {nb(o.timing)}
             </p>
@@ -422,7 +422,7 @@ function Now({ w, o, now }: Drawn) {
         ) : null}
         <Ink order={3} className={o.timing ? "mt-[1.2rem]" : "mt-[2.2rem]"}>
           <p
-            className={`text-[3.1rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
+            className={`text-[3.8rem] leading-[1.2] italic ${act ? "text-ink-soft" : "text-accent"}`}
           >
             {o.wear}
           </p>
@@ -430,19 +430,23 @@ function Now({ w, o, now }: Drawn) {
       </div>
       {/* The rest of the day, in words, under one fine rule. */}
       <Ink order={4} mode="seep" className="grid grid-cols-3 border-t border-rule pt-[1.8rem]">
+        {/* Set like an almanac's table: when, then what, two short lines each. */}
         {o.parts.map((p, i) => (
-          <p
+          <div
             key={p.label}
-            className={`text-[2rem] text-ink-soft ${i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right"}`}
+            className={`text-[2.6rem] leading-[1.25] whitespace-nowrap text-ink-soft ${i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right"}`}
           >
-            <span className="text-ink-faint italic">{p.label}, </span>
-            <span className="text-ink">{p.temp}°</span> {p.high ? "high" : "low"}, {lower(p.words)}
-          </p>
+            <p className="text-ink-faint italic">{p.label}</p>
+            <p>
+              <span className="text-ink">{p.temp}°</span> {p.high ? "high" : "low"},{" "}
+              {lower(p.words)}
+            </p>
+          </div>
         ))}
       </Ink>
       {o.ahead ? (
         <Ink order={5} mode="seep" className="mt-[1rem] text-center">
-          <p className="text-[1.85rem] text-ink-faint italic">{nb(o.ahead)}</p>
+          <p className="text-[2.5rem] text-ink-faint italic">{nb(o.ahead)}</p>
         </Ink>
       ) : null}
     </div>
@@ -470,7 +474,7 @@ function Days({ w, now, snapshot }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[88rem] text-[4.4rem] leading-[1.18] text-balance">
+        <p className="max-w-[104rem] text-[5.8rem] leading-[1.14] text-balance">
           {nb(weekLine(w, now, tz))}
         </p>
       </Ink>
@@ -487,17 +491,19 @@ function Days({ w, now, snapshot }: Drawn) {
           return (
             <div key={d.date} className="relative flex flex-col items-center text-center">
               {/* The weekend: one fine rule over Saturday and Sunday. */}
-              {end ? <div className="absolute inset-x-0 -top-[2.2rem] h-px bg-rule" /> : null}
-              <p className={`text-[2rem] italic ${end ? "text-ink" : "text-ink-soft"}`}>{label}</p>
+              {end ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+              <p className={`text-[2.7rem] italic ${end ? "text-ink" : "text-ink-soft"}`}>
+                {label}
+              </p>
               <Engraving
                 code={p.code}
                 isDay
                 date={now}
-                className="my-[0.6rem] size-[9rem] text-ink"
+                className="my-[0.8rem] size-[12rem] text-ink"
               />
-              <p className="text-[3.4rem] leading-none text-ink">{d.high}°</p>
-              <p className="mt-[0.5rem] text-[2rem] leading-none text-ink-faint">{d.low}°</p>
-              <p className="mt-[1rem] h-[2.4rem] text-[1.85rem] text-ink-soft">
+              <p className="text-[5rem] leading-none text-ink">{d.high}°</p>
+              <p className="mt-[0.6rem] text-[3rem] leading-none text-ink-faint">{d.low}°</p>
+              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
                 {p.wet ? p.words : ""}
               </p>
             </div>
@@ -523,7 +529,7 @@ function Hours({ w, now, snapshot }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[88rem] text-[4.4rem] leading-[1.18] text-balance">
+        <p className="max-w-[104rem] text-[5.8rem] leading-[1.14] text-balance">
           {nb(hoursLine(w, now, tz))}
         </p>
       </Ink>
@@ -542,18 +548,20 @@ function Hours({ w, now, snapshot }: Drawn) {
           return (
             <div key={first.time} className="relative flex flex-col items-center text-center">
               {/* The night: one fine rule over its hours, as the weekend has in Days. */}
-              {night ? <div className="absolute inset-x-0 -top-[2.2rem] h-px bg-rule" /> : null}
-              <p className={`text-[2rem] italic ${night ? "text-ink" : "text-ink-soft"}`}>
+              {night ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+              <p
+                className={`text-[2.6rem] whitespace-nowrap italic ${night ? "text-ink" : "text-ink-soft"}`}
+              >
                 {i === 0 ? "Now" : nb(hourWord(first.time, tz))}
               </p>
               <Engraving
                 code={code}
                 isDay={isDay}
                 date={now}
-                className="my-[0.6rem] size-[9rem] text-ink"
+                className="my-[0.8rem] size-[12rem] text-ink"
               />
-              <p className="text-[3.4rem] leading-none text-ink">{temp}°</p>
-              <p className="mt-[1rem] h-[2.4rem] text-[1.85rem] text-ink-soft">
+              <p className="text-[5rem] leading-none text-ink">{temp}°</p>
+              <p className="mt-[1rem] h-[3.2rem] text-[2.5rem] whitespace-nowrap text-ink-soft">
                 {kind ? `${cap(kind === "storms" ? "storms" : kind)} ${chance}%` : ""}
               </p>
             </div>
