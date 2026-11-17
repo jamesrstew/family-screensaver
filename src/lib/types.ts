@@ -115,12 +115,26 @@ export type NotebookItem = {
   source?: string;
 };
 
+/** Inside the house, from the Nest thermostats. °F; `temp` is their average. */
+export type Indoor = {
+  /** When the thermostats were read (ISO): the server may hand out a cached reading. */
+  at: string;
+  temp: number;
+  rooms: Array<{
+    name: string; // the thermostat's room; never shown in the repo or logs
+    temp: number;
+    humidity?: number;
+  }>;
+};
+
 export type Snapshot = {
   issuedAt: string; // ISO
   place: string;
   timeZone: string;
   weather: Weather | null; // null: not configured or unavailable
   happenings: Happening[] | null; // null: no calendar connected
+  /** null: no thermostats connected, or they didn't answer. Optional for older snapshots. */
+  indoor?: Indoor | null;
   notebook: NotebookItem[]; // today's selection, in order
   voice: boolean; // can it talk?
 };

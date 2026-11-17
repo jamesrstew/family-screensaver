@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SHOW_TTL_MS, targetOf, viewAsked } from "@/lib/show";
 import { WEATHER_MS, slideFromKey, slideKey, slideOf, type WeatherView } from "@/lib/carousel";
+import { freshIndoor, insideOf } from "@/lib/indoor";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
@@ -81,6 +82,16 @@ export function Screen({
   const [sun, setSun] = useState(initial.weather?.today ?? null);
   const mood = moodOf(now, snapshot.timeZone, snapshot.weather?.today ?? sun);
 
+  // ---- Inside the house. Each snapshot's note is decided against the last
+  // one decided (before the corner narrows it for room), so a reading that
+  // wobbles at the edge doesn't flip its form.
+  const [inside, setInside] = useState(() => insideOf(initial.indoor, null));
+  const [insideFrom, setInsideFrom] = useState(initial);
+  if (snapshot !== insideFrom) {
+    setInsideFrom(snapshot);
+    setInside(insideOf(snapshot.indoor, inside));
+  }
+
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home by day is a slow carousel (Almanac only): each piece turns like a page.
   // It counts from the moment home appears, so it always opens on the weather.
@@ -151,7 +162,12 @@ export function Screen({
           setSun(next.weather.today);
         }
         const keep = !next.weather && Date.now() - weatherAt < STALE_WEATHER_MS;
-        setSnapshot((prev) => (keep && prev.weather ? { ...next, weather: prev.weather } : next));
+        setSnapshot((prev) => ({
+          ...next,
+          weather: keep && prev.weather ? prev.weather : next.weather,
+          // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
+          indoor: next.indoor ?? prev.indoor,
+        }));
       } catch {
         // Offline: keep printing what we have.
       }
@@ -251,7 +267,7 @@ export function Screen({
 
   const asked = view.startsWith("weather:") ? (view.slice(8) as WeatherView) : undefined;
   const slide = view.startsWith("home:") ? slideFromKey(view.slice(5)) : undefined;
-  const props = { snapshot, now, mood, slide };
+  const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now) ? inside : null };
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (view === "home" || slide || view === "night" || asked) ? kit : null;
   return (

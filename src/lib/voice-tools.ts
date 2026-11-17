@@ -3,6 +3,7 @@
 
 import { WEATHER_VIEWS, type WeatherView } from "./carousel";
 import { forecastLine } from "./forecast";
+import { freshIndoor } from "./indoor";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
 import { PAGES, type Snapshot, type Page } from "./types";
 
@@ -31,8 +32,21 @@ export async function runTool(
     }
     case "read_weather": {
       const w = snapshot.weather;
-      if (!w) return { available: false };
+      // Inside the house, room by room, when the thermostats answered recently;
+      // otherwise plainly unknown, so the voice says so rather than guessing.
+      // Room names leave the house here (to OpenAI, with the rest of the
+      // conversation); they're the family's own labels, often a child's name.
+      const indoor = freshIndoor(snapshot, now);
+      const inside = indoor
+        ? indoor.rooms.map((r) => ({
+            room: r.name,
+            temperature: `${r.temp}°F`,
+            ...(r.humidity !== undefined ? { humidity: `${r.humidity}%` } : {}),
+          }))
+        : "unknown";
+      if (!w) return { available: false, inside };
       return {
+        inside,
         summary: forecastLine(w, now, tz),
         now: `${w.now.temp}°F, ${w.now.label}`,
         days: w.days.slice(0, 7).map((d, i) => ({

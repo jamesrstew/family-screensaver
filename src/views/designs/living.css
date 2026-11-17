@@ -202,6 +202,16 @@
     transparent
   );
 }
+/* The corner note's: smaller and softer, so the land fades under the words
+   instead of stopping at a rim. */
+.sky-word-clearing.corner-clearing {
+  inset: -1.25rem -1.5rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 80%, transparent),
+    transparent
+  );
+}
 .sky-clearing-hero {
   left: 8rem;
   top: 29.5rem;

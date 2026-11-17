@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
+import { insideText, type Inside as InsideNote } from "@/lib/indoor";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -16,7 +17,7 @@ import {
   heroFitting,
   Deg,
 } from "./common";
-import { fitType } from "./fit";
+import { fitType, widthEm } from "./fit";
 
 /*
  * D. Almanac. The sheet is a window onto the day's sky (living.tsx): one
@@ -119,9 +120,15 @@ export function Home(props: ViewProps) {
   const tz = snapshot.timeZone;
   const next = nextUp(props);
   const w = snapshot.weather;
+  const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
+  // The house's temperature, in the corner, when what's next leaves it room.
+  const inside = cornerNote(props.inside, nextLine);
   const asks = (item: NotebookItem) => item.kind === "question";
+  // The foot is kept whenever the house has been read, note or not, so the
+  // reading coming and going never resizes or changes the passage.
+  const foot = Boolean(next || snapshot.indoor);
   const boxFor = (item: NotebookItem) =>
-    heroBox({ sky: Boolean(w), next: Boolean(next), ask: asks(item), item });
+    heroBox({ sky: Boolean(w), next: foot, ask: asks(item), item });
   const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
   // The first of the day's passages that fits its space; a longer one waits
   // for the Ideas page, which has room for anything.
@@ -167,15 +174,86 @@ export function Home(props: ViewProps) {
           </article>
         ) : null}
       </Ink>
-      {next ? (
-        <Ink order={2} mode="seep" className="pt-[1rem] text-center">
-          <p className="text-[2.6rem] text-ink-soft">
-            <span className="text-ink-faint italic">Next, </span>
-            {nextWords(next, tz)}
-          </p>
-        </Ink>
+      {foot ? (
+        // The foot of the page: what's next in the middle, the house in the corner.
+        <div className="relative pt-[1rem] text-center">
+          <Ink order={2} mode="seep">
+            <p className="text-[2.6rem] text-ink-soft">
+              {next ? (
+                <>
+                  <span className="text-ink-faint italic">Next, </span>
+                  {nextWords(next, tz)}
+                </>
+              ) : (
+                "\u00a0"
+              )}
+            </p>
+          </Ink>
+          {/* Always on the page, so the note sinks away rather than vanishing. */}
+          <Ink
+            k={inside?.kind ?? "none"}
+            order={3}
+            mode="seep"
+            className="absolute right-0 bottom-[0.7rem] isolate"
+          >
+            {inside ? (
+              <>
+                {/* Its own small clearing of paper, so no river runs through it. */}
+                <div className="sky-word-clearing corner-clearing" aria-hidden />
+                <Inside inside={inside} />
+              </>
+            ) : null}
+          </Ink>
+        </div>
       ) : null}
     </div>
+  );
+}
+
+// The foot's measure (the page inside its margins), the type of what's next
+// and of the corner note, and the air kept between them, in rem.
+const FOOT_W = 109;
+const NEXT = 2.6;
+const CORNER = 2;
+const AIR = 3;
+
+/**
+ * The note, if the corner has room for it beside what's next (centered on
+ * the same line): the range, else the one number, else nothing.
+ */
+export function cornerNote(
+  inside: InsideNote | null | undefined,
+  nextLine: string,
+): InsideNote | null {
+  if (!inside) return null;
+  const room = FOOT_W / 2 - (widthEm(nextLine) * NEXT) / 2 - AIR;
+  const one = { kind: "one", temp: inside.temp } as const;
+  return [inside, one].find((i) => widthEm(insideText(i)) * CORNER <= room) ?? null;
+}
+
+/**
+ * Inside the house, a note in the corner, written as the ends of the day are
+ * at the horizon: "68° inside", or "66° to 71° inside" when the rooms really
+ * differ. Part of the paper's furniture; it stays put while the sun moves,
+ * and comes and goes with the passages. A new number just changes; a new
+ * form re-inks.
+ */
+function Inside({ inside }: { inside: InsideNote }) {
+  return (
+    <p
+      className="leading-none whitespace-nowrap text-ink-soft"
+      style={{ fontSize: `${CORNER}rem` }}
+    >
+      {inside.kind === "one" ? (
+        <Deg v={inside.temp} />
+      ) : (
+        <>
+          <Deg v={inside.low} /> <span className="text-ink-faint italic">to</span>{" "}
+          <Deg v={inside.high} />
+        </>
+      )}{" "}
+      <span className="text-ink-faint italic">inside</span>
+    </p>
   );
 }
 
@@ -196,6 +274,7 @@ export function Night(props: ViewProps) {
   const fit = piece ? fitType(piece.text, box(piece), style(piece)) : null;
   return (
     <div className="flex h-full flex-col">
+      {/* The house's temperature isn't one of night's few things (DOCTRINE §4). */}
       {w ? (
         <SkyWords w={w} now={now} tz={tz}>
           <p className="text-[5.4rem] leading-none text-ink">

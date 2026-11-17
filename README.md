@@ -25,6 +25,18 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
 
+### Nest thermostats
+
+Optional: "68° inside" in home's corner, and the voice can say how warm each room is. Read only. Once, in this order:
+
+1. **Google Cloud:** make a project (console.cloud.google.com) and enable the **Smart Device Management API**.
+2. **OAuth consent screen:** user type _External_. Branding needs a home page and a privacy policy link (the site's address will do). Then **publish it to _In production_**: while it's in _Testing_, Google expires the refresh token after 7 days and the reading quietly disappears. The "unverified app" warning during consent is expected.
+3. **OAuth client:** _Credentials_ → _Create credentials_ → _OAuth client ID_ → _Web application_, with the authorized redirect URI `https://www.google.com`. Keep the client ID and secret.
+4. **Device Access:** register at console.nest.google.com/device-access (a one-time $5 fee) and create a project with that OAuth client ID. Note the project ID.
+5. From this folder, in your own terminal: `pnpm nest:connect`. It asks for the project ID, client ID, and secret, prints Google's consent link (grant the thermostats only, in this home only; then paste back the google.com address you land on), and stores `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET`, and `NEST_REFRESH_TOKEN` in Vercel. Redeploy.
+
+To disconnect: Google Account → _Security_ → _Third-party access_ (remove the app), and remove the project in the Device Access console.
+
 ## Develop
 
 `pnpm check` runs lint, types, tests, and formatting. `node scripts/shot.mjs <url> out.png` takes a 1920 × 1080 screenshot (add `--at 2026-11-16T22:30:00-08:00` to see night). Look at the screen before calling a design change done.
