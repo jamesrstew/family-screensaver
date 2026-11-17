@@ -38,6 +38,7 @@ describe("withAir", () => {
     const smoky = withAir(
       bare,
       shapeAir(air((day, h) => (day === 2 && h > 12 ? null : 40 + day * 50 + h))),
+      tz,
     );
     // 10 a.m. on the first day.
     expect(smoky.now.aqi).toBe(50);
@@ -53,11 +54,11 @@ describe("withAir", () => {
 
   it("takes the service's own current reading when it sends one", () => {
     const a = { ...air(() => 30), current: { us_aqi: 77, pm2_5: 21.4 } };
-    expect(withAir(bare, shapeAir(a)).now).toMatchObject({ aqi: 77, pm: 21 });
+    expect(withAir(bare, shapeAir(a), tz).now).toMatchObject({ aqi: 77, pm: 21 });
   });
 
   it("adds nothing when the air forecast is empty", () => {
-    const quiet = withAir(bare, shapeAir(air(() => null)));
+    const quiet = withAir(bare, shapeAir(air(() => null)), tz);
     expect(quiet.now.aqi).toBeUndefined();
     expect(quiet.days[0]).toEqual(bare.days[0]);
   });

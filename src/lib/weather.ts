@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife } from "next/cache";
 import { feelOf } from "./feel";
 import { describe } from "./forecast";
+import { dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
 
 // Open-Meteo: free, no key. Fahrenheit, inches, mph, the family's time zone.
@@ -78,12 +79,12 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
   });
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
-  return shape(await res.json());
+  return shape(await res.json(), new Date(), timeZone);
 }
 
 // Open-Meteo returns local wall times without an offset ("2026-11-16T07:00").
 // Attach the location's offset so every time we pass on is a real instant.
-function instant(local: string, offsetSeconds: number): string {
+export function instant(local: string, offsetSeconds: number): string {
   const sign = offsetSeconds < 0 ? "-" : "+";
   const abs = Math.abs(offsetSeconds);
   const hh = String(Math.floor(abs / 3600)).padStart(2, "0");
@@ -96,39 +97,68 @@ const r2 = (x: Num | undefined) => (x == null ? undefined : Math.round(x * 100) 
 const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
 const r1 = (x: Num | undefined) => (x == null ? undefined : Math.round(x * 10) / 10);
 
-/** Each day's hours, from local midnight, as columns. Missing when any column is. */
-function dayHours(h: OpenMeteo["hourly"]): Map<string, DayHours> {
+/**
+ * Each day's hours as columns, by the family's own clock: hour h of a day is
+ * h o'clock there. Open-Meteo labels a whole response with one fixed offset
+ * (every day 24 hours, even across a clock change), so each hour is placed
+ * by its real instant: on the fall-back day the repeated hour keeps its
+ * later reading, and the spring-forward day's missing hour borrows the one
+ * before. Missing when any column is.
+ */
+function dayHours(h: OpenMeteo["hourly"], off: number, tz: string): Map<string, DayHours> {
   const out = new Map<string, DayHours>();
   const cols = [h.precipitation, h.snowfall, h.wind_speed_10m, h.wind_gusts_10m, h.uv_index];
   if (cols.some((c) => !c)) return out;
+  const day = (date: string) => {
+    let d = out.get(date);
+    if (!d) {
+      const blank = () => Array<number>(24);
+      d = {
+        precip: blank(),
+        snow: blank(),
+        wind: blank(),
+        gust: blank(),
+        uv: blank(),
+        temp: blank(),
+        feels: blank(),
+      };
+      if (h.relative_humidity_2m) d.rh = blank();
+      if (h.dew_point_2m) d.dew = blank();
+      out.set(date, d);
+    }
+    return d;
+  };
   h.time.forEach((t, i) => {
-    const date = t.slice(0, 10);
-    let day = out.get(date);
-    if (!day) out.set(date, (day = { precip: [], snow: [], wind: [], gust: [], uv: [] }));
-    day.precip.push(r2(h.precipitation![i]) ?? 0);
-    day.snow.push(r2(h.snowfall![i]) ?? 0);
-    day.wind.push(r0(h.wind_speed_10m![i]) ?? 0);
-    day.gust.push(r0(h.wind_gusts_10m![i]) ?? 0);
-    day.uv.push(r1(h.uv_index![i]) ?? 0);
-    // How it feels against the thermometer, and the air's water.
-    (day.temp ??= []).push(Math.round(h.temperature_2m[i]));
+    const at = new Date(instant(t, off));
+    const d = day(dayKey(at, tz));
+    const hr = parts(at, tz).hour;
+    d.precip[hr] = r2(h.precipitation![i]) ?? 0;
+    d.snow[hr] = r2(h.snowfall![i]) ?? 0;
+    d.wind[hr] = r0(h.wind_speed_10m![i]) ?? 0;
+    d.gust[hr] = r0(h.wind_gusts_10m![i]) ?? 0;
+    d.uv[hr] = r1(h.uv_index![i]) ?? 0;
+    d.temp![hr] = Math.round(h.temperature_2m[i]);
     // How it feels: the NWS wind chill or heat index (feel.ts), from the raw readings.
-    (day.feels ??= []).push(
-      feelOf(
-        h.temperature_2m[i],
-        h.wind_speed_10m![i] ?? 0,
-        h.relative_humidity_2m?.[i] ?? undefined,
-      ),
+    d.feels![hr] = feelOf(
+      h.temperature_2m[i],
+      h.wind_speed_10m![i] ?? 0,
+      h.relative_humidity_2m?.[i] ?? undefined,
     );
-    if (h.relative_humidity_2m) (day.rh ??= []).push(r0(h.relative_humidity_2m[i]) ?? 0);
-    if (h.dew_point_2m) (day.dew ??= []).push(r0(h.dew_point_2m[i]) ?? 0);
+    if (d.rh) d.rh[hr] = r0(h.relative_humidity_2m![i]) ?? 0;
+    if (d.dew) d.dew[hr] = r0(h.dew_point_2m![i]) ?? 0;
   });
+  // A missing hour (spring forward, or the ends of the window) borrows its neighbor.
+  for (const d of out.values()) {
+    for (const col of Object.values(d) as number[][]) {
+      for (let hr = 0; hr < 24; hr++) col[hr] ??= col[hr - 1] ?? col.find((x) => x != null) ?? 0;
+    }
+  }
   return out;
 }
 
-export function shape(d: OpenMeteo, now = new Date()): Weather {
+export function shape(d: OpenMeteo, now = new Date(), tz = "UTC"): Weather {
   const off = d.utc_offset_seconds;
-  const strips = dayHours(d.hourly);
+  const strips = dayHours(d.hourly, off, tz);
   const all = d.daily.time.map((date, i) => ({
     date,
     high: Math.round(d.daily.temperature_2m_max[i]),
@@ -147,7 +177,7 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     hourly: strips.get(date),
   }));
   // The family's date now; with past_days, yesterday comes first and is set aside.
-  const today = new Date(now.getTime() + off * 1000).toISOString().slice(0, 10);
+  const today = dayKey(now, tz);
   const t0 = Math.max(d.daily.time.indexOf(today), 0);
   const days = all.slice(t0);
   const before = t0 > 0 ? all[t0 - 1] : undefined;

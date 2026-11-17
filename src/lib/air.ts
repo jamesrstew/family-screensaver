@@ -1,7 +1,9 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import { nowcast } from "./smoke";
+import { dayKey, parts } from "./time";
 import type { Weather } from "./types";
+import { instant } from "./weather";
 
 // Open-Meteo's air-quality forecast: free, no key, its own service. It runs
 // about five days, so the week's last days have no air to report; they're
@@ -25,11 +27,10 @@ export type OpenMeteoAir = {
 /** One hour's air: the blended AQI, fine particles (µg/m³), and the ozone AQI. */
 type Hour = { aqi: number; pm?: number; ozone?: number };
 
-/** The air, hour by hour, keyed by local wall time ("2026-11-18T14"). */
+/** The air, hour by hour, keyed by the hour's real instant (ms). */
 export type Air = {
   now: { aqi?: number; pm?: number; ozone?: number; pm10?: number };
-  hours: Map<string, Hour>;
-  offset: number;
+  hours: Map<number, Hour>;
 };
 
 export async function getAir(lat: number, lon: number, timeZone: string): Promise<OpenMeteoAir> {
@@ -55,11 +56,13 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
 const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
 
 export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
-  const hours = new Map<string, Hour>();
+  // Open-Meteo labels the whole response with one offset; each label's real
+  // instant is what matches it to the weather's hours.
+  const hours = new Map<number, Hour>();
   d.hourly.time.forEach((t, i) => {
     const aqi = r0(d.hourly.us_aqi?.[i]);
     if (aqi != null)
-      hours.set(t.slice(0, 13), {
+      hours.set(Date.parse(instant(t, d.utc_offset_seconds)), {
         aqi,
         pm: r0(d.hourly.pm2_5?.[i]),
         ozone: r0(d.hourly.us_aqi_ozone?.[i]),
@@ -78,7 +81,6 @@ export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
       pm10: r0(d.current?.us_aqi_pm10),
     },
     hours,
-    offset: d.utc_offset_seconds,
   };
 }
 
@@ -87,15 +89,26 @@ function wall(iso: string, offset: number): string {
   return new Date(Date.parse(iso) + offset * 1000).toISOString().slice(0, 13);
 }
 
+/** The top of the hour an instant falls in, in ms. */
+const hourOf = (iso: string) => Math.floor(Date.parse(iso) / 3_600_000) * 3_600_000;
+
 /**
  * The weather with the air folded in: now, each of the next hours, each
  * day's worst, and each day's hours. Where the air forecast doesn't reach,
  * nothing is added.
  */
-export function withAir(w: Weather, air: Air): Weather {
-  const at = (key: string) => air.hours.get(key);
+export function withAir(w: Weather, air: Air, tz = "UTC"): Weather {
+  const at = (iso: string) => air.hours.get(hourOf(iso));
   // The current hour stands in when "current" is missing.
-  const first = w.hours[0] ? at(wall(w.hours[0].time, air.offset)) : undefined;
+  const first = w.hours[0] ? at(w.hours[0].time) : undefined;
+  // Each day's hours, by the family's own clock (as the weather's are).
+  const byDay = new Map<string, Array<Hour | undefined>>();
+  for (const [ms, a] of air.hours) {
+    const t = new Date(ms);
+    const key = dayKey(t, tz);
+    if (!byDay.has(key)) byDay.set(key, Array(24).fill(undefined));
+    byDay.get(key)![parts(t, tz).hour] = a;
+  }
   return {
     ...w,
     now: {
@@ -106,13 +119,11 @@ export function withAir(w: Weather, air: Air): Weather {
       pm10: air.now.pm10,
     },
     hours: w.hours.map((h) => {
-      const a = at(wall(h.time, air.offset));
+      const a = at(h.time);
       return a ? { ...h, aqi: a.aqi, pm: a.pm, ozone: a.ozone } : h;
     }),
     days: w.days.map((d) => {
-      const hours = Array.from({ length: 24 }, (_, h) =>
-        at(`${d.date}T${String(h).padStart(2, "0")}`),
-      );
+      const hours = byDay.get(d.date) ?? [];
       const aqi = hours.map((a) => a?.aqi ?? null);
       const pm = hours.map((a) => a?.pm ?? null);
       const known = aqi.filter((x): x is number => x != null);

@@ -52,7 +52,7 @@ export async function getSnapshot(): Promise<Snapshot> {
   ]);
 
   // The air is folded into the weather, and only ever adds to it.
-  const weather = forecast && air ? withAirQuietly(forecast, air) : forecast;
+  const weather = forecast && air ? withAirQuietly(forecast, air, h.timeZone) : forecast;
 
   return {
     issuedAt: now.toISOString(),
@@ -65,9 +65,9 @@ export async function getSnapshot(): Promise<Snapshot> {
   };
 }
 
-function withAirQuietly(w: Weather, air: OpenMeteoAir): Weather {
+function withAirQuietly(w: Weather, air: OpenMeteoAir, tz: string): Weather {
   try {
-    return withAir(w, shapeAir(air));
+    return withAir(w, shapeAir(air), tz);
   } catch (err) {
     console.error("[snapshot] air unreadable", err);
     return w;

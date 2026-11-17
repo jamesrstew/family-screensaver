@@ -132,3 +132,51 @@ describe("shape, visibility", () => {
     expect(w.now.visibility).toBe(8000);
   });
 });
+
+describe("shape, across a clock change", () => {
+  it("files each hour under the family's own day and hour", () => {
+    // Oct. 31 to Nov. 2, 2026 in Chicago: clocks fall back at 2 a.m. on Nov. 1.
+    // Open-Meteo labels all three days with one offset (CDT, -5) and 24 hours each.
+    const time = ["2026-10-31", "2026-11-01", "2026-11-02"].flatMap((d) =>
+      Array.from({ length: 24 }, (_, h) => `${d}T${String(h).padStart(2, "0")}:00`),
+    );
+    const fill3 = <T>(f: (i: number) => T) => time.map((_, i) => f(i));
+    const w = shape(
+      {
+        current: { temperature_2m: 50, weather_code: 0, is_day: 1 },
+        hourly: {
+          time,
+          // Each hour's temperature is its index, so we can see where it landed.
+          temperature_2m: fill3((i) => i),
+          precipitation_probability: fill3(() => 0),
+          precipitation: fill3(() => 0),
+          snowfall: fill3(() => 0),
+          wind_speed_10m: fill3(() => 5),
+          wind_gusts_10m: fill3(() => 9),
+          uv_index: fill3(() => 0),
+        },
+        daily: {
+          time: ["2026-10-31", "2026-11-01", "2026-11-02"],
+          weather_code: [0, 0, 0],
+          temperature_2m_max: [60, 60, 60],
+          temperature_2m_min: [40, 40, 40],
+          precipitation_probability_max: [0, 0, 0],
+          sunrise: ["2026-10-31T07:20", "2026-11-01T06:21", "2026-11-02T06:22"],
+          sunset: ["2026-10-31T17:50", "2026-11-01T16:49", "2026-11-02T16:48"],
+        },
+        utc_offset_seconds: -5 * 3600,
+      },
+      new Date("2026-10-31T15:00:00Z"),
+      "America/Chicago",
+    );
+    const temp = (date: string) => w.days.find((d) => d.date === date)!.hourly!.temp!;
+    // Before the change, labels and the clock agree.
+    expect(temp("2026-10-31")[9]).toBe(9);
+    // After it, the label "10:00" (at -5) is 9 a.m. by the clock (at -6).
+    expect(temp("2026-11-02")[9]).toBe(48 + 10);
+    // The repeated 1 a.m. keeps its later reading; every hour is filled.
+    expect(temp("2026-11-01")[1]).toBe(24 + 2);
+    expect(temp("2026-11-01")).toHaveLength(24);
+    expect(temp("2026-11-02").every((x) => x != null)).toBe(true);
+  });
+});

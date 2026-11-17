@@ -803,8 +803,8 @@ function Days({ w, now, snapshot }: Drawn) {
               lens={lens}
               scale={1.5}
               bin={3}
-              // Each day's 24 hours from midnight (a clock-change day's 23 or 25
-              // kept to 24); today's hours already past are left bare.
+              // Each day's 24 hours from midnight, by the family's clock (weather.ts
+              // places each hour by its real instant); today's past hours are drawn faint.
               hours={ahead.flatMap((d) =>
                 Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
                   const day = d.hourly;
