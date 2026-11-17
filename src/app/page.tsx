@@ -10,7 +10,13 @@ import { designOf } from "@/views/designs/registry";
 // The TV. ?page= opens straight to a page (the TV app's launcher tiles use it).
 export default function Home({ searchParams }: PageProps<"/">) {
   return (
-    <Suspense fallback={<div data-surface="tv" className="paper h-dvh" />}>
+    // Dark while the page loads: the server can't know yet whether it's night, and a
+    // flash of bright paper in a dark room is the worse mistake (DOCTRINE §4).
+    <Suspense
+      fallback={
+        <div data-surface="tv" data-mood="night" data-design="almanac" className="paper h-dvh" />
+      }
+    >
       <Snapshot searchParams={searchParams} />
     </Suspense>
   );
