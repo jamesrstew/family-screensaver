@@ -11,7 +11,8 @@
  * lines without ever adding one.
  */
 
-export type Fit = { size: number; lh: number };
+/** The size and leading chosen, and whether the words fit the box at all. */
+export type Fit = { size: number; lh: number; fits: boolean };
 
 type Options = {
   italic?: boolean;
@@ -45,13 +46,27 @@ export function linesAt(text: string, size: number, w: number, italic = false): 
   return lines;
 }
 
-export function fitType(text: string, box: { w: number; h: number }, o: Options): Fit {
+/** The height the words take at a size, in rem. */
+export function heightAt(text: string, size: number, w: number, italic = false): number {
   const paras = text.split(/\n{2,}/).length;
-  for (let size = o.max; size > o.min; size = Math.round((size - 0.1) * 10) / 10) {
-    const lh = leadingFor(size);
-    const lines = linesAt(text, size, box.w, o.italic);
-    const height = lines * size * lh + (paras - 1) * PARA_GAP * size;
-    if (height <= box.h) return { size, lh };
+  return linesAt(text, size, w, italic) * size * leadingFor(size) + (paras - 1) * PARA_GAP * size;
+}
+
+/** The widest single word at a size, in rem (a word can't wrap). */
+const longestAt = (text: string, size: number, italic = false) =>
+  Math.max(...text.split(/\s+/).map((w) => w.length)) *
+  (italic ? ADVANCE.italic : ADVANCE.roman) *
+  size;
+
+/**
+ * The largest size, from `max` down to `min`, at which the words wrap into
+ * the box and no single word is wider than it. If even `min` won't do, it
+ * says so (`fits: false`), so the caller can choose other words.
+ */
+export function fitType(text: string, box: { w: number; h: number }, o: Options): Fit {
+  for (let size = o.max; size >= o.min; size = Math.round((size - 0.1) * 10) / 10) {
+    if (heightAt(text, size, box.w, o.italic) <= box.h && longestAt(text, size, o.italic) <= box.w)
+      return { size, lh: leadingFor(size), fits: true };
   }
-  return { size: o.min, lh: leadingFor(o.min) };
+  return { size: o.min, lh: leadingFor(o.min), fits: false };
 }

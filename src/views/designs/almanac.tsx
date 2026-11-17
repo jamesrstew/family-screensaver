@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
 import { clock } from "@/lib/time";
-import type { Weather as Sky } from "@/lib/types";
+import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { ARC, placeOf } from "./arc";
 import {
@@ -13,8 +13,11 @@ import {
   nextUp,
   nextWords,
   fitStyle,
+  heroBox,
+  heroFitting,
   Deg,
 } from "./common";
+import { fitType } from "./fit";
 
 /*
  * D. Almanac. The sheet is a window onto the day's sky (living.tsx): one
@@ -113,22 +116,16 @@ function SkyWords({
 export function Home(props: ViewProps) {
   const { snapshot, now, mood } = props;
   const tz = snapshot.timeZone;
-  const hero = heroOf(props);
   const next = nextUp(props);
   const w = snapshot.weather;
-  const ask = hero?.kind === "question" && mood === "evening";
-  // The passage's box: the page below the sky, less the lines around it
-  // (the label above, the credit and what's next below), less a little air.
-  const box = {
-    w: 102,
-    h:
-      PAGE_H -
-      (w ? SKY_H : 14.4) -
-      (next ? 4.9 : 0) -
-      (hero?.author ? 6.3 : 0) -
-      (ask ? 6.2 : 0) -
-      3,
-  };
+  const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
+  const boxFor = (item: NotebookItem) =>
+    heroBox({ sky: Boolean(w), next: Boolean(next), ask: asks(item), item });
+  const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
+  // The first of the day's passages that fits its space; a longer one waits
+  // for the Ideas page, which has room for anything.
+  const hero = heroFitting(props, (i) => fitType(i.text, boxFor(i), style(i)).fits);
+  const ask = hero ? asks(hero) : false;
 
   return (
     <div className="flex h-full flex-col">
@@ -162,13 +159,7 @@ export function Home(props: ViewProps) {
               <p className="mb-[2rem] text-[2.8rem] text-accent italic">A question for the table</p>
             ) : null}
             {/* As large as fits: a short line is set huge, a long one as big as it can go. */}
-            <div
-              style={fitStyle(hero.text, box, {
-                italic: hero.kind !== "idea",
-                max: 11,
-                min: 3.6,
-              })}
-            >
+            <div style={fitStyle(hero.text, boxFor(hero), style(hero))}>
               <Words item={hero} className="text-balance" />
             </div>
             <Credit item={hero} className="mt-[2.4rem] text-[2.6rem] text-ink-faint" />
@@ -193,6 +184,13 @@ export function Night(props: ViewProps) {
   const w = snapshot.weather;
   const tomorrow = firstTomorrow(props);
   const question = heroOf({ ...props, mood: "evening" });
+  // The question to sleep on, as large as the dark page allows; if it can't
+  // fit at all, the page stays nearly empty, as night should be.
+  const qBox = { w: 100, h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - 3.5 };
+  const qFit =
+    question?.kind === "question"
+      ? fitType(question.text, qBox, { italic: true, max: 9, min: 3.6 })
+      : null;
   return (
     <div className="flex h-full flex-col">
       {w ? (
@@ -208,16 +206,12 @@ export function Night(props: ViewProps) {
           </p>
         </Ink>
       )}
-      {question?.kind === "question" ? (
+      {question && qFit?.fits ? (
         <Ink order={1} className="flex flex-1 items-center justify-center text-center">
-          {/* The question to sleep on, as large as the dark page allows, in soft gray ink. */}
+          {/* In soft gray ink. */}
           <p
             className="max-w-[100rem] text-balance text-ink-soft italic"
-            style={fitStyle(
-              question.text,
-              { w: 100, h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - 3.5 },
-              { italic: true, max: 9, min: 3.6 },
-            )}
+            style={{ fontSize: `${qFit.size}rem`, lineHeight: qFit.lh }}
           >
             {question.text}
           </p>

@@ -1,23 +1,85 @@
 // Shared pieces for the design directions. Pure; no state.
 
-import { leadAt, leadFor, questionFor } from "@/lib/pick";
+import { leadAt, questionFor, slotOf } from "@/lib/pick";
 import { addDays, clock, clockFace, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
 import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
 import { fitType } from "./fit";
 
-/** Home's one piece: the evening's question, otherwise the idea of the hour. */
-export function heroOf({ snapshot, now, mood, slide }: ViewProps): NotebookItem | null {
+/**
+ * Home's one piece: the evening's question, otherwise the idea of the hour.
+ * `skip` passes over that many candidates (the question first, then ideas in
+ * the day's order), for when one won't fit its space.
+ */
+export function heroOf({ snapshot, now, mood, slide }: ViewProps, skip = 0): NotebookItem | null {
   const n = slide?.kind === "passage" ? slide.n : null;
   // In the evening the question for the table comes around every other passage.
   const ask = mood === "evening" && (n === null || n % 2 === 0);
-  return (
-    (ask ? questionFor(snapshot.notebook) : null) ??
-    (n === null
-      ? leadFor(snapshot.notebook, now)
+  const question = ask ? questionFor(snapshot.notebook) : null;
+  if (question && skip === 0) return question;
+  const at =
+    n === null
+      ? slotOf(now)
       : // In the evening only every other passage is a quote; count those alone.
-        leadAt(snapshot.notebook, mood === "evening" ? Math.floor(n / 2) : n))
-  );
+        mood === "evening"
+        ? Math.floor(n / 2)
+        : n;
+  return leadAt(snapshot.notebook, at + skip - (question ? 1 : 0));
+}
+
+// Home's page inside its margins (67.5 rem less 3.25 top and 3 bottom), and
+// the band the sky's words take at its head (less the top margin).
+const PAGE_H = 61.25;
+const SKY_H = 27.75;
+
+/**
+ * The room home's piece has, in rem: the page below the sky, less the lines
+ * around it (the evening label above; the credit, which may wrap to two
+ * lines, and what's next below), less a little air.
+ */
+export function heroBox({
+  sky,
+  next,
+  ask,
+  item,
+}: {
+  sky: boolean;
+  next: boolean;
+  ask: boolean;
+  item: NotebookItem;
+}): { w: number; h: number } {
+  const w = 102;
+  const credit = item.author
+    ? `${item.author}${item.source && item.source !== "3-2-1" ? `, ${item.source}` : ""}`
+    : "";
+  // Credit at 2.6 rem, about 0.43 em a character, 1.5 leading, 2.4 rem above it.
+  const creditLines = credit ? Math.ceil((credit.length * 0.43 * 2.6) / w) : 0;
+  const h =
+    PAGE_H -
+    (sky ? SKY_H : 14.4) -
+    (next ? 4.9 : 0) -
+    (creditLines ? 2.4 + creditLines * 3.9 : 0) -
+    (ask ? 6.2 : 0) -
+    3;
+  return { w, h };
+}
+
+/**
+ * The first candidate for home's piece whose words fit the space they'd
+ * have (`fitFor` says), so a long passage is never cut off: it waits for a
+ * page with more room (the Ideas page shows anything). Gives up after a few.
+ */
+export function heroFitting(
+  props: ViewProps,
+  fitFor: (item: NotebookItem) => boolean,
+  tries = 12,
+): NotebookItem | null {
+  for (let k = 0; k < tries; k++) {
+    const item = heroOf(props, k);
+    if (!item) return null;
+    if (fitFor(item)) return item;
+  }
+  return null;
 }
 
 /** The next timed thing today that hasn't started. */
