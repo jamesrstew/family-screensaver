@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife } from "next/cache";
+import { feelOf } from "./feel";
 import { describe } from "./forecast";
 import type { DayHours, Weather } from "./types";
 
@@ -25,7 +26,6 @@ export type OpenMeteo = {
     wind_gusts_10m?: Num[];
     wind_direction_10m?: Num[];
     uv_index?: Num[];
-    apparent_temperature?: Num[];
     relative_humidity_2m?: Num[];
     dew_point_2m?: Num[];
   };
@@ -43,8 +43,6 @@ export type OpenMeteo = {
     wind_gusts_10m_max?: Num[];
     wind_direction_10m_dominant?: Num[];
     uv_index_max?: Num[];
-    apparent_temperature_max?: Num[];
-    apparent_temperature_min?: Num[];
   };
   utc_offset_seconds: number;
 };
@@ -69,11 +67,10 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
     hourly:
       "temperature_2m,precipitation_probability,weather_code,is_day," +
       "precipitation,snowfall,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index," +
-      "apparent_temperature,relative_humidity_2m,dew_point_2m",
+      "relative_humidity_2m,dew_point_2m",
     daily:
       "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset," +
-      "precipitation_sum,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max," +
-      "apparent_temperature_max,apparent_temperature_min",
+      "precipitation_sum,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max",
     // Eight, so the seven days ahead are all there after today drops off at 5 p.m.
     forecast_days: "8",
   });
@@ -113,7 +110,14 @@ function dayHours(h: OpenMeteo["hourly"]): Map<string, DayHours> {
     day.uv.push(r1(h.uv_index![i]) ?? 0);
     // How it feels against the thermometer, and the air's water.
     (day.temp ??= []).push(Math.round(h.temperature_2m[i]));
-    if (h.apparent_temperature) (day.feels ??= []).push(r0(h.apparent_temperature[i]) ?? 0);
+    // How it feels: the NWS wind chill or heat index (feel.ts), from the raw readings.
+    (day.feels ??= []).push(
+      feelOf(
+        h.temperature_2m[i],
+        h.wind_speed_10m![i] ?? 0,
+        h.relative_humidity_2m?.[i] ?? undefined,
+      ),
+    );
     if (h.relative_humidity_2m) (day.rh ??= []).push(r0(h.relative_humidity_2m[i]) ?? 0);
     if (h.dew_point_2m) (day.dew ??= []).push(r0(h.dew_point_2m[i]) ?? 0);
   });
@@ -136,8 +140,8 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     gust: r0(d.daily.wind_gusts_10m_max?.[i]),
     dir: r0(d.daily.wind_direction_10m_dominant?.[i]),
     uv: r1(d.daily.uv_index_max?.[i]),
-    feelsHigh: r0(d.daily.apparent_temperature_max?.[i]),
-    feelsLow: r0(d.daily.apparent_temperature_min?.[i]),
+    feelsHigh: strips.get(date)?.feels && Math.max(...strips.get(date)!.feels!),
+    feelsLow: strips.get(date)?.feels && Math.min(...strips.get(date)!.feels!),
     hourly: strips.get(date),
   }));
 
@@ -157,7 +161,14 @@ export function shape(d: OpenMeteo, now = new Date()): Weather {
     gust: r0(d.hourly.wind_gusts_10m?.[from + i]),
     dir: r0(d.hourly.wind_direction_10m?.[from + i]),
     uv: r1(d.hourly.uv_index?.[from + i]),
-    feels: r0(d.hourly.apparent_temperature?.[from + i]),
+    feels:
+      d.hourly.wind_speed_10m?.[from + i] != null
+        ? feelOf(
+            d.hourly.temperature_2m[from + i],
+            d.hourly.wind_speed_10m[from + i]!,
+            d.hourly.relative_humidity_2m?.[from + i] ?? undefined,
+          )
+        : undefined,
     rh: r0(d.hourly.relative_humidity_2m?.[from + i]),
     dew: r0(d.hourly.dew_point_2m?.[from + i]),
   }));
