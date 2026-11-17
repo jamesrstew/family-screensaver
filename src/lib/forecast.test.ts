@@ -256,3 +256,18 @@ describe("tomorrow's air, in the evening", () => {
     );
   });
 });
+
+describe("an ozone day", () => {
+  it("stays clear in the sky's words, and the air line says ozone", () => {
+    const tz = "America/Los_Angeles";
+    const now = new Date("2026-08-18T13:00:00-07:00");
+    const w = fakeWeather("fair", now, tz);
+    w.now = { ...w.now, aqi: 118, ozone: 118, pm: 6, pm10: 30 };
+    const o = outlook(w, now, tz);
+    expect(o.line).not.toMatch(/Smoky|Hazy/);
+    expect(o.parts.map((p) => p.words).join(" ")).not.toMatch(/smoky|hazy/i);
+    expect(o.air).toBe(
+      "Ozone unhealthy for sensitive groups, AQI 118: take it easy outside if you’re sensitive.",
+    );
+  });
+});

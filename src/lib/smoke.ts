@@ -4,11 +4,16 @@
 //
 // Open-Meteo's us_aqi for fine particles is a trailing 24-hour mean (checked
 // against its hourly pm2_5 and the EPA's breakpoints): it lags arriving smoke
-// by hours. So what the air is like *now* is the EPA's own "now", the NowCast
-// (what AirNow shows): the last 12 hours of PM2.5, the recent ones weighted
-// more when the air is changing. One smoky hour can't set off an alarm, and
-// arriving smoke still shows within the hour or two. Later hours keep
-// Open-Meteo's AQI.
+// by hours, and the blended us_aqi is the worst of every pollutant, ozone
+// included. So:
+//  - Smoke and haze come from fine particles alone (a high-ozone day is clear).
+//  - What the air is like *now* is the worst of the EPA's NowCast for fine
+//    particles (what AirNow shows: the last 12 hours, the recent ones weighted
+//    more when the air is changing), and Open-Meteo's own ozone and PM10
+//    indices. One smoky hour can't set off an alarm, arriving smoke still
+//    shows within an hour or two, and clearing smoke stops alarming as soon.
+//  - When ozone is what makes the air bad, the words say ozone, not smoke.
+// Later hours keep Open-Meteo's AQI.
 
 /** The EPA's words for the US AQI. */
 export function aqiWord(aqi: number): string {
@@ -50,8 +55,9 @@ export function pmAqi(pm: number): number {
   return Math.round(((b - a) / (hi - lo)) * (Math.min(c, hi) - lo) + a);
 }
 
-/** "Air unhealthy for sensitive groups", "Unhealthy air": the category as a subject. */
-export function airPhrase(aqi: number): string {
+/** "Air unhealthy for sensitive groups", "Unhealthy air", "Ozone unhealthy": the category as a subject. */
+export function airPhrase(aqi: number, ozone = false): string {
+  if (ozone) return `Ozone ${aqiWord(aqi)}`;
   if (aqi <= 50) return "Good air";
   if (aqi <= 100) return "Moderate air";
   if (aqi <= 150) return "Air unhealthy for sensitive groups";
@@ -90,47 +96,75 @@ export function nowcast(recent: Array<number | null | undefined>): number | null
   return Math.floor((sum / weights) * 10) / 10;
 }
 
+/** The air now, as lib/air.ts gathers it: `pm` is the NowCast (µg/m³); `ozone` and `pm10` are AQIs. */
+export type AirReading = { aqi?: number; pm?: number; ozone?: number; pm10?: number };
+
 /**
- * The air right now, as one AQI: the worse of Open-Meteo's index and the
- * NowCast of fine particles (`pm` is the NowCast; lib/air.ts computes it).
+ * The air right now, as one AQI: the worst of the fine particles' NowCast,
+ * ozone, and PM10. Open-Meteo's blended index stands in only when none of
+ * those came (an older report).
  */
-export function airNow(a: { aqi?: number; pm?: number }): number | null {
-  if (a.aqi == null && a.pm == null) return null;
-  return Math.max(a.aqi ?? 0, a.pm == null ? 0 : pmAqi(a.pm));
+export function airNow(a: AirReading): number | null {
+  const parts = [a.pm == null ? null : pmAqi(a.pm), a.ozone, a.pm10].filter(
+    (x): x is number => x != null,
+  );
+  if (parts.length) return Math.max(...parts);
+  return a.aqi ?? null;
+}
+
+/** Whether ozone is what makes the air what it is now. */
+export function ozoneLeads(a: AirReading): boolean {
+  const n = airNow(a);
+  return a.ozone != null && n != null && a.ozone >= n && (a.pm == null || pmAqi(a.pm) < n);
 }
 
 /**
  * The air, as home and the voice say it, when it isn't fine for everyone:
- * "Unhealthy air, AQI 168: keep time outside short and easy." Null otherwise.
+ * "Unhealthy air, AQI 168: keep time outside short and easy." or "Ozone
+ * unhealthy for sensitive groups, AQI 112: …". Null otherwise.
  */
-export function airLine(a: { aqi?: number; pm?: number }): string | null {
+export function airLine(a: AirReading): string | null {
   const n = airNow(a);
   if (n == null || n <= AQI_SENSITIVE) return null;
-  return `${airPhrase(n)}, AQI ${n}: ${airAdvice(n)}.`;
+  return `${airPhrase(n, ozoneLeads(a))}, AQI ${n}: ${airAdvice(n)}.`;
 }
 
 /** A day ahead's air, when it won't be fine for everyone: "Tomorrow, unhealthy air, AQI up to 182: …" */
-export function airAhead(label: string, aqi?: number): string | null {
+export function airAhead(label: string, aqi?: number, ozone = false): string | null {
   if (aqi == null || aqi <= AQI_SENSITIVE) return null;
-  const phrase = airPhrase(aqi);
+  const phrase = airPhrase(aqi, ozone);
   return `${label}, ${phrase[0].toLowerCase()}${phrase.slice(1)}, AQI up to ${aqi}: ${airAdvice(aqi)}.`;
 }
 
 /**
- * Smoke and haze, from the air itself: the hour's fine particles (µg/m³)
- * and the US AQI, or, with no word from the air, a short view on a dry day.
+ * Smoke and haze, from fine particles alone (µg/m³: the NowCast now, the
+ * hour's reading ahead), or, with no word from the air, a short view on a
+ * dry day. Ozone is invisible: a high-ozone day is drawn clear.
  *  haze:  fine particles from 15, or visibility under 8 km with no fog or rain.
- *  smoke: the air unhealthy for sensitive groups (AQI over 100, or 35.5 µg/m³).
- *  thick: the air unhealthy for everyone (AQI over 150, or 55.5 µg/m³).
+ *  smoke: from 35.5, unhealthy for sensitive groups.
+ *  thick: from 55.5, unhealthy for everyone.
  */
 export type Smoke = "none" | "haze" | "smoke" | "thick";
-export function smokeOf(
-  now: { aqi?: number; pm?: number; visibility?: number; code?: number } | null,
-): Smoke {
+
+/**
+ * Smoke over a stretch of hours (a part of the day, a whole day): the worst
+ * level that lasts three hours (or all of them, in a shorter stretch).
+ */
+export function smokeOver(pms: Array<number | null | undefined>): Smoke {
+  const known = pms.filter((x): x is number => x != null);
+  const need = Math.min(3, known.length);
+  if (!need) return "none";
+  const lasting = (line: number) => known.filter((pm) => pm >= line).length >= need;
+  if (lasting(THICK_PM)) return "thick";
+  if (lasting(SMOKE_PM)) return "smoke";
+  if (lasting(HAZE_PM)) return "haze";
+  return "none";
+}
+export function smokeOf(now: { pm?: number; visibility?: number; code?: number } | null): Smoke {
   if (!now) return "none";
-  const { aqi, pm, visibility, code } = now;
-  if ((aqi ?? 0) > 150 || (pm ?? 0) >= THICK_PM) return "thick";
-  if ((aqi ?? 0) > AQI_SENSITIVE || (pm ?? 0) >= SMOKE_PM) return "smoke";
+  const { pm, visibility, code } = now;
+  if ((pm ?? 0) >= THICK_PM) return "thick";
+  if ((pm ?? 0) >= SMOKE_PM) return "smoke";
   // Fog and rain cut the view too; that isn't haze.
   const murky = code != null && (code === 45 || code === 48 || code >= 51);
   if ((pm ?? 0) >= HAZE_PM || (visibility != null && visibility < 8000 && !murky)) return "haze";

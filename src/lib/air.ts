@@ -11,15 +11,24 @@ const API = "https://air-quality-api.open-meteo.com/v1/air-quality";
 type Num = number | null;
 
 export type OpenMeteoAir = {
-  current?: { time?: string; us_aqi?: Num; pm2_5?: Num };
-  hourly: { time: string[]; us_aqi?: Num[]; pm2_5?: Num[] };
+  current?: {
+    time?: string;
+    us_aqi?: Num;
+    pm2_5?: Num;
+    us_aqi_ozone?: Num;
+    us_aqi_pm10?: Num;
+  };
+  hourly: { time: string[]; us_aqi?: Num[]; pm2_5?: Num[]; us_aqi_ozone?: Num[] };
   utc_offset_seconds: number;
 };
 
+/** One hour's air: the blended AQI, fine particles (µg/m³), and the ozone AQI. */
+type Hour = { aqi: number; pm?: number; ozone?: number };
+
 /** The air, hour by hour, keyed by local wall time ("2026-11-18T14"). */
 export type Air = {
-  now: { aqi?: number; pm?: number };
-  hours: Map<string, { aqi: number; pm?: number }>;
+  now: { aqi?: number; pm?: number; ozone?: number; pm10?: number };
+  hours: Map<string, Hour>;
   offset: number;
 };
 
@@ -30,8 +39,10 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
     latitude: String(lat),
     longitude: String(lon),
     timezone: timeZone,
-    current: "us_aqi,pm2_5",
-    hourly: "us_aqi,pm2_5",
+    // The blended index, and its parts: fine particles (for the NowCast and
+    // smoke), ozone (invisible, but the words should say so), and PM10.
+    current: "us_aqi,pm2_5,us_aqi_ozone,us_aqi_pm10",
+    hourly: "us_aqi,pm2_5,us_aqi_ozone",
     // Yesterday too: the NowCast needs the last 12 hours.
     past_days: "1",
     forecast_days: "7",
@@ -44,10 +55,15 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
 const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
 
 export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
-  const hours = new Map<string, { aqi: number; pm?: number }>();
+  const hours = new Map<string, Hour>();
   d.hourly.time.forEach((t, i) => {
     const aqi = r0(d.hourly.us_aqi?.[i]);
-    if (aqi != null) hours.set(t.slice(0, 13), { aqi, pm: r0(d.hourly.pm2_5?.[i]) });
+    if (aqi != null)
+      hours.set(t.slice(0, 13), {
+        aqi,
+        pm: r0(d.hourly.pm2_5?.[i]),
+        ozone: r0(d.hourly.us_aqi_ozone?.[i]),
+      });
   });
   // Now's fine particles: the NowCast over the 12 hours up to this one.
   const here = d.current?.time?.slice(0, 13) ?? wall(at.toISOString(), d.utc_offset_seconds);
@@ -58,6 +74,8 @@ export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
     now: {
       aqi: r0(d.current?.us_aqi),
       pm: cast != null ? Math.round(cast) : r0(d.current?.pm2_5),
+      ozone: r0(d.current?.us_aqi_ozone),
+      pm10: r0(d.current?.us_aqi_pm10),
     },
     hours,
     offset: d.utc_offset_seconds,
@@ -84,10 +102,12 @@ export function withAir(w: Weather, air: Air): Weather {
       ...w.now,
       aqi: air.now.aqi ?? first?.aqi,
       pm: air.now.pm ?? first?.pm,
+      ozone: air.now.ozone ?? first?.ozone,
+      pm10: air.now.pm10,
     },
     hours: w.hours.map((h) => {
       const a = at(wall(h.time, air.offset));
-      return a ? { ...h, aqi: a.aqi, pm: a.pm } : h;
+      return a ? { ...h, aqi: a.aqi, pm: a.pm, ozone: a.ozone } : h;
     }),
     days: w.days.map((d) => {
       const hours = Array.from({ length: 24 }, (_, h) =>
@@ -97,9 +117,11 @@ export function withAir(w: Weather, air: Air): Weather {
       const pm = hours.map((a) => a?.pm ?? null);
       const known = aqi.filter((x): x is number => x != null);
       if (!known.length) return d;
+      const ozone = hours.flatMap((a) => (a?.ozone == null ? [] : [a.ozone]));
       return {
         ...d,
         aqi: Math.max(...known),
+        ozone: ozone.length ? Math.max(...ozone) : undefined,
         hourly: d.hourly ? { ...d.hourly, aqi, pm } : d.hourly,
       };
     }),

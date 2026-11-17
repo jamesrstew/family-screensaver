@@ -5,7 +5,7 @@
 // what later days look like (the daily forecast). The daily label is the worst
 // hour of the whole day, past hours included, so it never describes "now".
 
-import { AQI_SENSITIVE, HAZE_PM, airAhead, airLine, airNow, smokeOf, type Smoke } from "./smoke";
+import { AQI_SENSITIVE, airAhead, airLine, airNow, smokeOf, smokeOver, type Smoke } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
 import { wearLine, type Facts, type Hold } from "./wear";
@@ -311,13 +311,6 @@ function skyWithSmoke(code: number, isDay: boolean, smoke: Smoke): string {
   return skyWords(code, isDay);
 }
 
-/** The air over a stretch of hours: its worst AQI and its worst hour of fine particles. */
-const smokeIn = (hours: Hour[]) =>
-  smokeOf({
-    aqi: Math.max(0, ...hours.map((h) => h.aqi ?? 0)),
-    pm: Math.max(0, ...hours.map((h) => h.pm ?? 0)),
-  });
-
 function partFromHours(label: string, hours: Hour[], night: boolean): Part | null {
   if (!hours.length) return null;
   const temps = hours.map((h) => h.temp);
@@ -328,7 +321,7 @@ function partFromHours(label: string, hours: Hour[], night: boolean): Part | nul
     high: !night,
     code,
     isDay: !night,
-    words: fall ? fallWords(fall) : skyWithSmoke(code, !night, smokeIn(hours)),
+    words: fall ? fallWords(fall) : skyWithSmoke(code, !night, smokeOver(hours.map((h) => h.pm))),
     wet: Boolean(fall),
   };
 }
@@ -339,9 +332,8 @@ export function partFromDay(label: string, d: Day): Part {
   const counts = f && f.sure !== "slight";
   // A day whose worst hour is a slight chance of snow is drawn as a gray one.
   const code = counts ? d.code : precipKind(d.code) ? 3 : d.code;
-  // A smoky day (its worst AQI over 100), or a hazy one (three hours of haze).
-  const hazy = (d.hourly?.pm ?? []).filter((pm) => pm != null && pm >= HAZE_PM).length >= 3;
-  const smoke = smokeOf({ aqi: d.aqi, pm: hazy ? HAZE_PM : undefined });
+  // A smoky or hazy day, by its fine particles (ozone is invisible).
+  const smoke = smokeOver(d.hourly?.pm ?? []);
   return {
     label,
     temp: d.high,
@@ -522,7 +514,11 @@ export function outlook(w: Weather, now: Date, tz: string, hold?: Hold): Outlook
     air:
       airLine(w.now) ??
       (focus === "tomorrow" && !lateNight
-        ? airAhead("Tomorrow", w.days[dayIdx(tomorrow)]?.aqi)
+        ? airAhead(
+            "Tomorrow",
+            w.days[dayIdx(tomorrow)]?.aqi,
+            (w.days[dayIdx(tomorrow)]?.ozone ?? 0) >= (w.days[dayIdx(tomorrow)]?.aqi ?? 1),
+          )
         : null),
     ahead,
     focus,

@@ -31,7 +31,6 @@ import {
   hoursHumidityLine,
   humidityDayFigure,
   humidityFigure,
-  HAZE_HOURS,
   hazeOf,
   hourNow,
   lensesFor,
@@ -45,7 +44,7 @@ import {
   type Figure,
   type Lens,
 } from "@/lib/lenses";
-import { AQI_SENSITIVE, airNow, smokeOf } from "@/lib/smoke";
+import { airNow, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Hold } from "@/lib/wear";
 import type { Weather as Sky } from "@/lib/types";
@@ -714,7 +713,14 @@ function Days({ w, now, snapshot }: Drawn) {
         : lens === "uv"
           ? daysUvLine(named.map(({ d, name }) => ({ name, uv: d.uv ?? 0 })))
           : lens === "air"
-            ? daysAirLine(named.map(({ d, s, name }) => ({ name, aqi: d.aqi, haze: s.haze })))
+            ? daysAirLine(
+                named.map(({ d, s, name }) => ({
+                  name,
+                  aqi: d.aqi,
+                  haze: s.haze,
+                  ozone: d.ozone != null && d.ozone >= (d.aqi ?? 0),
+                })),
+              )
             : lens === "feels"
               ? daysFeelsLine(
                   named.map(({ d, name }) => ({
@@ -763,10 +769,10 @@ function Days({ w, now, snapshot }: Drawn) {
             <div className="grid" style={gridOf(days.length)}>
               {days.map((d) => {
                 const p = partFromDay(labelOf(d.date), d);
-                // A smoky day's sun is veiled, a hazy day's softened, as the living sky draws them.
-                const hazy = (d.hourly?.pm ?? []).reduce<number>((a, pm) => a + hazeOf(pm), 0);
-                const veil =
-                  (d.aqi ?? 0) > AQI_SENSITIVE ? "smoke" : hazy >= HAZE_HOURS ? "haze" : undefined;
+                // A smoky day's sun is veiled, a hazy day's softened, as the living sky
+                // draws them: by fine particles alone (a high-ozone day is clear).
+                const smoke = smokeOver(d.hourly?.pm ?? []);
+                const veil = smoke === "none" ? undefined : smoke === "haze" ? "haze" : "smoke";
                 return (
                   <div key={d.date} className="flex flex-col items-center text-center">
                     <Engraving
@@ -883,10 +889,16 @@ function Hours({ w, now, snapshot }: Drawn) {
   const current = slots[0] && Date.parse(slots[0][0].time) <= now.getTime();
   const nowAir = airNow(w.now);
   const air = slots.map((slot, i) => {
-    if (i === 0 && current && nowAir != null) return { time: slot[0].time, aqi: nowAir };
+    if (i === 0 && current && nowAir != null)
+      return { time: slot[0].time, aqi: nowAir, ozone: ozoneLeads(w.now) };
     const known = slot.filter((h) => h.aqi != null);
     const worst = known.length ? known.reduce((a, b) => (b.aqi! > a.aqi! ? b : a)) : slot[0];
-    return { time: worst.time, aqi: worst.aqi };
+    // Ozone makes the hour what it is when its index is the blended one.
+    return {
+      time: worst.time,
+      aqi: worst.aqi,
+      ozone: worst.ozone != null && worst.ozone >= (worst.aqi ?? 0),
+    };
   });
   // Each slot's feel: its coldest hour (or hottest, when it's the heat that
   // strays), so the sentence quotes a number the columns show.
@@ -991,12 +1003,7 @@ function Hours({ w, now, snapshot }: Drawn) {
                 const kind = falls[0]?.kind;
                 // Smoke or haze veils the sun, as the living sky draws it.
                 const smoke = smokeOf(
-                  i === 0
-                    ? w.now
-                    : {
-                        aqi: Math.max(...slot.map((h) => h.aqi ?? 0)),
-                        pm: Math.max(...slot.map((h) => h.pm ?? 0)),
-                      },
+                  i === 0 ? w.now : { pm: Math.max(...slot.map((h) => h.pm ?? 0)) },
                 );
                 const veil = smoke === "haze" ? "haze" : smoke === "none" ? undefined : "smoke";
                 return (

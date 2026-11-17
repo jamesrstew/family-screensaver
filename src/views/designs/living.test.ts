@@ -129,7 +129,9 @@ describe("smokeOf", () => {
     expect(smokeOf(null)).toBe("none");
     expect(smokeOf(sky({ aqi: 30, pm: 6, visibility: 40_000 }))).toBe("none");
     expect(smokeOf(sky({ aqi: 70, pm: 18 }))).toBe("haze");
-    expect(smokeOf(sky({ aqi: 120 }))).toBe("smoke");
+    expect(smokeOf(sky({ pm: 40 }))).toBe("smoke");
+    // Ozone is invisible: a high-ozone day is clear.
+    expect(smokeOf(sky({ aqi: 140, ozone: 140, pm: 5 }))).toBe("none");
     expect(smokeOf(sky({ pm: 60 }))).toBe("thick");
   });
   it("calls a short view on a dry day haze, but not fog or rain", () => {

@@ -771,12 +771,14 @@ const SMOKY_MODERATE = "Fine for most; sensitive people may want to take it easy
  * moderate.
  */
 export function hoursAirLine(
-  cols: Array<{ time: string; aqi?: number }>,
+  cols: Array<{ time: string; aqi?: number; ozone?: boolean }>,
   now: Date,
   tz: string,
   o: { smoky?: boolean; current?: boolean } = {},
 ): string {
-  const known = cols.filter((c): c is { time: string; aqi: number } => c.aqi != null);
+  const known = cols.filter(
+    (c): c is { time: string; aqi: number; ozone?: boolean } => c.aqi != null,
+  );
   if (!known.length) return "";
   const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
   const when = periodWord(new Date(worst.time), now, tz);
@@ -784,21 +786,23 @@ export function hoursAirLine(
   if (first != null && first > AQI_SENSITIVE) {
     const later =
       worst !== known[0] && worst.aqi > first ? `; worst ${when}, AQI ${worst.aqi}` : "";
-    return `${airPhrase(first)} now, AQI ${first}${later}: ${airAdvice(Math.max(first, worst.aqi))}.`;
+    return `${airPhrase(first, cols[0].ozone)} now, AQI ${first}${later}: ${airAdvice(Math.max(first, worst.aqi))}.`;
   }
   if (worst.aqi <= 50) return `Good air, AQI ${worst.aqi} at most.`;
   if (worst.aqi <= AQI_SENSITIVE) {
-    return o.smoky
+    return o.smoky && !worst.ozone
       ? `Smoky, moderate air ${when}, AQI up to ${worst.aqi}. ${SMOKY_MODERATE}`
       : `Moderate air ${when}, AQI up to ${worst.aqi}.`;
   }
-  return `${airPhrase(worst.aqi)} ${when}, AQI up to ${worst.aqi}: ${airAdvice(worst.aqi)}.`;
+  return `${airPhrase(worst.aqi, worst.ozone)} ${when}, AQI up to ${worst.aqi}: ${airAdvice(worst.aqi)}.`;
 }
 
 /** "Worst air Saturday: AQI 160, unhealthy. Forecast through Sunday." */
-export function daysAirLine(days: Array<{ name: string; aqi?: number; haze?: number }>): string {
+export function daysAirLine(
+  days: Array<{ name: string; aqi?: number; haze?: number; ozone?: boolean }>,
+): string {
   const known = days.filter(
-    (d): d is { name: string; aqi: number; haze?: number } => d.aqi != null,
+    (d): d is { name: string; aqi: number; haze?: number; ozone?: boolean } => d.aqi != null,
   );
   if (!known.length) return "";
   const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
@@ -808,5 +812,6 @@ export function daysAirLine(days: Array<{ name: string; aqi?: number; haze?: num
     const smoky = days.find((d) => (d.haze ?? 0) >= HAZE_HOURS)!;
     return `Smoky, moderate air ${smoky.name}, AQI up to ${worst.aqi}. ${SMOKY_MODERATE}${through}`;
   }
-  return `Worst air ${worst.name}: AQI ${worst.aqi}, ${aqiWord(worst.aqi)}.${through}`;
+  const what = worst.ozone ? `ozone at AQI ${worst.aqi}` : `AQI ${worst.aqi}`;
+  return `Worst air ${worst.name}: ${what}, ${aqiWord(worst.aqi)}.${through}`;
 }

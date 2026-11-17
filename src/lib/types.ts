@@ -13,9 +13,14 @@ export type Weather = {
     isDay: boolean;
     /** How far one can see, meters. */
     visibility?: number;
-    /** The air now: the US AQI, and fine particles (µg/m³) as the EPA's NowCast over 12 hours. */
+    /**
+     * The air now: Open-Meteo's blended US AQI; fine particles (µg/m³) as the
+     * EPA's NowCast over 12 hours; the ozone and PM10 indices (lib/smoke.ts).
+     */
     aqi?: number;
     pm?: number;
+    ozone?: number;
+    pm10?: number;
   };
   today: {
     high: number;
@@ -47,8 +52,9 @@ export type Weather = {
     /** How the day's warmest and coldest feel: the NWS heat index and wind chill (feel.ts). */
     feelsHigh?: number;
     feelsLow?: number;
-    /** The day's worst air (US AQI), when the air-quality forecast reaches it. */
+    /** The day's worst air (US AQI), and its worst ozone, when the air-quality forecast reaches it. */
     aqi?: number;
+    ozone?: number;
     /** The day hour by hour, from midnight, for drawing it. */
     hourly?: DayHours;
   }>;
@@ -68,9 +74,10 @@ export type Weather = {
     feels?: number;
     rh?: number;
     dew?: number;
-    /** US AQI and fine particles (µg/m³). */
+    /** US AQI, fine particles (µg/m³), and the ozone AQI. */
     aqi?: number;
     pm?: number;
+    ozone?: number;
   }>; // next 24
   /** Yesterday's hours, for last evening (fresh snow overnight). */
   yesterday?: { date: string; hourly: DayHours };
