@@ -544,14 +544,14 @@ function Labels({ cols }: { cols: Column[] }) {
 function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: string | null }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center">
-      <Ink k={caption ?? ""} lag={SENTENCE_LAG_MS} order={0}>
+      <Ink k={caption ?? ""} lag={SENTENCE_LAG_MS} plain order={0}>
         {caption ? (
           <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic in-data-[mood=night]:text-ink-soft">
             {caption}
           </p>
         ) : null}
       </Ink>
-      <Ink k={lens} lag={SENTENCE_LAG_MS} order={0}>
+      <Ink k={lens} lag={SENTENCE_LAG_MS} plain order={0}>
         <p
           className="max-w-[102rem] text-balance"
           style={headline(line, 102, caption ? 16.5 : 20.5)}
@@ -764,7 +764,14 @@ function Days({ w, now, snapshot }: Drawn) {
       <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(ahead))} />
       <div className="pb-[3rem]">
         <Labels cols={cols} />
-        <Ink k={lens} rest={PLATE_REST_MS} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Ink
+          k={lens}
+          rest={PLATE_REST_MS}
+          plain
+          order={2}
+          mode="seep"
+          className="relative h-[26.4rem]"
+        >
           {lens === "sky" ? (
             <div className="grid" style={gridOf(days.length)}>
               {days.map((d) => {
@@ -988,7 +995,14 @@ function Hours({ w, now, snapshot }: Drawn) {
       <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(span))} />
       <div className="pb-[3rem]">
         <Labels cols={cols} />
-        <Ink k={lens} rest={PLATE_REST_MS} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Ink
+          k={lens}
+          rest={PLATE_REST_MS}
+          plain
+          order={2}
+          mode="seep"
+          className="relative h-[26.4rem]"
+        >
           {lens === "sky" ? (
             <div className="grid" style={gridOf(slots.length)}>
               {slots.map((slot, i) => {

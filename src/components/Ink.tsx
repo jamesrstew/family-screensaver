@@ -27,7 +27,9 @@ import {
  * `lag` holds the old ink a while before it sinks, and `rest` leaves the
  * paper bare a while before the new ink comes, so blocks that change
  * together turn in an order (a plate's figures never sit under another
- * lens's sentence) and the page is never blank.
+ * lens's sentence) and the page is never blank. `plain` turns a block that
+ * changes often (the weather's lenses) by opacity alone on the TV, with no
+ * blur: the only thing its weak GPU then animates is opacity.
  * Inside a leaving <InkStage>, every block bleeds out.
  */
 
@@ -108,6 +110,8 @@ type Props = {
   lag?: number;
   /** Milliseconds the paper stays bare before the new ink, when `k` changes. */
   rest?: number;
+  /** On the TV, turn (a change of `k`) by opacity alone. */
+  plain?: boolean;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -151,6 +155,7 @@ export function Ink({
   mode: asked,
   lag = 0,
   rest = 0,
+  plain: plainTurn = false,
   className,
   style,
   children,
@@ -274,7 +279,13 @@ export function Ink({
     frame.current = requestAnimationFrame(tick);
   }
 
-  function play(dir: "in" | "out", delay: number, done?: () => void, as?: InkMode): void {
+  function play(
+    dir: "in" | "out",
+    delay: number,
+    done?: () => void,
+    as?: InkMode,
+    plain = false,
+  ): void {
     const el = box.current;
     if (!el) return;
     cancelAnimationFrame(frame.current);
@@ -284,8 +295,9 @@ export function Ink({
 
     if (lightHand() && !prefersStill()) {
       const ms = dir === "in" ? 2400 : Math.min(tune.outMs, LIGHT_OUT_MS);
-      const blurred = `blur(${LIGHT_BLUR_REM}rem)`;
-      el.style.willChange = "opacity, filter";
+      // A plain turn is opacity alone: no filter for the GPU to redraw.
+      const blurred = plain ? "none" : `blur(${LIGHT_BLUR_REM}rem)`;
+      el.style.willChange = plain ? "opacity" : "opacity, filter";
       if (dir === "in") {
         // Start from nothing, with no transition, then let the GPU bring it up.
         el.style.transition = "none";
@@ -293,9 +305,11 @@ export function Ink({
         el.style.filter = blurred;
         void el.offsetWidth;
       }
-      el.style.transition = `opacity ${ms}ms ease-in-out ${delay}ms, filter ${ms}ms ease-out ${delay}ms`;
+      el.style.transition = plain
+        ? `opacity ${ms}ms ease-in-out ${delay}ms`
+        : `opacity ${ms}ms ease-in-out ${delay}ms, filter ${ms}ms ease-out ${delay}ms`;
       el.style.opacity = dir === "in" ? "1" : "0";
-      el.style.filter = dir === "in" ? "blur(0)" : blurred;
+      el.style.filter = dir === "in" ? (plain ? "none" : "blur(0)") : blurred;
       timer.current = window.setTimeout(() => {
         // Dry: nothing left for the compositor to hold on to.
         el.style.transition = "none";
@@ -318,8 +332,10 @@ export function Ink({
 
     el.style.opacity = "1";
     el.style.filter = `url(#${fid})`;
+    // Coming in, the paper is bare from the start; going out, the ink stays as it is.
+    if (dir === "in") paint(0);
     const duration = dir === "in" ? tune.inMs || 4200 : tune.outMs;
-    const start = performance.now() + delay;
+    let start = 0;
     const tick = (t: number) => {
       const x = Math.min(Math.max((t - start) / duration, 0), 1);
       paint(dir === "in" ? easeInOut(x) : 1 - easeIn(x));
@@ -332,14 +348,21 @@ export function Ink({
       else el.style.opacity = "0";
       done?.();
     };
-    frame.current = requestAnimationFrame(tick);
+    // Nothing changes while waiting out a delay: no frames until it's over.
+    const begin = () => {
+      start = performance.now();
+      frame.current = requestAnimationFrame(tick);
+    };
+    if (delay > 0) timer.current = window.setTimeout(begin, delay);
+    else begin();
   }
 
   // Ink in on arrival, and again whenever new content takes the page.
   useEffect(() => {
-    const delay = firstIn.current ? order * STAGGER_MS : rest;
+    const turning = !firstIn.current;
+    const delay = turning ? rest : order * STAGGER_MS;
     firstIn.current = false;
-    play("in", delay);
+    play("in", delay, undefined, undefined, turning && plainTurn);
     return () => {
       cancelAnimationFrame(frame.current);
       window.clearTimeout(timer.current);
@@ -357,7 +380,7 @@ export function Ink({
       return;
     }
     settledK.current = false;
-    play("out", lag, () => setShown((s) => ({ k, children: s.children })));
+    play("out", lag, () => setShown((s) => ({ k, children: s.children })), undefined, plainTurn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [k]);
 
