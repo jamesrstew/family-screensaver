@@ -1,0 +1,10 @@
+#!/bin/sh
+# Never push a red branch: run the same checks CI runs (lint, types, tests,
+# formatting) before anything leaves this machine. Skip with --no-verify only
+# when you mean it.
+echo "pre-push: pnpm check"
+{ pnpm -s next typegen && pnpm -s check; } >/tmp/family-pre-push.log 2>&1 || {
+  tail -30 /tmp/family-pre-push.log
+  echo "pre-push: checks failed; nothing was pushed. Fix them (pnpm format fixes formatting)."
+  exit 1
+}

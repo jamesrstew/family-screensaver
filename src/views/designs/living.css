@@ -57,6 +57,7 @@
   position: absolute;
   inset: 0;
   opacity: 0.55;
+  transition: opacity 24s ease;
 }
 [data-mood="night"] .sky-land {
   opacity: 0.3;
@@ -225,6 +226,17 @@
     transparent
   );
 }
+/* A weather slide's sentence on home or at night: the sky isn't dimmed for
+   it (the carousel's sky holds steady), so it brings its own clearing. */
+.sky-word-clearing.text-clearing {
+  inset: -3rem -6rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 85%, transparent),
+    color-mix(in srgb, var(--paper) 65%, transparent) 60%,
+    transparent
+  );
+}
 /* The corner note's: smaller and softer, so the land fades under the words
    instead of stopping at a rim. */
 .sky-word-clearing.corner-clearing {
@@ -258,6 +270,21 @@
     color-mix(in srgb, var(--paper) 55%, transparent) 60%,
     transparent
   );
+}
+
+/* A weather slide's words are up (home or night): the horizon rule and the
+   arc's dots step back, and the sun or moon goes faint behind the words, in
+   the time the page takes to turn. Only the layers' insides fade (opacity),
+   so the layers themselves never start their long fades. */
+.sky-arc > svg,
+.sky-body > * {
+  transition: opacity 1.5s ease;
+}
+.sky[data-words] .sky-arc > svg {
+  opacity: 0;
+}
+.sky[data-words] .sky-body > * {
+  opacity: 0.2;
 }
 
 /* ---- Sun and moon. */
