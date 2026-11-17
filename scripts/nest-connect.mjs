@@ -24,7 +24,9 @@ async function secret(q) {
   return answer.trim();
 }
 
-console.log("Connect the Nest thermostats. See ROADMAP WX-1 for the steps before this one.\n");
+console.log(
+  "Connect the Nest thermostats. See README: Nest thermostats for the steps before this one.\n",
+);
 const project = await ask("Device Access project ID (a long id from console.nest.google.com): ");
 const clientId = await ask("OAuth client ID (ends in .apps.googleusercontent.com): ");
 const clientSecret = await secret("OAuth client secret (hidden): ");
