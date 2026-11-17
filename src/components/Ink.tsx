@@ -311,7 +311,8 @@ export function Ink({
       el.style.transition = `opacity ${dir === "in" ? 900 : 500}ms ease`;
       el.style.transitionDelay = `${delay}ms`;
       el.style.opacity = dir === "in" ? "1" : "0";
-      window.setTimeout(() => done?.(), delay + (dir === "in" ? 900 : 500));
+      // Kept, like every path's timer, so a turn called off can't fire a stale swap.
+      timer.current = window.setTimeout(() => done?.(), delay + (dir === "in" ? 900 : 500));
       return;
     }
 
