@@ -4,6 +4,7 @@ import { leadAt, leadFor, questionFor } from "@/lib/pick";
 import { addDays, clock, clockFace, dayKey, happeningsOn, parts, weekdayOf } from "@/lib/time";
 import type { Happening, NotebookItem, Weather } from "@/lib/types";
 import type { ViewProps } from "../parts";
+import { fitType } from "./fit";
 
 /** Home's one piece: the evening's question, otherwise the idea of the hour. */
 export function heroOf({ snapshot, now, mood, slide }: ViewProps): NotebookItem | null {
@@ -151,4 +152,10 @@ export function ClockFace({ now, tz }: { now: Date; tz: string }) {
       </span>
     </>
   );
+}
+
+/** Inline style for a block of type fitted to its box (see fit.ts). */
+export function fitStyle(...args: Parameters<typeof fitType>) {
+  const f = fitType(...args);
+  return { fontSize: `${f.size}rem`, lineHeight: f.lh };
 }

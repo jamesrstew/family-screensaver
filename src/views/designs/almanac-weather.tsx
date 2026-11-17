@@ -15,7 +15,7 @@ import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
-import { hourWord } from "./common";
+import { fitStyle, hourWord } from "./common";
 
 /*
  * The weather, four views. Each stands alone: as the Weather page (Now is the
@@ -99,7 +99,7 @@ function Ribbon({ w, o, now, snapshot }: Drawn) {
   return (
     <div className="flex h-full flex-col">
       <Ink order={0} className="pt-[2rem] text-center">
-        <p className="mx-auto max-w-[104rem] text-[5.6rem] leading-[1.14] text-balance">
+        <p className="mx-auto max-w-[106rem] text-balance" style={headline(o.line, 106, 15)}>
           {nb(o.line)}
         </p>
       </Ink>
@@ -409,7 +409,12 @@ function Now({ w, o, now }: Drawn) {
           />
         </Ink>
         <Ink order={1}>
-          <p className="max-w-[104rem] text-[6rem] leading-[1.12] text-balance">{nb(o.line)}</p>
+          <p
+            className="max-w-[104rem] text-balance"
+            style={headline(o.line, 104, o.timing ? 14.5 : 20)}
+          >
+            {nb(o.line)}
+          </p>
         </Ink>
         {o.timing ? (
           <Ink order={2} className="mt-[2.2rem]">
@@ -455,6 +460,13 @@ function Now({ w, o, now }: Drawn) {
 
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
 
+/**
+ * Each view's sentence, as large as its space allows (fit.ts): a short answer
+ * is set big, a long one still fits. `w` and `h` are the room it has, in rem.
+ */
+const headline = (text: string, w: number, h: number) =>
+  fitStyle(nb(text), { w, h }, { max: 8, min: 4.4 });
+
 /** Keep "10 p.m." and "about 7" together on one line. */
 const nb = (s: string) =>
   s.replace(/(\d) (a\.m\.|p\.m\.)/g, "$1\u00a0$2").replace(/about (\d)/g, "about\u00a0$1");
@@ -473,8 +485,8 @@ function Days({ w, now, snapshot }: Drawn) {
   };
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[104rem] text-[5.8rem] leading-[1.14] text-balance">
+      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
+        <p className="max-w-[102rem] text-balance" style={headline(weekLine(w, now, tz), 102, 23)}>
           {nb(weekLine(w, now, tz))}
         </p>
       </Ink>
@@ -528,8 +540,8 @@ function Hours({ w, now, snapshot }: Drawn) {
   ).filter((s) => s.length > 0);
   return (
     <div className="flex h-full flex-col">
-      <Ink order={0} className="flex flex-1 items-center justify-center px-[8rem] text-center">
-        <p className="max-w-[104rem] text-[5.8rem] leading-[1.14] text-balance">
+      <Ink order={0} className="flex flex-1 items-center justify-center px-[3rem] text-center">
+        <p className="max-w-[102rem] text-balance" style={headline(hoursLine(w, now, tz), 102, 23)}>
           {nb(hoursLine(w, now, tz))}
         </p>
       </Ink>

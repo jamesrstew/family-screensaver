@@ -12,7 +12,7 @@ import {
   heroOf,
   nextUp,
   nextWords,
-  sized,
+  fitStyle,
   Deg,
 } from "./common";
 
@@ -28,13 +28,10 @@ import {
 
 export { LivingSky as Sky } from "./living";
 
-const LADDER: Array<[number, string]> = [
-  [60, "text-[7.6rem] leading-[1.08]"],
-  [110, "text-[6.4rem] leading-[1.12]"],
-  [170, "text-[5.5rem] leading-[1.16]"],
-  [240, "text-[4.8rem] leading-[1.2]"],
-  [9999, "text-[4.2rem] leading-[1.24]"],
-];
+// The page inside its margins (67.5 rem less 3.25 top and 3 bottom), and the
+// band the sky's words take at its head (SkyWords, less the top margin).
+const PAGE_H = 61.25;
+const SKY_H = 27.75;
 
 /**
  * The words around the arc. They live in sheet coordinates (rem), like the
@@ -107,6 +104,19 @@ export function Home(props: ViewProps) {
   const hero = heroOf(props);
   const next = nextUp(props);
   const w = snapshot.weather;
+  const ask = hero?.kind === "question" && mood === "evening";
+  // The passage's box: the page below the sky, less the lines around it
+  // (the label above, the credit and what's next below), less a little air.
+  const box = {
+    w: 102,
+    h:
+      PAGE_H -
+      (w ? SKY_H : 14.4) -
+      (next ? 4.9 : 0) -
+      (hero?.author ? 6.3 : 0) -
+      (ask ? 6.2 : 0) -
+      3,
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -133,10 +143,19 @@ export function Home(props: ViewProps) {
       >
         {hero ? (
           <article className="max-w-[102rem]">
-            {hero.kind === "question" && mood === "evening" ? (
+            {ask ? (
               <p className="mb-[2rem] text-[2.8rem] text-accent italic">A question for the table</p>
             ) : null}
-            <Words item={hero} className={`text-balance ${sized(hero.text, LADDER)}`} />
+            {/* As large as fits: a short line is set huge, a long one as big as it can go. */}
+            <div
+              style={fitStyle(hero.text, box, {
+                italic: hero.kind !== "idea",
+                max: 11,
+                min: 3.6,
+              })}
+            >
+              <Words item={hero} className="text-balance" />
+            </div>
             <Credit item={hero} className="mt-[2.4rem] text-[2.6rem] text-ink-faint" />
           </article>
         ) : null}
@@ -176,7 +195,15 @@ export function Night(props: ViewProps) {
       )}
       {question?.kind === "question" ? (
         <Ink order={1} className="flex flex-1 items-center justify-center text-center">
-          <p className="max-w-[86rem] text-[3.8rem] leading-[1.3] text-balance text-ink-soft italic">
+          {/* The question to sleep on, as large as the dark page allows, in soft gray ink. */}
+          <p
+            className="max-w-[100rem] text-balance text-ink-soft italic"
+            style={fitStyle(
+              question.text,
+              { w: 100, h: PAGE_H - (w ? SKY_H : 22) - (tomorrow ? 3.9 : 0) - 3.5 },
+              { italic: true, max: 9, min: 3.6 },
+            )}
+          >
             {question.text}
           </p>
         </Ink>
