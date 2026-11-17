@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { LENSES, compass, hourKind, lensAt, lensOrder, type Figure, type Lens } from "@/lib/lenses";
+import {
+  LENSES,
+  LENS_MS,
+  hourKind,
+  lensOrder,
+  nextLens,
+  type Figure,
+  type Lens,
+} from "@/lib/lenses";
 
 /*
  * The lenses, drawn. Hours and Days each show a stretch of time as a row of
@@ -13,12 +21,16 @@ import { LENSES, compass, hourKind, lensAt, lensOrder, type Figure, type Lens } 
  *                 engraver would set them.
  *  wind:          the sustained wind as one stroke; the gusts above it as a
  *                 fine line, the space between hatched.
- *  the air:       the AQI as a hatched hill against the EPA's dotted lines,
- *                 stopping where the air forecast ends.
+ *  the air:       the AQI as a hatched hill, a dotted line where it turns
+ *                 unhealthy for sensitive groups; it stops where the air
+ *                 forecast ends.
  *  feels like:    the thermometer dashed, the feel bold, the chill or the
  *                 heat hatched between.
  *  humidity:      the relative humidity as a hatched hill, very dry dotted.
- *  UV:            the sun's strength as a hatched hill each day.
+ *  UV:            the sun's strength as a hatched hill each day, a dotted
+ *                 line at "high", where the EPA's advice gets firm.
+ *
+ * No words sit on a plate: the figures under it say them.
  *
  * Every chart is drawn once, in plain SVG: nothing moves but the ink.
  */
@@ -33,8 +45,10 @@ const BASE = 126;
 const lastSeen = new Map<string, Lens>();
 
 /**
- * The lens to show: the sky first, then turning every half minute from the
- * moment the view appeared, through the lenses after the one last seen.
+ * The lens to show: the sky first, then the next lens every half minute
+ * from the moment the view appeared, carrying on after the one last seen.
+ * A lens only ever changes at a turn: if the snapshot refreshes mid-turn
+ * and the list changes (UV gone at dusk), the lens showing stays its time.
  */
 export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens {
   const forced = useForced();
@@ -48,8 +62,12 @@ export function useLens(now: Date, lenses: readonly Lens[], view: string): Lens 
   }
   const [after] = useState(() => lastSeen.get(view) ?? null);
   // To the second: the screen's ten-second tick lands a hair short of each turn.
-  const lens =
-    forced ?? lensAt(Math.round((t - clock.since) / 1000) * 1000, lensOrder(lenses, after));
+  const turn = Math.floor((Math.round((t - clock.since) / 1000) * 1000) / LENS_MS);
+  const [shown, setShown] = useState<{ turn: number; lens: Lens }>({ turn: 0, lens: "sky" });
+  if (turn !== shown.turn) {
+    setShown({ turn, lens: turn === 0 ? "sky" : nextLens(lensOrder(lenses, after), shown.lens) });
+  }
+  const lens = forced ?? shown.lens;
   useEffect(() => {
     if (lens !== "sky") lastSeen.set(view, lens);
   }, [lens, view]);
@@ -174,19 +192,23 @@ export type PlateHour = {
   feels?: number;
   rh?: number;
   aqi?: number | null;
+  /** A fair chance (30% or more) of what falls: drawn in full; otherwise faint. */
+  sure?: boolean;
 };
 
 type PlateProps = {
   lens: Exclude<Lens, "sky">;
   /** Hour by hour across the plate; `undefined` where the forecast runs out. */
   hours: Array<PlateHour | undefined>;
-  /** Columns under the plate (8 slots of hours, or 7 days). */
+  /** Columns under the plate (8 slots of hours, or the days). */
   cols: number;
   scale: number;
+  /** Hours to a bar of rain or snow: a week's hours are binned by three, too thin alone. */
+  bin?: number;
 };
 
 /** One lens's chart across the whole row. */
-export function Plate({ lens, hours, cols, scale }: PlateProps) {
+export function Plate({ lens, hours, cols, scale, bin = 1 }: PlateProps) {
   const id = `plate-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const values = (pick: (h: PlateHour) => number | null | undefined) =>
     hours.map((h) => (h ? (pick(h) ?? undefined) : undefined));
@@ -202,7 +224,7 @@ export function Plate({ lens, hours, cols, scale }: PlateProps) {
     >
       <Fills id={id} scale={scale} />
       <Frame cols={cols} />
-      {lens === "precip" ? <Precip id={id} hours={hours} /> : null}
+      {lens === "precip" ? <Precip id={id} hours={binned(hours, bin)} /> : null}
       {lens === "wind" ? <Wind id={id} hours={hours} /> : null}
       {lens === "feels" ? <Feels id={id} hours={hours} /> : null}
       {lens === "uv" || lens === "air" || lens === "humidity" ? (
@@ -217,20 +239,39 @@ export function Plate({ lens, hours, cols, scale }: PlateProps) {
   );
 }
 
-/** Rain and snow: each run of wet hours as a stepped silhouette, filled by its kind. */
+/** Hours summed in bins of `n`: water and snow added, sure if any hour was. */
+function binned(hours: PlateProps["hours"], n: number): PlateProps["hours"] {
+  if (n <= 1) return hours;
+  return Array.from({ length: Math.ceil(hours.length / n) }, (_, b) => {
+    const some = hours.slice(b * n, b * n + n).filter((h): h is PlateHour => Boolean(h));
+    if (!some.length) return undefined;
+    return {
+      ...some[0],
+      precip: some.reduce((a, h) => a + h.precip, 0),
+      snow: some.reduce((a, h) => a + h.snow, 0),
+      sure: some.some((h) => h.sure !== false),
+    };
+  });
+}
+
+/**
+ * Rain and snow: each run of wet hours as a stepped silhouette, filled by its
+ * kind. What has only a slim chance is drawn faint.
+ */
 function Precip({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
   const n = hours.length;
   const w = PW / n;
   const most = Math.max(0.1, ...hours.map((h) => h?.precip ?? 0));
   const y = (water: number) => BASE - Math.max((water / most) * (BASE - TOP), 4);
-  // Runs of neighboring hours of the same kind.
-  const runs: Array<{ kind: "rain" | "snow"; from: number; to: number }> = [];
+  // Runs of neighboring hours of the same kind and the same certainty.
+  const runs: Array<{ kind: "rain" | "snow"; sure: boolean; from: number; to: number }> = [];
   hours.forEach((h, i) => {
     const kind = h ? hourKind(h.precip, h.snow) : null;
+    const sure = h?.sure !== false;
     const last = runs.at(-1);
     if (!kind) return;
-    if (last && last.kind === kind && last.to === i) last.to = i + 1;
-    else runs.push({ kind, from: i, to: i + 1 });
+    if (last && last.kind === kind && last.sure === sure && last.to === i) last.to = i + 1;
+    else runs.push({ kind, sure, from: i, to: i + 1 });
   });
   return (
     <g>
@@ -247,7 +288,7 @@ function Precip({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
             d={d}
             fill={`url(#${id}-${r.kind})`}
             strokeWidth={r.kind === "snow" ? 0.9 : 1.2}
-            className={r.kind === "snow" ? "text-ink-soft" : undefined}
+            className={!r.sure ? "text-ink-faint" : r.kind === "snow" ? "text-ink-soft" : undefined}
             stroke="currentColor"
           />
         );
@@ -326,39 +367,16 @@ function Feels({ id, hours }: { id: string; hours: PlateProps["hours"] }) {
   );
 }
 
-/** The lines worth drawing across a hill: the EPA's thresholds, and very dry air. */
-const BANDS: Record<"uv" | "air" | "humidity", Array<{ at: number; word: string }>> = {
-  uv: [
-    { at: 3, word: "moderate" },
-    { at: 6, word: "high" },
-    { at: 8, word: "very high" },
-    { at: 11, word: "extreme" },
-  ],
-  air: [
-    { at: 51, word: "moderate" },
-    { at: 101, word: "unhealthy for sensitive groups" },
-    { at: 151, word: "unhealthy" },
-    { at: 201, word: "very unhealthy" },
-    { at: 301, word: "hazardous" },
-  ],
-  humidity: [{ at: 15, word: "very dry" }],
-};
+/**
+ * One dotted line across each hill, where the advice begins: UV 6 (the EPA's
+ * "high"), AQI 101 (unhealthy for sensitive groups), humidity 15% (very dry).
+ * No words on the plate; the figures say them.
+ */
+const LINE: Record<"uv" | "air" | "humidity", number> = { uv: 6, air: 101, humidity: 15 };
 
-/** The top of a hill's scale: room for the first lines that matter, and the peak. */
+/** The top of a hill's scale: room for its line, and the peak. */
 const topOf = (lens: "uv" | "air" | "humidity", peak: number) =>
   lens === "uv" ? Math.max(9, peak) : lens === "air" ? Math.max(170, peak * 1.1) : 100;
-
-/** The thresholds' names, set at the plate's right edge over their dotted lines. */
-export function bandsOf(lens: Lens, peak: number): Array<{ word: string; top: string }> {
-  if (lens !== "uv" && lens !== "air" && lens !== "humidity") return [];
-  const top = topOf(lens, peak);
-  return BANDS[lens]
-    .filter((b) => b.at <= top)
-    .map((b) => ({
-      word: b.word,
-      top: `${(((BASE - (b.at / top) * (BASE - TOP)) / PH) * 13.6).toFixed(2)}rem`,
-    }));
-}
 
 /**
  * A reading drawn as a hatched hill: the sun's UV (each day's peak dotted),
@@ -397,20 +415,15 @@ function Hill({
     : [];
   return (
     <g>
-      {BANDS[lens]
-        .filter((b) => b.at <= top)
-        .map((b) => (
-          <line
-            key={b.at}
-            x1={0}
-            y1={r1(y(b.at))}
-            x2={PW}
-            y2={r1(y(b.at))}
-            strokeWidth={1}
-            strokeDasharray="1 7"
-            className="text-ink-faint"
-          />
-        ))}
+      <line
+        x1={0}
+        y1={r1(y(LINE[lens]))}
+        x2={PW}
+        y2={r1(y(LINE[lens]))}
+        strokeWidth={1}
+        strokeDasharray="1 7"
+        className="text-ink-faint"
+      />
       <path d={area} fill={`url(#${id}-hatch)`} stroke="none" className="text-ink-soft" />
       <path d={line} strokeWidth={2.2} />
       {peaks.map((k) => (
@@ -439,92 +452,40 @@ export function Figures({ f, act }: { f: Figure; act: boolean }) {
         {f.big}
       </p>
       <p
-        className={`mt-[0.6rem] flex h-[3rem] items-center gap-[0.6rem] leading-none whitespace-nowrap ${f.small ? "text-[2.6rem]" : "text-[3rem]"} ${
+        className={`mt-[0.6rem] h-[3rem] leading-none whitespace-nowrap ${f.small ? "text-[2.6rem]" : "text-[3rem]"} ${
           act ? "text-accent" : f.quiet ? "text-ink-faint italic" : "text-ink-soft"
         }`}
       >
-        {f.kind ? <Mark kind={f.kind} /> : null}
         {f.sub}
       </p>
-      <p className="mt-[1rem] flex h-[3.2rem] items-center gap-[0.5rem] text-[2.5rem] whitespace-nowrap text-ink-faint">
-        {f.dir != null && !f.quiet ? (
-          <>
-            <Vane dir={f.dir} />
-            {compass(f.dir)}
-          </>
-        ) : (
-          f.note
-        )}
-      </p>
+      <div className="mt-[0.6rem] flex h-[3.6rem] items-center text-[2.5rem] whitespace-nowrap text-ink-faint">
+        {f.dir != null && !f.quiet ? <Vane dir={f.dir} /> : f.note}
+      </div>
     </div>
   );
 }
 
 /**
- * Rain's or snow's key, as an almanac's legend sets one: a small box of the
- * plate's own fill. Slanting strokes for rain, a stipple for snow, half and
- * half for a mix.
+ * An arrow flying the way the wind blows: downwind, as a person feels it and
+ * as a map draws it (`dir` is where the wind comes from). A plain shaft and
+ * an open head, big enough to read across the room; the sentence names the
+ * direction in words.
  */
-function Mark({ kind }: { kind: "rain" | "snow" | "mix" }) {
-  const id = `mark-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const strokes = [-6, -1, 4, 9].map((x) => <line key={x} x1={x} y1={-8} x2={x - 5} y2={8} />);
-  const dots = [-5.5, -1.5, 2.5, 6.5].flatMap((y, row) =>
-    [-5, -1, 3, 7].map((x) => (
-      <circle
-        key={`${x} ${y}`}
-        cx={x - (row % 2) * 2}
-        cy={y}
-        r={0.95}
-        stroke="none"
-        fill="currentColor"
-      />
-    )),
-  );
-  return (
-    <svg
-      viewBox="-9 -9 18 18"
-      className="size-[2.3rem]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.1}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <defs>
-        <clipPath id={`${id}-a`}>
-          <rect x={-8} y={-8} width={kind === "mix" ? 8 : 16} height={16} />
-        </clipPath>
-        <clipPath id={`${id}-b`}>
-          <rect x={kind === "mix" ? 0 : -8} y={-8} width={kind === "mix" ? 8 : 16} height={16} />
-        </clipPath>
-      </defs>
-      {kind !== "snow" ? <g clipPath={`url(#${id}-a)`}>{strokes}</g> : null}
-      {kind !== "rain" ? <g clipPath={`url(#${id}-b)`}>{dots}</g> : null}
-      <rect x={-8} y={-8} width={16} height={16} strokeWidth={0.9} />
-    </svg>
-  );
-}
-
-/** A small engraved arrow, flying the way the wind blows (from `dir`). */
 function Vane({ dir }: { dir: number }) {
   return (
     <svg
       viewBox="-13 -13 26 26"
-      className="size-[2.4rem]"
+      className="size-[4rem] text-ink-soft"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
+      strokeWidth={1.9}
       aria-hidden
     >
       <g transform={`rotate(${dir})`}>
-        {/* The shaft runs downwind; the fletching sits upwind, where the wind comes from. */}
-        <line x1={0} y1={-8} x2={0} y2={10} strokeWidth={1.4} />
-        <path d="M-4 5 L0 10.5 L4 5" strokeWidth={1.4} />
-        <path
-          d="M0 -8 L-3.5 -11.5 M0 -4.5 L-3.5 -8 M0 -8 L3.5 -11.5 M0 -4.5 L3.5 -8"
-          strokeWidth={1}
-        />
+        <line x1={0} y1={-10} x2={0} y2={10} />
+        <path d="M-5 4 L0 10.5 L5 4" />
       </g>
     </svg>
   );

@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Ink } from "@/components/Ink";
 import {
+  CHANCE,
   hourFall,
   hoursLine,
   outlook,
@@ -30,7 +31,10 @@ import {
   hoursHumidityLine,
   humidityDayFigure,
   humidityFigure,
+  hourNow,
   lensesFor,
+  restOfDay,
+  type LensDay,
   meanDir,
   precipFigure,
   kindsIn,
@@ -43,7 +47,7 @@ import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
 import type { ViewProps } from "../parts";
-import { Figures, Plate, bandsOf, captionOf, useLens, type PlateHour } from "./almanac-lenses";
+import { Figures, Plate, captionOf, useLens, type PlateHour } from "./almanac-lenses";
 import { fitStyle, hourWord } from "./common";
 
 /*
@@ -473,17 +477,24 @@ const nb = (s: string) =>
 
 /*
  * Days and Hours turn slowly through their lenses (lenses.ts): the sky, then
- * rain and snow, wind, and UV, each for half a minute, skipping one with
- * nothing to say. The row's labels stay put; the sentence, the plate, and the
- * figures re-ink with each turn.
+ * rain and snow, the air, how it feels, wind, humidity, and UV, each for half
+ * a minute, skipping any with nothing to say. The row's labels stay put, and
+ * so does the lens's name when it doesn't change; the sentence sinks first
+ * and the plate a beat later, so the page is never blank.
  */
+
+/** How long the plate holds its old ink after the sentence starts to sink. */
+const PLATE_LAG_MS = 1500;
 
 type Column = { key: string; label: string; rule: boolean; strong: boolean };
 
+/** As many columns as there are days or slots: a short forecast still fills the row. */
+const gridOf = (n: number) => ({ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` });
+
 /** The row's labels, which stay still while the lenses turn under them. */
-function Labels({ cols, grid }: { cols: Column[]; grid: string }) {
+function Labels({ cols }: { cols: Column[] }) {
   return (
-    <Ink order={1} mode="seep" className={`grid ${grid}`}>
+    <Ink order={1} mode="seep" className="grid" style={gridOf(cols.length)}>
       {cols.map((c) => (
         <div key={c.key} className="relative text-center">
           {/* The weekend, or the night: one fine rule over its columns. */}
@@ -501,22 +512,28 @@ function Labels({ cols, grid }: { cols: Column[]; grid: string }) {
 
 /**
  * The sentence over the row, with the lens's name above it (the sky goes
- * unnamed). Its box leaves the row's fine rule room to breathe.
+ * unnamed). The name has its own ink, so it holds when it doesn't change.
+ * Its box leaves the row's fine rule room to breathe.
  */
 function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: string | null }) {
   return (
-    <Ink
-      k={lens}
-      order={0}
-      className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center"
-    >
-      {caption ? (
-        <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic">{caption}</p>
-      ) : null}
-      <p className="max-w-[102rem] text-balance" style={headline(line, 102, caption ? 16.5 : 20.5)}>
-        {nb(line)}
-      </p>
-    </Ink>
+    <div className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center">
+      <Ink k={caption ?? ""} order={0}>
+        {caption ? (
+          <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic in-data-[mood=night]:text-ink-soft">
+            {caption}
+          </p>
+        ) : null}
+      </Ink>
+      <Ink k={lens} order={0}>
+        <p
+          className="max-w-[102rem] text-balance"
+          style={headline(line, 102, caption ? 16.5 : 20.5)}
+        >
+          {nb(line)}
+        </p>
+      </Ink>
+    </div>
   );
 }
 
@@ -529,39 +546,24 @@ function LensBody({
   lens,
   hours,
   figures,
-  cols,
   scale,
+  bin,
 }: {
   lens: Exclude<Lens, "sky">;
-  /** Hour by hour: `per` for each column, in order. */
-  hours: Parameters<typeof Plate>[0]["hours"];
+  /** Hour by hour, the same number for each column, in order. */
+  hours: Array<PlateHour | undefined>;
   figures: Figure[];
-  cols: number;
   scale: number;
+  bin?: number;
 }) {
-  const per = Math.max(Math.round(hours.length / Math.max(figures.length, 1)), 1);
-  const plate = Array.from({ length: cols * per }, (_, i) => hours[i]);
   const acted = figures.reduce(
     (best, f, i) => (f.act && (best < 0 || (f.score ?? 0) > (figures[best].score ?? 0)) ? i : best),
     -1,
   );
-  const peak = Math.max(
-    0,
-    ...hours.map((h) => (lens === "uv" ? h?.uv : lens === "air" ? h?.aqi : h?.rh) ?? 0),
-  );
   return (
     <>
-      <Plate lens={lens} hours={plate} cols={cols} scale={scale} />
-      {bandsOf(lens, peak).map((b) => (
-        <p
-          key={b.word}
-          className="absolute right-0 -translate-y-1/2 bg-paper px-[0.6rem] text-[1.85rem] leading-none text-ink-faint italic"
-          style={{ top: b.top }}
-        >
-          {b.word}
-        </p>
-      ))}
-      <div className={`grid ${cols === 7 ? "grid-cols-7" : "grid-cols-8"} pt-[13.6rem]`}>
+      <Plate lens={lens} hours={hours} cols={figures.length} scale={scale} bin={bin} />
+      <div className="grid pt-[13.6rem]" style={gridOf(figures.length)}>
         {figures.map((f, i) => (
           <Figures key={i} f={f} act={i === acted} />
         ))}
@@ -569,6 +571,35 @@ function LensBody({
     </>
   );
 }
+
+/** A Weather hour or a day's hour as the plate wants it. */
+const plateHour = (
+  h: {
+    precip?: number;
+    snow?: number;
+    wind?: number;
+    gust?: number;
+    uv?: number;
+    temp?: number;
+    feels?: number;
+    rh?: number;
+    aqi?: number | null;
+  },
+  sure: boolean,
+): PlateHour => ({
+  precip: h.precip ?? 0,
+  snow: h.snow ?? 0,
+  wind: h.wind ?? 0,
+  gust: h.gust ?? 0,
+  uv: h.uv ?? 0,
+  temp: h.temp,
+  feels: h.feels,
+  rh: h.rh,
+  aqi: h.aqi,
+  sure,
+});
+
+const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /* ------------------------------------------------------------------ d */
 
@@ -587,10 +618,21 @@ function Days({ w, now, snapshot }: Drawn) {
   const nameOf = (k: string) =>
     k === today || k === addDays(today, 1) ? lower(labelOf(k)) : labelOf(k);
 
+  // The lenses look ahead: today counts only its hours still to come, with
+  // the chance of those hours (the day's own chance includes the morning).
+  const todayChance = Math.max(
+    0,
+    ...w.hours.filter((h) => dayKey(new Date(h.time), tz) === today).map((h) => h.precipChance),
+  );
+  const ahead: LensDay[] = days.map((d) =>
+    d.date === today ? restOfDay(d, hourNow(now, tz), todayChance) : { ...d, from: 0 },
+  );
+  const left = <T,>(d: LensDay, xs?: T[]) => xs?.slice(d.from) ?? [];
+  const lo = (xs: number[]) => (xs.length ? Math.min(...xs) : undefined);
+  const hi = (xs: number[]) => (xs.length ? Math.max(...xs) : undefined);
+
   // The lenses need every day's hours; an older report has none, and shows the sky alone.
-  const lo = (xs?: number[]) => (xs?.length ? Math.min(...xs) : undefined);
-  const hi = (xs?: number[]) => (xs?.length ? Math.max(...xs) : undefined);
-  const samples = days.map((d) =>
+  const samples = ahead.map((d) =>
     d.hourly
       ? {
           precip: d.precip,
@@ -603,8 +645,8 @@ function Days({ w, now, snapshot }: Drawn) {
           feels: d.hourly.feels && d.feelsHigh,
           tempLow: d.low,
           feelsLow: d.hourly.feels && d.feelsLow,
-          rh: lo(d.hourly.rh),
-          dew: hi(d.hourly.dew),
+          rh: lo(left(d, d.hourly.rh)),
+          dew: hi(left(d, d.hourly.dew)),
           aqi: d.aqi,
         }
       : {},
@@ -617,7 +659,7 @@ function Days({ w, now, snapshot }: Drawn) {
     strong: weekend(d.date),
   }));
 
-  const named = days.map((d, i) => ({ d, s: samples[i], name: nameOf(d.date) }));
+  const named = ahead.map((d, i) => ({ d, s: samples[i], name: nameOf(d.date) }));
   const line =
     lens === "precip"
       ? daysPrecipLine(
@@ -633,9 +675,10 @@ function Days({ w, now, snapshot }: Drawn) {
         ? daysWindLine(
             named.map(({ d, name }) => ({
               name,
-              lo: Math.min(...(d.hourly?.wind ?? [0])),
+              lo: lo(left(d, d.hourly?.wind)) ?? 0,
               hi: d.wind ?? 0,
               gust: d.gust ?? 0,
+              dir: d.dir,
             })),
           )
         : lens === "uv"
@@ -654,16 +697,21 @@ function Days({ w, now, snapshot }: Drawn) {
                 )
               : lens === "humidity"
                 ? daysHumidityLine(
-                    named.map(({ s, name }) => ({ name, rhLow: s.rh ?? 100, dew: s.dew ?? 0 })),
+                    named.map(({ d, s, name }) => ({
+                      name,
+                      rhLow: s.rh ?? 100,
+                      dew: s.dew ?? 0,
+                      gust: d.gust,
+                    })),
                   )
                 : weekLine(w, now, tz);
 
-  const figureOf = (d: (typeof days)[number], s: (typeof samples)[number]): Figure => {
+  const figureOf = (d: LensDay, s: (typeof samples)[number]): Figure => {
     if (lens === "precip")
       return precipFigure(d.precip ?? 0, d.snow ?? 0, d.precipChance, precipKind(d.code));
     if (lens === "wind")
       return windFigure(
-        Math.min(...(d.hourly?.wind ?? [d.wind ?? 0])),
+        lo(left(d, d.hourly?.wind)) ?? d.wind ?? 0,
         d.wind ?? 0,
         d.gust ?? 0,
         d.dir,
@@ -676,12 +724,12 @@ function Days({ w, now, snapshot }: Drawn) {
 
   return (
     <div className="flex h-full flex-col">
-      <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(days))} />
+      <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(ahead))} />
       <div className="pb-[3rem]">
-        <Labels cols={cols} grid="grid-cols-7" />
-        <Ink k={lens} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Labels cols={cols} />
+        <Ink k={lens} lag={PLATE_LAG_MS} order={2} mode="seep" className="relative h-[26.4rem]">
           {lens === "sky" ? (
-            <div className="grid grid-cols-7">
+            <div className="grid" style={gridOf(days.length)}>
               {days.map((d) => {
                 const p = partFromDay(labelOf(d.date), d);
                 return (
@@ -704,27 +752,31 @@ function Days({ w, now, snapshot }: Drawn) {
           ) : (
             <LensBody
               lens={lens}
-              cols={7}
-              scale={1}
-              // Each day's 24 hours from midnight (a clock-change day's 23 or 25 kept to 24).
-              hours={days.flatMap((d) =>
+              scale={1.5}
+              bin={3}
+              // Each day's 24 hours from midnight (a clock-change day's 23 or 25
+              // kept to 24); today's hours already past are left bare.
+              hours={ahead.flatMap((d) =>
                 Array.from({ length: 24 }, (_, h): PlateHour | undefined => {
                   const day = d.hourly;
-                  if (!day || h >= day.wind.length) return undefined;
-                  return {
-                    precip: day.precip[h],
-                    snow: day.snow[h],
-                    wind: day.wind[h],
-                    gust: day.gust[h],
-                    uv: day.uv[h],
-                    temp: day.temp?.[h],
-                    feels: day.feels?.[h],
-                    rh: day.rh?.[h],
-                    aqi: day.aqi?.[h],
-                  };
+                  if (!day || h >= day.wind.length || h < d.from) return undefined;
+                  return plateHour(
+                    {
+                      precip: day.precip[h],
+                      snow: day.snow[h],
+                      wind: day.wind[h],
+                      gust: day.gust[h],
+                      uv: day.uv[h],
+                      temp: day.temp?.[h],
+                      feels: day.feels?.[h],
+                      rh: day.rh?.[h],
+                      aqi: day.aqi?.[h],
+                    },
+                    d.precipChance >= CHANCE,
+                  );
                 }),
               )}
-              figures={days.map((d, i) => figureOf(d, samples[i]))}
+              figures={ahead.map((d, i) => figureOf(d, samples[i]))}
             />
           )}
         </Ink>
@@ -739,7 +791,7 @@ const STEP = 3;
 const COLS = 8;
 
 /** Hours: Days' sibling. The next day every three hours, the night marked. */
-function Hours({ w, o, now, snapshot }: Drawn) {
+function Hours({ w, now, snapshot }: Drawn) {
   const tz = snapshot.timeZone;
   const hours = w.hours.filter((h) => Date.parse(h.time) + HOUR > now.getTime());
   const slots = Array.from({ length: COLS }, (_, i) =>
@@ -770,6 +822,9 @@ function Hours({ w, o, now, snapshot }: Drawn) {
       strong: night,
     };
   });
+
+  const sum = (xs: Array<number | undefined>) => r2(xs.reduce<number>((a, x) => a + (x ?? 0), 0));
+  const most = (xs: Array<number | undefined>) => Math.max(...xs.map((x) => x ?? 0));
   const known = (h: Sky["hours"][number]) => ({
     time: h.time,
     wind: h.wind ?? 0,
@@ -777,10 +832,18 @@ function Hours({ w, o, now, snapshot }: Drawn) {
     dir: h.dir,
     uv: h.uv ?? 0,
   });
+  // Each slot's rain and snow: its sums, and its best chance.
+  const wet = slots.map((slot) => ({
+    from: slot[0].time,
+    to: new Date(Date.parse(slot.at(-1)!.time) + HOUR).toISOString(),
+    precip: sum(slot.map((h) => h.precip)),
+    snow: sum(slot.map((h) => h.snow)),
+    chance: most(slot.map((h) => h.precipChance)),
+  }));
 
   const line =
     lens === "precip"
-      ? hoursPrecipLine(o.timing, samples)
+      ? hoursPrecipLine(wet, now, tz)
       : lens === "wind"
         ? hoursWindLine(span.map(known), now, tz)
         : lens === "uv"
@@ -795,23 +858,62 @@ function Hours({ w, o, now, snapshot }: Drawn) {
                 )
               : lens === "humidity"
                 ? hoursHumidityLine(
-                    span.map((h) => ({ time: h.time, rh: h.rh ?? 50, dew: h.dew ?? 0 })),
+                    span.map((h) => ({
+                      time: h.time,
+                      rh: h.rh ?? 50,
+                      dew: h.dew ?? 0,
+                      gust: h.gust,
+                    })),
                     now,
                     tz,
                   )
                 : hoursLine(w, now, tz);
 
-  const sum = (xs: Array<number | undefined>) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
-  const most = (xs: Array<number | undefined>) => Math.max(...xs.map((x) => x ?? 0));
+  const figures = slots.map((slot, i): Figure => {
+    if (lens === "precip") {
+      const code = slot.find((h) => h.code != null && precipKind(h.code))?.code;
+      return precipFigure(
+        wet[i].precip,
+        wet[i].snow,
+        wet[i].chance,
+        code != null ? precipKind(code) : null,
+      );
+    }
+    if (lens === "wind") {
+      const hi = most(slot.map((h) => h.wind));
+      const dir = meanDir(
+        slot.map((h) => h.dir ?? 0),
+        slot.map((h) => (h.dir == null ? 0 : (h.wind ?? 0))),
+      );
+      return windFigure(hi, hi, most(slot.map((h) => h.gust)), dir);
+    }
+    if (lens === "air") {
+      const aqis = slot.flatMap((h) => (h.aqi == null ? [] : [h.aqi]));
+      const pms = slot.flatMap((h) => (h.pm == null ? [] : [h.pm]));
+      return airFigure(
+        aqis.length ? Math.max(...aqis) : undefined,
+        pms.length ? Math.max(...pms) : undefined,
+      );
+    }
+    // How it feels and the air's water: as the slot begins, like its temperature.
+    const first = slot[0];
+    if (lens === "feels") return feelsFigure(first.feels ?? first.temp, first.temp);
+    if (lens === "humidity") return humidityFigure(first.rh ?? 0, first.dew ?? 0);
+    return uvFigure(most(slot.map((h) => h.uv)));
+  });
+  // UV's words only where they change: "very high" three times running crowds the row.
+  const said = figures.map((f, i) =>
+    lens === "uv" && i > 0 && f.sub && f.sub === figures[i - 1].sub ? { ...f, sub: "" } : f,
+  );
 
   return (
     <div className="flex h-full flex-col">
       <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(span))} />
       <div className="pb-[3rem]">
-        <Labels cols={cols} grid="grid-cols-8" />
-        <Ink k={lens} order={2} mode="seep" className="relative h-[26.4rem]">
+        <Labels cols={cols} />
+        <Ink k={lens} lag={PLATE_LAG_MS} order={2} mode="seep" className="relative h-[26.4rem]">
           {lens === "sky" ? (
-            <div className="grid grid-cols-8">
+            <div className="grid" style={gridOf(slots.length)}>
               {slots.map((slot, i) => {
                 const first = slot[0];
                 // The first slot is now: the sky and temperature as they are.
@@ -841,56 +943,12 @@ function Hours({ w, o, now, snapshot }: Drawn) {
           ) : (
             <LensBody
               lens={lens}
-              cols={COLS}
               scale={1.7}
-              hours={Array.from({ length: COLS * STEP }, (_, i) => {
+              hours={Array.from({ length: slots.length * STEP }, (_, i) => {
                 const h = span[i];
-                return h
-                  ? {
-                      precip: h.precip ?? 0,
-                      snow: h.snow ?? 0,
-                      wind: h.wind ?? 0,
-                      gust: h.gust ?? 0,
-                      uv: h.uv ?? 0,
-                      temp: h.temp,
-                      feels: h.feels,
-                      rh: h.rh,
-                      aqi: h.aqi,
-                    }
-                  : undefined;
+                return h ? plateHour(h, h.precipChance >= CHANCE) : undefined;
               })}
-              figures={slots.map((slot) => {
-                if (lens === "precip") {
-                  const wet = slot.find((h) => h.code != null && precipKind(h.code));
-                  return precipFigure(
-                    sum(slot.map((h) => h.precip)),
-                    sum(slot.map((h) => h.snow)),
-                    most(slot.map((h) => h.precipChance)),
-                    wet?.code != null ? precipKind(wet.code) : null,
-                  );
-                }
-                if (lens === "wind") {
-                  const hi = most(slot.map((h) => h.wind));
-                  const dir = meanDir(
-                    slot.map((h) => h.dir ?? 0),
-                    slot.map((h) => (h.dir == null ? 0 : (h.wind ?? 0))),
-                  );
-                  return windFigure(hi, hi, most(slot.map((h) => h.gust)), dir);
-                }
-                if (lens === "air") {
-                  const aqis = slot.flatMap((h) => (h.aqi == null ? [] : [h.aqi]));
-                  const pms = slot.flatMap((h) => (h.pm == null ? [] : [h.pm]));
-                  return airFigure(
-                    aqis.length ? Math.max(...aqis) : undefined,
-                    pms.length ? Math.max(...pms) : undefined,
-                  );
-                }
-                // How it feels and the air's water: as the slot begins, like its temperature.
-                const first = slot[0];
-                if (lens === "feels") return feelsFigure(first.feels ?? first.temp, first.temp);
-                if (lens === "humidity") return humidityFigure(first.rh ?? 0, first.dew ?? 0);
-                return uvFigure(most(slot.map((h) => h.uv)));
-              })}
+              figures={said}
             />
           )}
         </Ink>
