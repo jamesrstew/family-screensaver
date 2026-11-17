@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Ink } from "@/components/Ink";
-import { insideOf, insideShape, type Inside } from "@/lib/indoor";
+import { insideShape, insideWithin, type Inside as InsideNote } from "@/lib/indoor";
 import { clock } from "@/lib/time";
 import type { NotebookItem, Weather as Sky } from "@/lib/types";
 import type { ViewProps } from "../parts";
@@ -47,14 +47,11 @@ function SkyWords({
   w,
   now,
   tz,
-  shape = "",
   children,
 }: {
   w: Sky;
   now: Date;
   tz: string;
-  /** What else is written with the hour; a new shape re-inks the words. */
-  shape?: string;
   children: ReactNode;
 }) {
   const p = placeOf(w, now);
@@ -103,7 +100,7 @@ function SkyWords({
         ) : null,
       )}
       <Ink
-        k={`${sky.body}${low}${shape}`}
+        k={`${sky.body}${low}`}
         order={0}
         mode="seep"
         className="absolute isolate text-center whitespace-nowrap"
@@ -122,10 +119,11 @@ export function Home(props: ViewProps) {
   const tz = snapshot.timeZone;
   const next = nextUp(props);
   const w = snapshot.weather;
-  const inside = insideOf(snapshot.indoor);
+  const nextLine = next ? `Next, ${nextWords(next, tz)}` : "";
+  const inside = insideWithin(snapshot.indoor, cornerRoom(nextLine));
   const asks = (item: NotebookItem) => item.kind === "question" && mood === "evening";
   const boxFor = (item: NotebookItem) =>
-    heroBox({ sky: Boolean(w), next: Boolean(next), ask: asks(item), item });
+    heroBox({ sky: Boolean(w), next: Boolean(next || inside), ask: asks(item), item });
   const style = (item: NotebookItem) => ({ italic: item.kind !== "idea", max: 11, min: 3.6 });
   // The first of the day's passages that fits its space; a longer one waits
   // for the Ideas page, which has room for anything.
@@ -135,7 +133,7 @@ export function Home(props: ViewProps) {
   return (
     <div className="flex h-full flex-col">
       {w ? (
-        <SkyWords w={w} now={now} tz={tz} shape={insideShape(inside)}>
+        <SkyWords w={w} now={now} tz={tz}>
           {/* The most-glanced fact on the screen: the hour in ink, the temperature softer. */}
           <p className="text-[4.6rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
@@ -144,20 +142,13 @@ export function Home(props: ViewProps) {
               <Deg v={w.now.temp} />
             </span>
           </p>
-          {inside ? <InsideWords inside={inside} /> : null}
         </SkyWords>
       ) : (
         // No sky report: the hour alone, where the sky would be.
-        <Ink
-          k={insideShape(inside)}
-          order={0}
-          mode="seep"
-          className="pt-[6rem] pb-[4rem] text-center"
-        >
+        <Ink order={0} mode="seep" className="pt-[6rem] pb-[4rem] text-center">
           <p className="text-[4.4rem] leading-none text-ink-soft">
             <ClockFace now={now} tz={tz} />
           </p>
-          {inside ? <InsideWords inside={inside} /> : null}
         </Ink>
       )}
       <Ink
@@ -178,28 +169,66 @@ export function Home(props: ViewProps) {
           </article>
         ) : null}
       </Ink>
-      {next ? (
-        <Ink order={2} mode="seep" className="pt-[1rem] text-center">
-          <p className="text-[2.6rem] text-ink-soft">
-            <span className="text-ink-faint italic">Next, </span>
-            {nextWords(next, tz)}
-          </p>
-        </Ink>
+      {next || inside ? (
+        // The foot of the page: what's next in the middle, the house in the corner.
+        <div className="relative pt-[1rem] text-center">
+          <Ink order={2} mode="seep">
+            <p className="text-[2.6rem] text-ink-soft">
+              {next ? (
+                <>
+                  <span className="text-ink-faint italic">Next, </span>
+                  {nextWords(next, tz)}
+                </>
+              ) : (
+                "\u00a0"
+              )}
+            </p>
+          </Ink>
+          {inside ? (
+            <Ink
+              k={insideShape(inside)}
+              order={3}
+              mode="seep"
+              className="absolute right-0 bottom-[0.7rem]"
+            >
+              <Inside inside={inside} />
+            </Ink>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
 }
 
+// The foot's measure (the page inside its margins), and the corner note's
+// type, in rem. About 0.45 em a character (fit.ts), padded.
+const FOOT_W = 109;
+const CORNER = 2;
+const NEXT = 2.6;
+const EM = 0.45;
+
 /**
- * Inside the house, a quiet line under the hour: "68° inside", or each room
- * when they differ. The numbers in soft ink, the words fainter, like the
- * ends of the day at the horizon.
+ * How many characters the corner has beside what's next, which is centered:
+ * half the foot, less half of what's next, less a little air between them.
  */
-function InsideWords({ inside }: { inside: Inside }) {
-  const word = (s: string) => <span className="text-ink-faint italic">{s}</span>;
-  const dot = <span className="mx-[0.6rem] text-ink-faint">·</span>;
+function cornerRoom(nextLine: string): number {
+  const free = FOOT_W / 2 - (nextLine.length * EM * NEXT) / 2 - 3;
+  return Math.floor(free / (EM * CORNER));
+}
+
+/**
+ * Inside the house, a note in the corner, like the ends of the day at the
+ * horizon: "68° inside", or each room when they differ. Part of the paper's
+ * furniture, in faint ink; it stays put while the sun moves.
+ */
+function Inside({ inside }: { inside: InsideNote }) {
+  const word = (s: string) => <span className="italic">{s}</span>;
+  const dot = <span className="mx-[0.5rem]">·</span>;
   return (
-    <p className="mt-[1.1rem] text-[2.6rem] leading-none text-ink-soft">
+    <p
+      className="leading-none whitespace-nowrap text-ink-faint"
+      style={{ fontSize: `${CORNER}rem` }}
+    >
       {inside.kind === "one" ? (
         <>
           <Deg v={inside.temp} /> {word("inside")}
@@ -241,8 +270,8 @@ export function Night(props: ViewProps) {
       : null;
   return (
     <div className="flex h-full flex-col">
+      {/* The house's temperature isn't one of night's few things (DOCTRINE §4). */}
       {w ? (
-        // The hour alone: neither the sky's temperature nor the house's at night.
         <SkyWords w={w} now={now} tz={tz}>
           <p className="text-[5.4rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />

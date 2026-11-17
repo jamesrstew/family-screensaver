@@ -65,3 +65,26 @@ export function roomName(name: string): string {
 /** The line's shape, so a change of shape re-inks it (a new number just changes). */
 export const insideShape = (i: Inside | null) =>
   i ? `${i.kind}${i.kind === "rooms" ? i.rooms.length : ""}${i.air ?? ""}` : "";
+
+/** The words as written, for measuring: "Hallway 66° · Upstairs 71° · dry air". */
+export function insideText(i: Inside): string {
+  const air = i.air ? ` · ${i.air} air` : "";
+  if (i.kind === "one") return `${i.temp}° inside${air}`;
+  if (i.kind === "range") return `${i.low}° to ${i.high}° inside${air}`;
+  return i.rooms.map((r) => `${r.name} ${r.temp}°`).join(" · ") + air;
+}
+
+/**
+ * The fullest version that fits in `room` characters: the rooms, else the
+ * house's one number, else the number without the air, else nothing.
+ */
+export function insideWithin(indoor: Indoor | null | undefined, room: number): Inside | null {
+  const full = insideOf(indoor);
+  if (!full || !indoor) return null;
+  const tries: Inside[] = [
+    full,
+    { kind: "one", temp: indoor.temp, air: full.air },
+    { kind: "one", temp: indoor.temp, air: null },
+  ];
+  return tries.find((t) => insideText(t).length <= room) ?? null;
+}

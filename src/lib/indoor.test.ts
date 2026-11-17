@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insideOf, insideShape, roomName } from "./indoor";
+import { insideOf, insideShape, insideText, insideWithin, roomName } from "./indoor";
 import type { Indoor } from "./types";
 
 const room = (name: string, temp: number, humidity?: number): Indoor["rooms"][number] => ({
@@ -76,5 +76,20 @@ describe("insideShape", () => {
     expect(insideShape(a)).toBe(insideShape(b));
     expect(insideShape(a)).not.toBe(insideShape(c));
     expect(insideShape(null)).toBe("");
+  });
+});
+
+describe("insideWithin", () => {
+  const split = house(room("Den", 66, 24), room("Loft", 71, 26));
+  it("keeps the rooms when there's room for them", () => {
+    expect(insideWithin(split, 40)?.kind).toBe("rooms");
+  });
+  it("gives way to one number, then drops the air, then says nothing", () => {
+    expect(insideWithin(split, 20)).toEqual({ kind: "one", temp: 69, air: "dry" });
+    expect(insideWithin(split, 12)).toEqual({ kind: "one", temp: 69, air: null });
+    expect(insideWithin(split, 5)).toBeNull();
+  });
+  it("writes what it measures", () => {
+    expect(insideText(insideOf(split)!)).toBe("Den 66° · Loft 71° · dry air");
   });
 });
