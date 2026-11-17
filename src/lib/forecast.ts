@@ -11,7 +11,6 @@ import type { Weather } from "./types";
 import { hourFeel } from "./feel";
 import { heldCondition, holdKey, wearLine, type Condition, type Facts, type Hold } from "./wear";
 
-/** WMO weather code to a short label. */
 /** A report older than this no longer says what it's like outside right now. */
 export const NOW_STALE_MS = 60 * 60_000;
 
@@ -21,6 +20,7 @@ export function nowIsFresh(w: Weather, now: Date): boolean {
   return Number.isFinite(at) && now.getTime() - at < NOW_STALE_MS;
 }
 
+/** WMO weather code to a short label. */
 export function describe(code: number, isDay = true): string {
   if (code === 0) return isDay ? "Fair" : "Clear";
   if (code === 1) return isDay ? "Mostly Sunny" : "Mostly Clear";
