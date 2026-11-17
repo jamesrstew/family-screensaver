@@ -8,7 +8,7 @@ import { fitsEverywhere } from "@/views/designs/common";
 import { getNotebook } from "./notebook";
 import { forDay, leadDeck, passagesFrom } from "./pick";
 import { dayKey } from "./time";
-import type { Snapshot, Weather } from "./types";
+import type { NotebookItem, Snapshot, Weather } from "./types";
 import { getWeather } from "./weather";
 
 /** Where the family lives. Env, so the repo stays free of it. */
@@ -70,12 +70,17 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
     indoor,
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     // From a couple of passages back, so a page that appeared a moment ago still finds its own.
-    passages: passagesFrom(
-      leadDeck(notebook ?? [], fitsEverywhere),
-      Math.floor(now.getTime() / TURN_MS) - 2,
-    ),
+    passages: passagesFrom(deckOf(notebook ?? []), Math.floor(now.getTime() / TURN_MS) - 2),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
+}
+
+// Fitting every passage takes a moment; the notebook changes rarely, so
+// the deck is kept until the notebook itself is a different list.
+let deck: { from: NotebookItem[]; items: NotebookItem[] } | null = null;
+function deckOf(notebook: NotebookItem[]): NotebookItem[] {
+  if (deck?.from !== notebook) deck = { from: notebook, items: leadDeck(notebook, fitsEverywhere) };
+  return deck.items;
 }
 
 const NEST_MS = 6000;

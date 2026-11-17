@@ -144,6 +144,7 @@
 /* Night (§4): the weather's words in the night page's soft ink, and no
    accent; the weather is half the night's slides and must be no brighter
    than the night page's own piece. */
+[data-mood="night"] [data-weather-view],
 [data-mood="night"] [data-weather-view] .text-ink,
 [data-mood="night"] [data-weather-view] .text-accent {
   color: var(--ink-soft);
