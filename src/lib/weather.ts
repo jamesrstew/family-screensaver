@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife } from "next/cache";
 import { dayFeels } from "./feel";
 import { describe } from "./forecast";
+import { civilTwilight } from "./sun";
 import { dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
 
@@ -79,7 +80,9 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
   });
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
-  return shape(await res.json(), new Date(), timeZone);
+  const w = shape(await res.json(), new Date(), timeZone);
+  w.today.twilight = civilTwilight(lat, new Date(w.today.sunset));
+  return w;
 }
 
 // Open-Meteo returns local wall times without an offset ("2026-11-16T07:00").
