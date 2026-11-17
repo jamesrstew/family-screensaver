@@ -1,5 +1,7 @@
 // The shapes that travel from the server to the TV. Plain JSON only.
 
+import type { WeatherView } from "./carousel";
+
 export const PAGES = ["home", "weather", "week", "notebook"] as const;
 export type Page = (typeof PAGES)[number];
 
@@ -59,4 +61,5 @@ export type Snapshot = {
   voice: boolean; // can it talk?
 };
 
-export type ShowRequest = { seq: number; page: Page; at: string };
+/** A page to show; for the weather, which view of it. */
+export type ShowRequest = { seq: number; page: Page; at: string; view?: WeatherView };

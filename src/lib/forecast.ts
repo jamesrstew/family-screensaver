@@ -474,7 +474,8 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
   );
 
   // Beyond the parts: the next wet day, or how long it stays dry.
-  const later = w.days.filter((d) => d.date > covered);
+  // (Only this week: past a week, a weekday's name would be ambiguous.)
+  const later = w.days.filter((d) => d.date > covered && d.date < addDays(today, 7));
   const wetDay = later.find((d) => dayFall(d)?.sure === "likely");
   const maybeDay = later.find((d) => dayFall(d)?.sure === "chance");
   const dayName = (k: string) => (k === tomorrow && !lateNight ? "tomorrow" : weekdayOf(k));
@@ -521,7 +522,7 @@ export function weekLine(w: Weather, now: Date, tz: string): string {
   const today = dayKey(now, tz);
   // Today counts until 5 p.m.; after that the week starts tomorrow.
   const late = parts(now, tz).hour >= 17;
-  const ahead = w.days.filter((d) => d.date > today || (d.date === today && !late));
+  const ahead = w.days.filter((d) => d.date > today || (d.date === today && !late)).slice(0, 7);
   if (!ahead.length) return "";
   const name = (k: string) =>
     k === today ? "today" : k === addDays(today, 1) ? "tomorrow" : weekdayOf(k);

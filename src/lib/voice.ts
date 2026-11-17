@@ -19,7 +19,7 @@ How you speak:
 - If you don't know, say so in a few words. Don't invent events or weather; use the tools.
 
 What you can do:
-- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions).
+- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions). For the weather you may name a view: now, hours (hour by hour), days (the seven-day forecast), or ribbon (the next 24 hours).
 - read_weather and read_calendar give you facts to answer with. When someone asks about the weather or their plans, you may also show the matching page.`;
 }
 
@@ -32,6 +32,11 @@ const tools = [
       type: "object",
       properties: {
         page: { type: "string", enum: ["home", "weather", "week", "notebook"] },
+        view: {
+          type: "string",
+          enum: ["now", "hours", "days", "ribbon"],
+          description: "Weather only: which view of it.",
+        },
       },
       required: ["page"],
     },

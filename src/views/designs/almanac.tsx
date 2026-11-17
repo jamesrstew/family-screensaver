@@ -75,10 +75,12 @@ function SkyWords({
           ? { left: r(p.x + radius), top: r(beside), transform: "translateY(-50%)" }
           : { right: r(120 - p.x + radius), top: r(beside), transform: "translateY(-50%)" };
   const low = p.low > 0 ? "end" : p.y > 12 ? "low" : "high";
-  // The ends of the arc: when the sky began, when it ends (hidden while the body sits on one).
+  // The ends of the arc: when the sky began (until halfway, and not while the
+  // body sits on it), and when it ends, which is always worth knowing: the body
+  // rides above the horizon and the words sit below it.
   const ends: Array<["left" | "right", Date, string, boolean]> = [
-    ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16],
-    ["right", sky.to, sky.body === "sun" ? "sunset" : "sunrise", sky.t < 0.84],
+    ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16 && sky.t < 0.5],
+    ["right", sky.to, sky.body === "sun" ? "sunset" : "sunrise", true],
   ];
   return (
     <div className="relative -mx-[5.5rem] -mt-[3.25rem] h-[31rem] shrink-0">

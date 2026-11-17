@@ -40,7 +40,8 @@ export async function getWeather(lat: number, lon: number, timeZone: string): Pr
     hourly: "temperature_2m,precipitation_probability,weather_code,is_day",
     daily:
       "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
-    forecast_days: "7",
+    // Eight, so the seven days ahead are all there after today drops off at 5 p.m.
+    forecast_days: "8",
   });
   const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);

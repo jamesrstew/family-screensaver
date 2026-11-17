@@ -2,39 +2,44 @@
 
 import { useCallback, useRef, useState } from "react";
 import { family } from "@/config";
+import type { WeatherView } from "@/lib/carousel";
 import type { Page, Snapshot } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { useVoice } from "./useVoice";
 
 // The phone remote: put a page on the TV, or talk to it.
 
-const PAGES: Array<{ page: Page; title: string; line: string }> = [
+type Ask = { page: Page; view?: WeatherView };
+const PAGES: Array<Ask & { title: string; line: string }> = [
   { page: "home", title: "Home", line: "The quiet screen" },
-  { page: "weather", title: "The Weather", line: "Today and the week ahead" },
+  { page: "weather", title: "The Weather", line: "The sky right now" },
+  { page: "weather", view: "hours", title: "Hour by Hour", line: "The next day, hour by hour" },
+  { page: "weather", view: "days", title: "Seven Days", line: "The week’s weather" },
   { page: "week", title: "The Week Ahead", line: "The family calendar" },
   { page: "notebook", title: "Ideas", line: "An idea, a quote, or a question" },
 ];
+const id = (a: Ask) => (a.view ? `${a.page}:${a.view}` : a.page);
 
-async function show(page: Page) {
+async function show(page: Page, view?: WeatherView) {
   const res = await fetch("/api/show", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ page }),
+    body: JSON.stringify(view ? { page, view } : { page }),
   });
   if (!res.ok) throw new Error(`show ${res.status}`);
 }
 
 export function Remote({ snapshot }: { snapshot: Snapshot }) {
-  const [sent, setSent] = useState<{ page: Page; ok: boolean } | null>(null);
+  const [sent, setSent] = useState<{ id: string; ok: boolean } | null>(null);
   const clear = useRef<number | undefined>(undefined);
 
-  const send = useCallback(async (page: Page) => {
+  const send = useCallback(async (page: Page, view?: WeatherView) => {
     window.clearTimeout(clear.current);
-    const ok = await show(page).then(
+    const ok = await show(page, view).then(
       () => true,
       () => false,
     );
-    setSent({ page, ok });
+    setSent({ id: id({ page, view }), ok });
     clear.current = window.setTimeout(() => setSent(null), 3000);
   }, []);
 
@@ -56,14 +61,14 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
 
       <ul className="mt-8 border-t border-rule/40">
         {PAGES.map((p) => (
-          <li key={p.page} className="border-b border-rule/40">
+          <li key={id(p)} className="border-b border-rule/40">
             <button
-              onClick={() => send(p.page)}
+              onClick={() => send(p.page, p.view)}
               className="w-full py-5 text-left active:opacity-60"
             >
               <span className="block text-[1.9rem] leading-tight">{p.title}</span>
               <span className="block text-lg text-ink-soft italic">
-                {sent?.page === p.page
+                {sent?.id === id(p)
                   ? sent.ok
                     ? "On the TV now."
                     : "The TV didn’t answer. Try again."

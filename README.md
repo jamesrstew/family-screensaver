@@ -23,7 +23,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 ### Siri
 
-Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`.
+Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
 
 ## Develop
 
