@@ -86,6 +86,21 @@ describe("wearLine", () => {
       ),
     );
 
+  it("never calls a warm-coat day the warmest and then hands out the warm coat", () => {
+    const lines = allDays({ cold: 34, warm: 47, coldFeel: 30, warmest: true }, 4);
+    expect(new Set(lines)).toEqual(
+      new Set([
+        "The warmest day of the week ahead, but still warm-coat weather.",
+        "The warmest day for a while, but still warm-coat weather.",
+      ]),
+    );
+    for (const l of allDays({ cold: 15, warm: 50, coldFeel: 12, warmest: true }, 4))
+      expect(l).toMatch(/but still a day for heavy layers\.$/);
+    // A milder warmest day keeps its coat for the cool hours.
+    expect(allDays({ cold: 45, warm: 56, coldFeel: 44, warmest: true }, 2).join(" ")).toContain(
+      "a jacket",
+    );
+  });
   it("holds all day: the same facts give the same line", () => {
     expect(wearLine(day({}))).toBe(wearLine(day({})));
   });
