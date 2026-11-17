@@ -54,7 +54,8 @@ type Num = number | null;
 
 export async function getWeather(lat: number, lon: number, timeZone: string): Promise<Weather> {
   "use cache";
-  cacheLife({ stale: 300, revalidate: 900, expire: 3600 });
+  // Expires well inside the hour the TV trusts a report's "now" (nowIsFresh).
+  cacheLife({ stale: 300, revalidate: 900, expire: 2700 });
 
   const params = new URLSearchParams({
     latitude: String(lat),
