@@ -1,6 +1,7 @@
 import "server-only";
 import { connection } from "next/server";
 import { getHappenings } from "./calendar";
+import { getIndoor } from "./nest";
 import { getNotebook } from "./notebook";
 import { forDay } from "./pick";
 import { dayKey } from "./time";
@@ -38,7 +39,7 @@ export async function getSnapshot(): Promise<Snapshot> {
   // Round the window to the hour so the calendar cache can do its job.
   const hour = Math.floor(now.getTime() / HOUR) * HOUR;
 
-  const [weather, happenings, notebook] = await Promise.all([
+  const [weather, happenings, notebook, indoor] = await Promise.all([
     h.coords ? quietly("weather", getWeather(h.coords.lat, h.coords.lon, h.timeZone)) : null,
     h.calendars.length
       ? quietly(
@@ -47,6 +48,7 @@ export async function getSnapshot(): Promise<Snapshot> {
         )
       : null,
     quietly("notebook", getNotebook()),
+    quietly("nest", getIndoor()),
   ]);
 
   return {
@@ -55,6 +57,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     timeZone: h.timeZone,
     weather,
     happenings,
+    indoor,
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     voice: Boolean(process.env.OPENAI_API_KEY),
   };
