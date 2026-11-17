@@ -12,17 +12,29 @@ export async function getHappenings(urls: string[], from: Date, to: Date): Promi
   "use cache";
   cacheLife({ stale: 60, revalidate: 300, expire: 3600 });
 
-  const texts = await Promise.all(
+  // One calendar that's down (or oversized) leaves the others standing.
+  const texts = await Promise.allSettled(
     urls.map(async (url) => {
       // Development only: a sample calendar from disk (see snapshot.ts).
       if (url.startsWith("file:")) return readFile(fileURLToPath(url), "utf8");
       const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`calendar ${res.status}`);
-      return res.text();
+      const text = await res.text();
+      if (text.length > MAX_ICS) throw new Error(`calendar too large (${text.length})`);
+      return text;
     }),
   );
-  return texts.flatMap((t) => expand(t, from, to));
+  const ok = texts.flatMap((t) => (t.status === "fulfilled" ? [t.value] : []));
+  for (const t of texts) {
+    if (t.status === "rejected") console.error("[calendar] one calendar unavailable", t.reason);
+  }
+  // Every calendar failed: let the snapshot leave the calendar out, as before.
+  if (!ok.length && urls.length) throw new Error("calendar unavailable");
+  return ok.flatMap((t) => expand(t, from, to));
 }
+
+/** A family calendar is far smaller; past this, something is wrong. */
+const MAX_ICS = 5_000_000;
 
 /** Every occurrence of every event in an iCal file that overlaps [from, to). */
 export function expand(ics: string, from: Date, to: Date): Happening[] {

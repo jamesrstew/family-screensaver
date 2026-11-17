@@ -18,6 +18,7 @@ export default function RemotePage({ searchParams }: PageProps<"/remote">) {
 
 async function Gate({ searchParams }: Pick<PageProps<"/remote">, "searchParams">) {
   const params = await searchParams;
-  if (!(await isFamily())) return <Locked next="/remote" wrong={params.nope === "1"} />;
+  if (!(await isFamily()))
+    return <Locked next="/remote" wrong={params.nope === "1"} wait={params.wait === "1"} />;
   return <Remote snapshot={await getSnapshot()} />;
 }

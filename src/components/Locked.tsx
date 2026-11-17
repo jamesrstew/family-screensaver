@@ -1,7 +1,15 @@
 import { family } from "@/config";
 
 // What a stranger sees: the name, a polite line, and a place for the key.
-export function Locked({ next, wrong }: { next: "/" | "/remote"; wrong: boolean }) {
+export function Locked({
+  next,
+  wrong,
+  wait = false,
+}: {
+  next: "/" | "/remote";
+  wrong: boolean;
+  wait?: boolean;
+}) {
   const tv = next === "/";
   return (
     <div
@@ -22,7 +30,11 @@ export function Locked({ next, wrong }: { next: "/" | "/remote"; wrong: boolean 
       >
         <input type="hidden" name="next" value={next} />
         <label className="kicker" htmlFor="key">
-          {wrong ? "That key didn’t fit. Try again." : "The family key"}
+          {wait
+            ? "Too many wrong keys lately. Try again in an hour."
+            : wrong
+              ? "That key didn’t fit. Try again."
+              : "The family key"}
         </label>
         <input
           id="key"
