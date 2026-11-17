@@ -88,7 +88,7 @@ describe("outlook", () => {
       "Tonight 32° Cloudy",
       "Tomorrow 44° Cloudy",
     ]);
-    expect(o.wear).toBe("You’ll want a warm coat.");
+    expect(o.wear).toMatch(/warm coat/i);
     expect(o.ahead).toBe("Snow likely Wednesday.");
     expect(forecastLine(bugMorning(), at("13:10"), tz)).toBe(
       "Cloudy and 45° now, down to 32° tonight. A few flakes possible this evening.",
@@ -100,7 +100,8 @@ describe("outlook", () => {
     const o = outlook(fakeWeather("snow", now, tz), now, tz);
     expect(o.line).toBe("Cloudy and 26° now, up to 33° this afternoon.");
     expect(o.timing).toBe("Snow likely from 2 p.m. until about 10 p.m.");
-    expect(o.wear).toBe("You’ll want a warm coat and boots.");
+    expect(o.wear).toMatch(/boots/i);
+    expect(o.wear).toMatch(/warm coat/);
     expect(o.ahead).toBe("A chance of snow tomorrow.");
     expect(o.tone).toBe("snow");
   });
@@ -131,7 +132,8 @@ describe("outlook", () => {
     expect(o.focus).toBe("tomorrow");
     expect(o.line).toBe("Clear and 53° now, down to 37° overnight. Tomorrow, sunny and 61°.");
     expect(o.parts.map((p) => p.label)).toEqual(["Tonight", "Tomorrow", "Wednesday"]);
-    expect(o.wear).toBe("Tomorrow, you’ll want a jacket.");
+    expect(o.wear).toMatch(/^Tomorrow/);
+    expect(o.wear).toMatch(/jacket/i);
   });
 
   it("past midnight, today is the new day", () => {

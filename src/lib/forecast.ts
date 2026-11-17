@@ -5,9 +5,10 @@
 // what later days look like (the daily forecast). The daily label is the worst
 // hour of the whole day, past hours included, so it never describes "now".
 
-import { airLine, smokeOf } from "./smoke";
+import { AQI_SENSITIVE, airLine, airNow, smokeOf } from "./smoke";
 import { addDays, clock, dayKey, parts, weekdayOf } from "./time";
 import type { Weather } from "./types";
+import { wearLine, type Facts } from "./wear";
 
 /** WMO weather code to a short label. */
 export function describe(code: number, isDay = true): string {
@@ -335,25 +336,6 @@ export function partFromDay(label: string, d: Day): Part {
   };
 }
 
-/** Do I need a coat? The coldest waking hour decides, and what's falling adds to it. */
-function wearWords(cold: number, fall: Fall | null, when: "today" | "tomorrow"): string {
-  const coat =
-    cold < 20
-      ? "a heavy coat, a hat, and mittens"
-      : cold < 40
-        ? "a warm coat"
-        : cold < 55
-          ? "a jacket"
-          : cold < 65
-            ? "a sweater"
-            : null;
-  const gear = fall === "snow" ? "boots" : fall ? "an umbrella" : null;
-  const day = when === "tomorrow" ? "Tomorrow, you’ll" : "You’ll";
-  if (!coat) return gear ? `No coat needed, but bring ${gear}.` : "No coat needed.";
-  if (!gear) return `${day} want ${coat}.`;
-  return `${day} want ${coat} and ${gear}.`;
-}
-
 /**
  * The weather, answered: now and the hours ahead in one sentence, rain or
  * snow and when, what to wear, and what the next few days hold.
@@ -477,10 +459,14 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
     const f = i >= 0 && !waking.length ? dayFall(w.days[i]) : null;
     return f?.sure === "likely" ? f.kind : null;
   })();
-  const wear = wearWords(
-    cold,
-    wetWhileOut ?? dayWet,
-    focus === "today" || lateNight ? "today" : "tomorrow",
+  const wear = wearLine(
+    wearFacts(w, now, tz, {
+      date: wearDay,
+      when: focus === "today" || lateNight ? "today" : "tomorrow",
+      waking,
+      cold,
+      fall: wetWhileOut ?? dayWet,
+    }),
   );
 
   // Beyond the parts: the next wet day, or how long it stays dry.
@@ -522,6 +508,89 @@ export function outlook(w: Weather, now: Date, tz: string): Outlook {
     parts: partsList,
     spell,
     tone,
+  };
+}
+
+/**
+ * What the forecast says about the day the coat advice is for (wear.ts picks
+ * the words): its waking hours' extremes and feel, what falls and for how
+ * long, the night before it (fresh snow, a hard frost), its sky, its air, and
+ * how it stands against the rest of the week.
+ */
+function wearFacts(
+  w: Weather,
+  now: Date,
+  tz: string,
+  d: { date: string; when: Facts["when"]; waking: Hour[]; cold: number; fall: Fall | null },
+): Facts {
+  const day = w.days.find((x) => x.date === d.date);
+  const temps = d.waking.map((h) => h.temp);
+  const feels = d.waking.map((h) => h.feels ?? h.temp);
+  const warm = temps.length ? Math.max(...temps) : (day?.high ?? w.now.temp);
+  const likely = d.waking.filter((h) => hourFall(h)?.sure === "likely").length;
+
+  // The night before: last evening from 6 p.m. to 8 a.m. Hours already past
+  // come from the day's own record; hours ahead count only when likely.
+  const night: Array<{ temp: number; snow: number; wet: boolean }> = [];
+  for (const [date, from, to] of [
+    [addDays(d.date, -1), 18, 24],
+    [d.date, 0, 8],
+  ] as const) {
+    for (let hr = from; hr < to; hr++) {
+      const ahead = w.hours.find(
+        (h) => dayKey(new Date(h.time), tz) === date && parts(new Date(h.time), tz).hour === hr,
+      );
+      if (ahead && Date.parse(ahead.time) + HOUR > now.getTime()) {
+        const f = hourFall(ahead);
+        night.push({
+          temp: ahead.temp,
+          snow: f?.sure === "likely" ? (ahead.snow ?? 0) : 0,
+          wet: Boolean(f && f.sure !== "slight"),
+        });
+        continue;
+      }
+      const past = w.days.find((x) => x.date === date)?.hourly;
+      if (past && hr < past.wind.length) {
+        night.push({
+          temp: past.temp?.[hr] ?? 99,
+          snow: past.snow[hr],
+          wet: past.precip[hr] >= 0.01,
+        });
+      }
+    }
+  }
+  const hour = parts(now, tz).hour;
+  const morningAhead = d.when === "tomorrow" || hour < 10;
+  const later = w.days.filter((x) => x.date > d.date && x.date <= addDays(d.date, 6));
+  const air = airNow(w.now);
+
+  return {
+    when: d.when,
+    date: d.date,
+    cold: d.cold,
+    warm,
+    coldFeel: feels.length ? Math.min(...feels) : d.cold,
+    hotFeel: feels.length ? Math.max(...feels) : warm,
+    wind: Math.max(0, ...d.waking.map((h) => h.wind ?? 0)),
+    dew: Math.max(-99, ...d.waking.map((h) => h.dew ?? -99)),
+    fall: d.fall,
+    wetHours: likely || (d.fall ? 3 : 0),
+    wakingHours: d.waking.length || 14,
+    wetNow:
+      d.when === "today" &&
+      d.waking.length > 0 &&
+      Date.parse(d.waking[0].time) <= now.getTime() &&
+      hourFall(d.waking[0])?.sure === "likely",
+    freshSnow: night.reduce((a, h) => a + h.snow, 0),
+    clear: (day?.code ?? 3) <= 2,
+    frost:
+      morningAhead &&
+      night.length > 0 &&
+      Math.min(...night.map((h) => h.temp)) <= 28 &&
+      !night.some((h) => h.wet),
+    afternoon: d.when === "tomorrow" || hour < 15,
+    airOk: (air?.n ?? 0) <= AQI_SENSITIVE && (day?.aqi ?? 0) <= AQI_SENSITIVE,
+    warmest: later.length >= 3 && warm > Math.max(...later.map((x) => x.high)),
   };
 }
 
