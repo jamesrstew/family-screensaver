@@ -164,6 +164,19 @@
     transparent
   );
 }
+/* The hour's own clearing, travelling with it (inside its ink). */
+.sky-word-clearing {
+  position: absolute;
+  inset: -2.5rem;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--paper) 90%, transparent),
+    color-mix(in srgb, var(--paper) 75%, transparent) 60%,
+    transparent
+  );
+}
 .sky-clearing-hero {
   left: 8rem;
   top: 29.5rem;

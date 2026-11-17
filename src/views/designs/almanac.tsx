@@ -57,15 +57,21 @@ function SkyWords({
   const radius = look === "dot" ? 2 : sky.body === "sun" ? p.size * 0.55 : 6.6;
   // High in the sky, the words hang beneath the body; low, they sit beside it,
   // on the side toward the middle of the sheet, clear of the horizon.
+  // At the day's ends, when long strokes run along the horizon from the low
+  // sun, the words ride above it instead, clear of the strokes.
   const r = (n: number) => `${n.toFixed(2)}rem`;
   const beside = Math.min(p.y, ARC.cy - 4);
+  const edge =
+    p.x < 60 ? { left: r(Math.max(p.x - 6, 5.5)) } : { right: r(Math.max(120 - p.x - 6, 5.5)) };
   const at: CSSProperties =
-    p.y <= 12
-      ? { left: r(p.x), top: r(p.y + radius), transform: "translateX(-50%)" }
-      : p.x < 60
-        ? { left: r(p.x + radius), top: r(beside), transform: "translateY(-50%)" }
-        : { right: r(120 - p.x + radius), top: r(beside), transform: "translateY(-50%)" };
-  const low = p.y > 12;
+    p.low > 0 && look !== "dot"
+      ? { ...edge, top: r(p.y - radius), transform: "translateY(-100%)" }
+      : p.y <= 12
+        ? { left: r(p.x), top: r(p.y + radius), transform: "translateX(-50%)" }
+        : p.x < 60
+          ? { left: r(p.x + radius), top: r(beside), transform: "translateY(-50%)" }
+          : { right: r(120 - p.x + radius), top: r(beside), transform: "translateY(-50%)" };
+  const low = p.low > 0 ? "end" : p.y > 12 ? "low" : "high";
   // The ends of the arc: when the sky began, when it ends (hidden while the body sits on one).
   const ends: Array<["left" | "right", Date, string, boolean]> = [
     ["left", sky.from, sky.body === "sun" ? "sunrise" : "sunset", sky.t > 0.16],
@@ -93,9 +99,11 @@ function SkyWords({
         k={`${sky.body}${low}`}
         order={0}
         mode="seep"
-        className="absolute text-center whitespace-nowrap"
+        className="absolute isolate text-center whitespace-nowrap"
         style={at}
       >
+        {/* Its own small clearing of paper, so no cloud or stroke crosses the hour. */}
+        <div className="sky-word-clearing" aria-hidden />
         {children}
       </Ink>
     </div>

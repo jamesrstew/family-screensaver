@@ -456,17 +456,28 @@ function Sun({ size, soft }: { size: number; soft: boolean }) {
         ))}
       </svg>
       <svg viewBox="0 0 100 100" className="sky-fill text-ink" fill="none" stroke="currentColor">
-        <circle cx={50} cy={50} r={21} strokeWidth={1.6} fill="var(--paper)" />
+        {/* An opaque disc: nothing behind (the arc, a wisp) shows through. */}
+        <circle cx={50} cy={50} r={21} strokeWidth={1.6} fill="var(--paper)" fillOpacity={1} />
         <circle cx={50} cy={50} r={16.5} strokeWidth={0.5} />
-        {/* The engraver's shading on the disc: a few fine arcs on the lower side. */}
-        {[13.5, 11, 8.5].map((r) => (
-          <path
-            key={r}
-            d={`M${50 - r} ${50 + 2} A${r} ${r} 0 0 0 ${50 + r} ${50 + 2}`}
-            strokeWidth={0.35}
-            opacity={0.7}
-          />
-        ))}
+        {/* The engraver's shading on the disc: a few fine arcs off to the lower
+            left, about a hundred degrees each. (Centered under the middle, they
+            read as a smile.) */}
+        {[13.5, 11, 8.5].map((r) => {
+          const cx = 47;
+          const cy = 53;
+          const a0 = (100 * Math.PI) / 180;
+          const a1 = (200 * Math.PI) / 180;
+          const p = (a: number) =>
+            `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`;
+          return (
+            <path
+              key={r}
+              d={`M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}`}
+              strokeWidth={0.35}
+              opacity={0.7}
+            />
+          );
+        })}
       </svg>
     </div>
   );
