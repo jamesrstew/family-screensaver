@@ -19,6 +19,10 @@ const ALIASES: Record<string, Asked> = {
   quote: { page: "notebook" },
   idea: { page: "notebook" },
   question: { page: "notebook" },
+  "nature mode": { page: "nature" },
+  "show nature": { page: "nature" },
+  relax: { page: "nature" },
+  calm: { page: "nature" },
   // The weather's views, by the names people say.
   now: { page: "weather", view: "now" },
   hours: { page: "weather", view: "hours" },
@@ -77,7 +81,8 @@ export function targetOf(o: {
 }): string {
   // A weather slide keeps its name across sunset and sunrise; a passage
   // turns into the night page's (or home's) with the mood.
-  if (o.slide?.startsWith("weather")) return `carousel:${o.slide}`;
+  // So does a nature clip (which plays by day, and by night while NATURE_AT_NIGHT).
+  if (o.slide?.startsWith("weather") || o.slide?.startsWith("nature")) return `carousel:${o.slide}`;
   if (o.slide) return `${o.base === "night" ? "night" : "home"}:${o.slide}`;
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;

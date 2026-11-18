@@ -16,6 +16,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm format:check",
     "key": "node scripts/key.mjs",
     "notebook:push": "tsx scripts/notebook-push.mts",
+    "nature:push": "node scripts/nature-push.mjs",
     "nest:connect": "node scripts/nest-connect.mjs"
   },
   "dependencies": {

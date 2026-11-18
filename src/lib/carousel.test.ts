@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CYCLE_MS,
   SLIDE_MS,
+  isNatureCycle,
+  natureNext,
   WEATHER_VIEWS,
   nextTurnIn,
   passageNear,
@@ -178,5 +180,57 @@ describe("the cadence, pinned", () => {
     expect(nextTurnIn(since + 12_000, since)).toBe(SLIDE_MS - 12_000);
     expect(nextTurnIn(since + SLIDE_MS + 1_000, since)).toBe(SLIDE_MS - 1_000);
     expect(nextTurnIn(since - 5_000, since)).toBe(SLIDE_MS);
+  });
+});
+
+describe("nature", () => {
+  // A cycle by the clock that is a nature cycle, and home appearing a cycle before.
+  const quarter = Date.parse("2026-11-18T10:15:00-08:00");
+  const since = quarter - CYCLE_MS + 7;
+  const yes = () => true;
+  const at = (ms: number, weather = true, ready = yes) =>
+    slideOf(new Date(since + ms), { since }, weather, tz, ready);
+
+  it("takes a cycle's last minute every quarter hour, after the weather", () => {
+    expect(isNatureCycle(Math.floor((since + CYCLE_MS) / CYCLE_MS))).toBe(true);
+    expect(at(CYCLE_MS).kind).toBe("weather");
+    expect(at(CYCLE_MS + SLIDE_MS)).toEqual({
+      kind: "nature",
+      n: (since + CYCLE_MS - 7) / CYCLE_MS,
+    });
+    expect(at(CYCLE_MS + 2 * SLIDE_MS).kind).toBe("nature");
+    expect(at(2 * CYCLE_MS).kind).toBe("weather");
+    // The next is ten cycles on: fifteen minutes.
+    const kinds = Array.from({ length: 30 * 3 }, (_, i) => at(i * SLIDE_MS).kind);
+    // Cycles 1, 11, and 21 of 30, two slides each.
+    expect(kinds.filter((k) => k === "nature")).toHaveLength(6);
+  });
+
+  it("never in the first cycle after home appears", () => {
+    const s = quarter + 1;
+    for (let ms = 0; ms < CYCLE_MS; ms += SLIDE_MS)
+      expect(slideOf(new Date(s + ms), { since: s }, true, tz, yes).kind).not.toBe("nature");
+  });
+
+  it("is a passage instead when the clip isn't ready", () => {
+    expect(at(CYCLE_MS + 2 * SLIDE_MS, true, () => false).kind).toBe("passage");
+  });
+
+  it("without the weather, takes the cycle's second half", () => {
+    expect(at(CYCLE_MS, false).kind).toBe("passage");
+    expect(at(CYCLE_MS + CYCLE_MS / 2, false).kind).toBe("nature");
+  });
+
+  it("knows when the next one starts, so its clip can load in time", () => {
+    const next = natureNext(since, { since }, true);
+    expect(next?.from).toBe(since + CYCLE_MS + SLIDE_MS);
+    expect(next?.to).toBe(since + 2 * CYCLE_MS);
+    expect(natureNext(since + 2 * CYCLE_MS, { since }, true)?.from).toBe(
+      since + 11 * CYCLE_MS + SLIDE_MS,
+    );
+  });
+
+  it("keys round-trip", () => {
+    expect(slideFromKey(slideKey({ kind: "nature", n: 12 }))).toEqual({ kind: "nature", n: 12 });
   });
 });

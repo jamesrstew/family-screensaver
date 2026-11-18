@@ -735,3 +735,61 @@
     transition: none !important;
   }
 }
+
+/*
+ * A nature clip, full screen at its own size (Nature.tsx). It surfaces and
+ * sinks by opacity alone, under the page's strip (NatureStrip.tsx).
+ */
+.nature-window {
+  opacity: 0;
+}
+.nature-window[data-visible] {
+  opacity: 1;
+}
+/*
+ * At night the picture is dimmed to the night paper: over its near-black,
+ * the brightest white comes to about #555, below the night ink, so a bright
+ * clip never lights the room.
+ */
+.paper[data-mood="night"] .nature-window[data-visible] {
+  opacity: 0.3;
+}
+.nature-window video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Pixel for pixel on the TV; the paper shows in any letterbox. */
+  object-fit: contain;
+}
+/* A soft darkening at the head of the picture, so the notes read over snow or sky. */
+.nature-scrim {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 30%;
+  /* Deep enough under the notes to read over snow, gone well before a band can show. */
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.52),
+    rgb(0 0 0 / 0.45) 45%,
+    rgb(0 0 0 / 0.25) 75%,
+    rgb(0 0 0 / 0)
+  );
+}
+/* While a clip holds the page, the hidden sky stops (§10): nothing animates behind it. */
+.paper[data-nature] .sky * {
+  animation-play-state: paused !important;
+}
+
+/* The strip over a clip: the page's ink, turned light by day (night keeps its own). */
+.nature-strip {
+  --ink: #fbf8f1;
+  --ink-soft: rgb(251 248 241 / 0.94);
+  --ink-faint: rgb(251 248 241 / 0.75);
+  color: var(--ink);
+}
+.paper[data-mood="night"] .nature-strip {
+  --ink: #847a69;
+  --ink-soft: #776d5d;
+  --ink-faint: #4a443a;
+}

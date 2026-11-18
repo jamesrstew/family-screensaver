@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TTL_MS, pageKey, targetOf, viewAsked } from "@/lib/show";
 import {
+  natureNext,
   nextTurnIn,
   startAfter,
   slideFromKey,
@@ -13,6 +14,26 @@ import {
   type WeatherView,
 } from "@/lib/carousel";
 import { freshIndoor } from "@/lib/indoor";
+import {
+  NATURE_AT_NIGHT,
+  VOLUME,
+  isReady,
+  modeFailed,
+  modeGivesUp,
+  modeJob,
+  modeN,
+  modeOnward,
+  modeReady,
+  modeSlot,
+  modeStart,
+  noteReady,
+  orderOf,
+  pickFor,
+  readyFor,
+  type Mode,
+  type Picked,
+  type Ready,
+} from "@/lib/nature";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
@@ -30,6 +51,8 @@ import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
+import { NATURE_GONE_MS, NatureWindow, SKY_MS, useClips, type Phase } from "./Nature";
+import { CAROUSEL_VIEWS, MODE_VIEWS, NatureStrip } from "./NatureStrip";
 import { useVoice } from "./useVoice";
 
 /*
@@ -54,6 +77,8 @@ const HOLD_MS: Record<Page, number> = {
   weather: 4 * 60_000,
   week: 6 * 60_000,
   notebook: 5 * 60_000,
+  // Asked for, nature plays clip after clip a good while, then goes home too.
+  nature: 60 * 60_000,
 };
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
@@ -62,6 +87,14 @@ const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 // The clock shows minutes; the carousel's turns get a timer of their own.
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
+// A nature clip starts loading this long before its slot.
+const PRELOAD_MS = 25_000;
+
+// Dev only: ?clip= starts nature mode on that clip.
+const devClip = () =>
+  process.env.NODE_ENV !== "production"
+    ? new URLSearchParams(window.location.search).get("clip")
+    : null;
 
 // Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
 // sky), so a day scene can be checked at night. Fixed at the first read.
@@ -121,9 +154,16 @@ export function Screen({
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home and night are a carousel (Almanac only), half a minute a piece, each turning like a page.
   // It counts from the moment home appears, so it always opens on the weather.
-  const base = viewOf(page, mood);
   // At dusk and dawn the paper turns between the two (Dusk.tsx).
   const { paper, turning } = useTurn(mood, settled);
+  // Nature mode needs clips and the Almanac: where there are none (not the
+  // TV), it's simply home.
+  const clips = useClips();
+  const askedBase = viewOf(page, mood);
+  const base =
+    askedBase === "nature" && (design !== "almanac" || clips?.length === 0)
+      ? viewOf("home", mood)
+      : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
     since: Date.parse(initial.issuedAt),
   }));
@@ -134,14 +174,101 @@ export function Screen({
     setHomeStart(startAfter(lastBase, base, now.getTime(), homeStart));
   }
   const carousel = turns(base) && design === "almanac";
+  const hasWeather = Boolean(snapshot.weather);
+
+  // ---- Nature: now and then a minute of a real place (at night too, dimmed,
+  // while NATURE_AT_NIGHT says so), and only once its clip is loaded and waiting.
+  const tz = snapshot.timeZone;
+  const outdoors = carousel && Boolean(clips?.length) && (NATURE_AT_NIGHT || mood !== "night");
+  const wild = outdoors ? natureNext(now.getTime(), homeStart, hasWeather) : null;
+  // The slot's clip is picked once, shortly before it, and kept.
+  const [picked, setPicked] = useState<Picked | null>(null);
+  if (wild && now.getTime() >= wild.from - PRELOAD_MS && picked?.n !== wild.n) {
+    const p = pickFor(picked, wild.n, clips ?? []);
+    if (p) setPicked(p);
+  }
+  // Word from the windows: which clips are loaded and waiting.
+  const [ready, setReady] = useState<Ready[]>([]);
+  const [failed, setFailed] = useState<number | null>(null);
+
+  // Nature mode: a session per asking (lib/nature.ts), clip after clip, the
+  // next loading in the other window while the current one plays out.
+  // A page opened straight onto nature starts where the clock says, like any
+  // asking (from the snapshot's time, the same on server and TV).
+  const [mode, setMode] = useState<Mode>(() => modeStart(null, Date.parse(initial.issuedAt)));
+  const [cur, setCur] = useState<Picked | null>(null);
+  const [next, setNext] = useState<Picked | null>(null);
+  const [nearN, setNearN] = useState<number | null>(null);
+  const onward = useCallback(
+    (n: number) => {
+      setMode((m) => modeOnward(m, n));
+      setNearN(null);
+    },
+    [setMode],
+  );
+  const onNear = useCallback((n: number) => setNearN(n), []);
+  const onFail = useCallback(
+    (n: number) => {
+      setFailed(n);
+      if (n >= 0) return;
+      setMode((m) => modeFailed(m, n));
+      // One loading ahead that won't: drop it; it's tried again in its turn.
+      setNext((j) => (j?.n === n ? null : j));
+      setNearN(null);
+    },
+    [setMode],
+  );
+  const onReady = useCallback(
+    (n: number, id: string) => {
+      setReady((list) => noteReady(list, { n, id, at: clockNow() }));
+      if (n < 0) setMode((m) => modeReady(m, n));
+    },
+    [setMode],
+  );
+  // Five clips in a row that won't play (a drive gone): home.
+  if (page === "nature" && modeGivesUp(mode)) setPage("home");
+  const inMode = base === "nature" && Boolean(clips?.length);
+  if (inMode && clips) {
+    const id = devClip();
+    const first = id ? Math.max(orderOf(clips, id), 0) : Math.floor(mode.at / 60_000);
+    const want = modeN(mode, mode.k);
+    if (cur?.n !== want) {
+      const j = next?.n === want ? next : modeJob(clips, mode, mode.k, first);
+      if (j) setCur(j);
+    } else if (nearN === cur.n && next?.n !== modeN(mode, mode.k + 1)) {
+      const j = modeJob(clips, mode, mode.k + 1, first);
+      if (j) setNext(j);
+    }
+  }
+  // The app hidden (the TV on another app): no clip plays, nothing counts as failed.
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const seen = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", seen);
+    return () => document.removeEventListener("visibilitychange", seen);
+  }, []);
+
+  const carouselJob = picked && wild && picked.n === wild.n && failed !== picked.n ? picked : null;
+  // Ready before its slot began, or not at all.
+  const readyN =
+    carouselJob && wild && readyFor(carouselJob.n, carouselJob, ready, wild.from)
+      ? carouselJob.n
+      : null;
+  const natureReady = (n: number) => n === readyN;
+  // Two windows: the carousel's minute plays in the first; nature mode
+  // alternates, so the next clip loads while the current one plays out.
+  // From a clip's first frame until it has sunk, the page is the clip's: no sky.
+  const [busyA, setBusyA] = useState(false);
+  const [busyB, setBusyB] = useState(false);
+  // Where each clip is in coming and going: the strip comes only once it's full.
+  const [phaseA, setPhaseA] = useState<Phase>("hidden");
+  const [phaseB, setPhaseB] = useState<Phase>("hidden");
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
   const target = targetOf({
     base,
-    slide: carousel
-      ? slideKey(slideOf(now, homeStart, Boolean(snapshot.weather), snapshot.timeZone))
-      : null,
+    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady)) : null,
     asked: view0,
     fromUrl,
   }) as View;
@@ -156,17 +283,25 @@ export function Screen({
   useEffect(() => {
     const justTurned = wasTurning.current && !turning;
     wasTurning.current = turning;
-    const wait = swapDelay(leaving, turning, justTurned, leaveMs());
+    // A clip sinks slower than ink; the next page waits for it.
+    const clip = view === "nature" || view.startsWith("carousel:nature");
+    const out = clip ? Math.max(leaveMs(), NATURE_GONE_MS) : leaveMs();
+    const wait = swapDelay(leaving, turning, justTurned, out);
     if (wait === null) return;
     const t = window.setTimeout(() => setView(target), wait);
     return () => window.clearTimeout(t);
-  }, [leaving, target, turning]);
+  }, [leaving, target, turning, view]);
 
-  const show = useCallback((p: Page, v?: WeatherView) => {
-    pageSince.current = Date.now();
-    setPage(p);
-    setView0(viewAsked(p, v));
-  }, []);
+  const show = useCallback(
+    (p: Page, v?: WeatherView) => {
+      pageSince.current = Date.now();
+      setPage(p);
+      setView0(viewAsked(p, v));
+      // Asking for nature starts a fresh session, whatever happened to the last.
+      if (p === "nature") setMode((m) => modeStart(m, clockNow()));
+    },
+    [setMode],
+  );
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
   useEffect(() => {
@@ -312,8 +447,29 @@ export function Screen({
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
+  const wilds = slide?.kind === "nature" && picked?.n === slide.n ? picked.clip : null;
+  // The clip plays while its turn is up and the app is in view (in nature
+  // mode, once it's loaded), and sinks as the page leaves.
+  const curIn = inMode && cur !== null && modeSlot(cur.n) === 1 ? "B" : "A";
+  const playing = inMode
+    ? !leaving && shown === "nature" && isReady(ready, cur)
+    : Boolean(wilds) && !leaving;
+  const on = playing && !hidden;
+  const jobIn = (w: "A" | "B") => {
+    if (!inMode) return w === "A" ? carouselJob : null;
+    const mine = (j: Picked | null) => (j && (modeSlot(j.n) === 1 ? "B" : "A") === w ? j : null);
+    return mine(cur) ?? mine(next);
+  };
+  const natureBusy = busyA || busyB;
+  const clipPhase = curIn === "B" ? phaseB : phaseA;
+  const stripClip = wilds ?? (shown === "nature" ? cur?.clip : null) ?? null;
+  const volume = paper === "night" ? VOLUME.night : twilight ? VOLUME.twilight : VOLUME.day;
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn = kit && (shown === "home" || slide || shown === "night" || asked) ? kit : null;
+  const stripUp = clipPhase === "full" || clipPhase === "closing";
+  const drawn =
+    kit && (shown === "home" || slide || shown === "night" || asked || shown === "nature")
+      ? kit
+      : null;
   return (
     <div
       data-surface="tv"
@@ -321,9 +477,32 @@ export function Screen({
       data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
       data-turning={turning ? "" : undefined}
+      // The sky stays stopped through nature mode, gaps included.
+      data-nature={natureBusy || base === "nature" ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
+      {/* A nature clip, full screen behind the page (which drifts; the picture needn't). */}
+      {design === "almanac"
+        ? (["A", "B"] as const).map((w) => (
+            <NatureWindow
+              key={w}
+              job={jobIn(w)}
+              on={on && curIn === w}
+              volume={volume}
+              onReady={onReady}
+              onFail={onFail}
+              onBusy={w === "A" ? setBusyA : setBusyB}
+              onPhase={w === "A" ? setPhaseA : setPhaseB}
+              onEnd={onward}
+              onNear={onNear}
+              // In nature mode the clip plays on while the paper turns
+              // behind it, and the sky is already gone.
+              turning={turning && !inMode}
+              skyMs={inMode ? 0 : SKY_MS}
+            />
+          ))
+        : null}
       <main
         className="relative h-[67.5rem] w-[120rem] px-[5.5rem] pt-[3.25rem] pb-[3rem]"
         style={{
@@ -335,7 +514,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn}
+            hidden={!drawn || natureBusy || shown === "nature"}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -369,6 +548,17 @@ export function Screen({
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
+              {drawn && stripClip && stripUp ? (
+                // The strip sinks before the clip does: it leaves as the clip closes.
+                <InkStage.Provider value={leaving || turning || clipPhase === "closing"}>
+                  <NatureStrip
+                    key={stripClip.id}
+                    {...props}
+                    clip={stripClip}
+                    views={wilds ? CAROUSEL_VIEWS : MODE_VIEWS}
+                  />
+                </InkStage.Provider>
+              ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
             </div>
