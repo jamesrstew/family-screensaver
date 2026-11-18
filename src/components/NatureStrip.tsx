@@ -8,10 +8,8 @@ import { ClockFace, dayShort, degrees, firstTomorrow, hourWord } from "@/views/d
 import { Ink } from "./Ink";
 
 /*
- * The notes over a nature clip, all at the top, so the foot is the picture's
- * (and the mark footage carries low on the left sits alone): a few quiet
- * lines, like the notes on home. In the top-left corner, always, where the
- * clip was filmed, the hour, and outside and inside. In the top-right, one
+ * The notes over a nature clip, like the notes on home. In the top-left
+ * corner, always, the hour and outside and inside; in the top-right, one
  * of the page's own views in
  * turn, half a minute each, always opening on the weather now: in the
  * carousel's minute, now and what's next; in nature mode, now, the next
@@ -46,13 +44,6 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
     <div className="nature-strip absolute inset-0">
       {/* The page's top margin is 3.25 rem; the notes sit at 3. */}
       <div className="absolute top-[-0.25rem] left-0">
-        {clip.place ? (
-          <Ink order={0} mode="seep">
-            <p className="mb-[0.5rem] text-[2.2rem] leading-tight text-ink-soft italic">
-              {clip.place}
-            </p>
-          </Ink>
-        ) : null}
         <Ink order={1} mode="seep">
           <p className="text-[3.6rem] leading-none text-ink">
             <ClockFace now={now} tz={tz} />
@@ -85,26 +76,39 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
         plain
         className="absolute top-[-0.25rem] right-0 text-right"
       >
-        {view === "now" && w ? <Now w={w} low={Boolean(clip.place)} /> : null}
+        {view === "now" && w ? <Now w={w} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}
         {view === "days" && w ? <Days w={w} /> : null}
         {view === "next" && next ? (
-          // On the clock's line, across from it.
-          <p className={`text-[2.8rem] leading-none text-ink ${clip.place ? "mt-[3.25rem]" : ""}`}>
+          <p className="text-[2.8rem] leading-none text-ink">
             <span className="text-ink-soft italic">{next.label}, </span>
             {next.title}
             {next.when ? <span className="text-ink-soft">, {next.when}</span> : null}
           </p>
         ) : null}
       </Ink>
+      {clip.place ? (
+        // Where the clip was filmed, apart from the hour and the temperatures
+        // (which are ours, not its): one quiet line at the foot, in the middle,
+        // clear of the marks footage carries in its lower corners.
+        <Ink
+          order={0}
+          mode="seep"
+          className="absolute inset-x-0 bottom-[0.2rem] flex justify-center"
+        >
+          <p className="max-w-[44rem] truncate text-[2.2rem] leading-tight text-ink-soft italic">
+            {clip.place}
+          </p>
+        </Ink>
+      ) : null}
     </div>
   );
 }
 
-/** The sky now, in its engraving and in words, on the clock's line (`low` when a place sits above the clock). */
-function Now({ w, low }: { w: Weather; low: boolean }) {
+/** The sky now, in its engraving and in words. */
+function Now({ w }: { w: Weather }) {
   return (
-    <div className={`flex items-end gap-[1.4rem] ${low ? "mt-[3.25rem]" : ""}`}>
+    <div className="flex items-end gap-[1.4rem]">
       <Sky code={w.now.code} isDay={w.now.isDay} className="h-[4.4rem] w-[4.4rem]" />
       <p className="text-[3.6rem] leading-none text-ink italic">
         {skyWords(w.now.code, w.now.isDay)}

@@ -326,6 +326,8 @@ export function NatureWindow({
       <video ref={ref} playsInline preload="auto" disablePictureInPicture />
       {/* A soft darkening at the head of the picture, so the notes read over snow or sky. */}
       <div className="nature-scrim" />
+      {/* And a fainter one at the foot, under where the clip was filmed. */}
+      {held?.clip.place ? <div className="nature-scrim nature-scrim-foot" /> : null}
     </div>
   );
 }
