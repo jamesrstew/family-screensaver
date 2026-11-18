@@ -737,14 +737,11 @@
 }
 
 /*
- * A nature clip's window (Nature.tsx): set into the page like a plate, with
- * a fine plate mark around it. It surfaces and sinks by opacity alone.
+ * A nature clip, full screen at its own size (Nature.tsx). It surfaces and
+ * sinks by opacity alone, under the page's strip (NatureStrip.tsx).
  */
 .nature-window {
   opacity: 0;
-  overflow: hidden;
-  outline: 1px solid var(--rule);
-  outline-offset: 0.9rem;
 }
 .nature-window[data-visible] {
   opacity: 1;
@@ -758,19 +755,81 @@
   opacity: 0.3;
 }
 .nature-window video {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /*
-   * Footage carries a small mark low on the left (about y 890–980 of 1080).
-   * A slight zoom, centered and held to the top, leaves it below the plate
-   * (the plate shows y 0–864).
-   */
-  transform: scale(1.25);
-  transform-origin: 50% 0;
+}
+/* A soft dusk at the foot of the picture, so the strip reads over snow or sky. */
+.nature-scrim {
+  position: absolute;
+  inset: auto 0 0;
+  height: 34%;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.58), rgb(0 0 0 / 0.3) 45%, rgb(0 0 0 / 0));
 }
 /* While a clip holds the page, the hidden sky stops (§10): nothing animates behind it. */
 .paper[data-nature] .sky * {
   animation-play-state: paused !important;
+}
+
+/* The strip over a clip: the page's ink, turned light by day (night keeps its own). */
+.nature-strip {
+  --paper: transparent;
+  --ink: #fbf8f1;
+  --ink-soft: rgb(251 248 241 / 0.86);
+  --ink-faint: rgb(251 248 241 / 0.62);
+  color: var(--ink);
+}
+.paper[data-mood="night"] .nature-strip {
+  --ink: #847a69;
+  --ink-soft: #6c6354;
+  --ink-faint: #4a443a;
+}
+/* The weather, drawn small behind the strip's right side. */
+.strip-sky {
+  position: absolute;
+  right: -2rem;
+  bottom: -1rem;
+  width: 64rem;
+  height: 20rem;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--ink-faint);
+  opacity: 0.6;
+}
+.strip-cloud {
+  position: absolute;
+  /* High in the band, clear of the words below. */
+  width: 8rem;
+  top: calc(var(--i) * 1.3rem);
+  left: calc(6rem + var(--i) * 19rem);
+  animation: strip-drift calc(170s + var(--i) * 37s) ease-in-out infinite alternate;
+}
+@keyframes strip-drift {
+  from {
+    transform: translateX(-6rem);
+  }
+  to {
+    transform: translateX(6rem);
+  }
+}
+.strip-fall {
+  position: absolute;
+  left: 0;
+  top: -20rem;
+  width: 100%;
+  height: 40rem;
+  animation: strip-fall 1.6s linear infinite;
+}
+.strip-fall-snow {
+  animation-duration: 16s;
+}
+@keyframes strip-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(20rem);
+  }
 }

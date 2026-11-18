@@ -68,12 +68,38 @@ export function clipsOf(json: unknown): Clip[] {
  * them in turn, so none comes back until every other one has played.
  */
 export function clipFor(clips: Clip[], n: number): Clip | null {
-  const pool = [...clips].sort((a, b) => hashOf(a.id) - hashOf(b.id));
-  return pool.length ? pool[Math.floor(n / NATURE_EVERY) % pool.length] : null;
+  return clipAt(clips, Math.floor(n / NATURE_EVERY));
 }
 
-/** A nature slot's clip and the minute of it, fixed once picked. */
-export type Picked = { n: number; clip: Clip; from: number };
+/** The `i`th clip in the library's one shuffled order, round and round. */
+export function clipAt(clips: Clip[], i: number): Clip | null {
+  const pool = [...clips].sort((a, b) => hashOf(a.id) - hashOf(b.id));
+  return pool.length ? pool[((i % pool.length) + pool.length) % pool.length] : null;
+}
+
+/** Where clip `id` stands in that order (-1 if it isn't there). */
+export const orderOf = (clips: Clip[], id: string) =>
+  [...clips].sort((a, b) => hashOf(a.id) - hashOf(b.id)).findIndex((c) => c.id === id);
+
+/**
+ * A clip to play and the stretch of it, fixed once picked: from `from`
+ * seconds, until the slot ends or, when given, `until`.
+ */
+export type Picked = { n: number; clip: Clip; from: number; until?: number };
+
+// Nature mode plays clips whole, from just after the opening credit (gone by
+// about 13 seconds) to a moment before the end.
+const WHOLE_FROM_S = 15;
+const WHOLE_TAIL_S = 1;
+
+/**
+ * Nature mode's `k`th clip, walking the same order from `start`: each one
+ * whole. Its `n` is negative, so it never meets a carousel slot's.
+ */
+export function wholeAt(clips: Clip[], start: number, k: number): Picked | null {
+  const clip = clipAt(clips, start + k);
+  return clip ? { n: -1 - k, clip, from: WHOLE_FROM_S, until: clip.seconds - WHOLE_TAIL_S } : null;
+}
 
 /**
  * The clip for slot `n`, keeping the one already picked for it: a manifest

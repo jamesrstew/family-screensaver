@@ -7,6 +7,7 @@ import {
   excerptAt,
   pickFor,
   readyFor,
+  wholeAt,
   volumeOf,
   type Clip,
 } from "./nature";
@@ -106,5 +107,20 @@ describe("a nature slot", () => {
     expect(pickFor(job, 40, refreshed)).toBe(job);
     // The next slot picks afresh.
     expect(pickFor(job, 50, refreshed)?.n).toBe(50);
+  });
+});
+
+describe("nature mode", () => {
+  const clips = ["a", "b", "c"].map((x) => clip(x.repeat(8)));
+
+  it("plays clips whole, one after another, in the library's order", () => {
+    const first = wholeAt(clips, 7, 0)!;
+    expect(first).toMatchObject({ n: -1, from: 15, until: 199 });
+    const ids = [0, 1, 2, 3].map((k) => wholeAt(clips, 7, k)!.clip.id);
+    expect(new Set(ids.slice(0, 3)).size).toBe(3);
+    expect(ids[3]).toBe(ids[0]);
+    // Never the same key as a carousel slot.
+    expect(wholeAt(clips, 7, 4)!.n).toBeLessThan(0);
+    expect(wholeAt([], 7, 0)).toBeNull();
   });
 });

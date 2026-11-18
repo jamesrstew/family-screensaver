@@ -14,7 +14,16 @@ import {
   type WeatherView,
 } from "@/lib/carousel";
 import { freshIndoor } from "@/lib/indoor";
-import { NATURE_AT_NIGHT, VOLUME, pickFor, readyFor, type Picked, type Ready } from "@/lib/nature";
+import {
+  NATURE_AT_NIGHT,
+  VOLUME,
+  orderOf,
+  pickFor,
+  readyFor,
+  wholeAt,
+  type Picked,
+  type Ready,
+} from "@/lib/nature";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
@@ -32,7 +41,8 @@ import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
-import { NATURE_OUT_MS, NatureNotes, NatureWindow, useClips } from "./Nature";
+import { NATURE_OUT_MS, NatureWindow, useClips } from "./Nature";
+import { NatureStrip } from "./NatureStrip";
 import { useVoice } from "./useVoice";
 
 /*
@@ -57,6 +67,8 @@ const HOLD_MS: Record<Page, number> = {
   weather: 4 * 60_000,
   week: 6 * 60_000,
   notebook: 5 * 60_000,
+  // Asked for, nature plays clip after clip a good while, then goes home too.
+  nature: 60 * 60_000,
 };
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
@@ -67,6 +79,12 @@ const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
 // A nature clip starts loading this long before its slot.
 const PRELOAD_MS = 25_000;
+
+// Dev only: ?clip= starts nature mode on that clip.
+const devClip = () =>
+  process.env.NODE_ENV !== "production"
+    ? new URLSearchParams(window.location.search).get("clip")
+    : null;
 
 // Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
 // sky), so a day scene can be checked at night. Fixed at the first read.
@@ -126,40 +144,76 @@ export function Screen({
   // ---- Pages turn with ink: the old one sinks, then the new one soaks in.
   // Home and night are a carousel (Almanac only), half a minute a piece, each turning like a page.
   // It counts from the moment home appears, so it always opens on the weather.
-  const base = viewOf(page, mood);
   // At dusk and dawn the paper turns between the two (Dusk.tsx).
   const { paper, turning } = useTurn(mood, settled);
+  // Nature mode needs clips: where there are none (not the TV, or a drive
+  // that won't play), it's simply home.
+  const clips = useClips();
+  // Nature mode walks the clips from where the clock says, one after another;
+  // five that won't play in a row and it gives up (a drive gone).
+  const [mode, setMode] = useState({ at: 0, k: 0, fails: 0 });
+  const askedBase = viewOf(page, mood);
+  const base =
+    askedBase === "nature" && (clips?.length === 0 || mode.fails >= 5)
+      ? viewOf("home", mood)
+      : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
     since: Date.parse(initial.issuedAt),
   }));
   const [lastBase, setLastBase] = useState(base);
+  const [modeJob, setModeJob] = useState<Picked | null>(null);
   if (base !== lastBase) {
     setLastBase(base);
     // Day and night are one carousel; back from another page, it starts over.
     setHomeStart(startAfter(lastBase, base, now.getTime(), homeStart));
+    if (base === "nature") {
+      setMode({ at: now.getTime(), k: 0, fails: 0 });
+      setModeJob(null);
+    }
   }
   const carousel = turns(base) && design === "almanac";
   const hasWeather = Boolean(snapshot.weather);
 
   // ---- Nature: now and then a minute of a real place (at night too, dimmed,
   // while NATURE_AT_NIGHT says so), and only once its clip is loaded and waiting.
-  const clips = useClips();
   const tz = snapshot.timeZone;
-  const outdoors = carousel && clips.length > 0 && (NATURE_AT_NIGHT || mood !== "night");
+  const outdoors = carousel && Boolean(clips?.length) && (NATURE_AT_NIGHT || mood !== "night");
   const wild = outdoors ? natureNext(now.getTime(), homeStart, hasWeather) : null;
   // The slot's clip is picked once, shortly before it, and kept.
   const [picked, setPicked] = useState<Picked | null>(null);
   if (wild && now.getTime() >= wild.from - PRELOAD_MS && picked?.n !== wild.n) {
-    const p = pickFor(picked, wild.n, clips);
+    const p = pickFor(picked, wild.n, clips ?? []);
     if (p) setPicked(p);
   }
   const [ready, setReady] = useState<Ready | null>(null);
   const [failed, setFailed] = useState<number | null>(null);
-  const onReady = useCallback((n: number, id: string) => setReady({ n, id, at: clockNow() }), []);
-  const onFail = useCallback((n: number) => setFailed(n), []);
-  const job = picked && wild && picked.n === wild.n && failed !== picked.n ? picked : null;
+  // In nature mode a clip that fails or ends gives way to the next.
+  const onward = useCallback(
+    (n: number) => setMode((m) => (n === -1 - m.k ? { ...m, k: m.k + 1 } : m)),
+    [],
+  );
+  const onFail = useCallback((n: number) => {
+    setFailed(n);
+    if (n < 0) setMode((m) => (n === -1 - m.k ? { ...m, k: m.k + 1, fails: m.fails + 1 } : m));
+  }, []);
+  const onReady = useCallback((n: number, id: string) => {
+    setReady({ n, id, at: clockNow() });
+    if (n < 0) setMode((m) => (m.fails ? { ...m, fails: 0 } : m));
+  }, []);
+  const inMode = base === "nature" && Boolean(clips?.length);
+  if (inMode && clips && modeJob?.n !== -1 - mode.k) {
+    const id = mode.k === 0 ? devClip() : null;
+    const first = id ? Math.max(orderOf(clips, id), 0) : Math.floor(mode.at / 60_000);
+    const next = wholeAt(clips, first, mode.k);
+    if (next) setModeJob(next);
+  }
+  const carouselJob = picked && wild && picked.n === wild.n && failed !== picked.n ? picked : null;
+  const job = inMode ? (modeJob && failed !== modeJob.n ? modeJob : null) : carouselJob;
   // Ready before its slot began, or not at all.
-  const readyN = job && wild && readyFor(job.n, job, ready, wild.from) ? job.n : null;
+  const readyN =
+    carouselJob && wild && readyFor(carouselJob.n, carouselJob, ready, wild.from)
+      ? carouselJob.n
+      : null;
   const natureReady = (n: number) => n === readyN;
   // From a clip's first frame until it has sunk, the page is the clip's: no sky.
   const [natureBusy, setNatureBusy] = useState(false);
@@ -184,7 +238,8 @@ export function Screen({
     const justTurned = wasTurning.current && !turning;
     wasTurning.current = turning;
     // A clip sinks slower than ink; the next page waits for it.
-    const out = view.startsWith("carousel:nature") ? Math.max(leaveMs(), NATURE_OUT_MS) : leaveMs();
+    const clip = view === "nature" || view.startsWith("carousel:nature");
+    const out = clip ? Math.max(leaveMs(), NATURE_OUT_MS) : leaveMs();
     const wait = swapDelay(leaving, turning, justTurned, out);
     if (wait === null) return;
     const t = window.setTimeout(() => setView(target), wait);
@@ -342,11 +397,21 @@ export function Screen({
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
   const wilds = slide?.kind === "nature" && picked?.n === slide.n ? picked.clip : null;
-  // The clip plays while its slot is up, and sinks as the page leaves.
-  const outside = Boolean(wilds) && !leaving;
+  // The clip plays while its slot is up (in nature mode, once it's ready),
+  // and sinks as the page leaves.
+  const outside = inMode
+    ? !leaving &&
+      shown === "nature" &&
+      job !== null &&
+      ready?.n === job.n &&
+      ready.id === job.clip.id
+    : Boolean(wilds) && !leaving;
   const volume = paper === "night" ? VOLUME.night : twilight ? VOLUME.twilight : VOLUME.day;
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
-  const drawn = kit && (shown === "home" || slide || shown === "night" || asked) ? kit : null;
+  const drawn =
+    kit && (shown === "home" || slide || shown === "night" || asked || shown === "nature")
+      ? kit
+      : null;
   return (
     <div
       data-surface="tv"
@@ -358,6 +423,20 @@ export function Screen({
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
+      {/* A nature clip, full screen behind the page (which drifts; the picture needn't). */}
+      {design === "almanac" ? (
+        <NatureWindow
+          job={job}
+          on={outside}
+          volume={volume}
+          onReady={onReady}
+          onFail={onFail}
+          onBusy={setNatureBusy}
+          onEnd={onward}
+          // In nature mode the clip plays on while the paper turns behind it.
+          turning={turning && !inMode}
+        />
+      ) : null}
       <main
         className="relative h-[67.5rem] w-[120rem] px-[5.5rem] pt-[3.25rem] pb-[3rem]"
         style={{
@@ -369,7 +448,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn || natureBusy}
+            hidden={!drawn || natureBusy || shown === "nature"}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -403,25 +482,15 @@ export function Screen({
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
-              {drawn && wilds && (
-                <NatureNotes clip={wilds} w={snapshot.weather} now={now} tz={tz} />
+              {drawn && wilds && <NatureStrip {...props} clip={wilds} />}
+              {drawn && shown === "nature" && modeJob && (
+                <NatureStrip {...props} clip={modeJob.clip} />
               )}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>
-        {design === "almanac" ? (
-          <NatureWindow
-            job={job}
-            on={outside}
-            volume={volume}
-            onReady={onReady}
-            onFail={onFail}
-            onBusy={setNatureBusy}
-            turning={turning}
-          />
-        ) : null}
         {design === "almanac" ? (
           <Dusk
             twilight={twilight}

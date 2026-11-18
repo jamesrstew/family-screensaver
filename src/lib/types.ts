@@ -2,7 +2,7 @@
 
 import type { WeatherView } from "./carousel";
 
-export const PAGES = ["home", "weather", "week", "notebook"] as const;
+export const PAGES = ["home", "weather", "week", "notebook", "nature"] as const;
 export type Page = (typeof PAGES)[number];
 
 export type Weather = {

@@ -19,6 +19,10 @@ const ALIASES: Record<string, Asked> = {
   quote: { page: "notebook" },
   idea: { page: "notebook" },
   question: { page: "notebook" },
+  "nature mode": { page: "nature" },
+  "show nature": { page: "nature" },
+  relax: { page: "nature" },
+  calm: { page: "nature" },
   // The weather's views, by the names people say.
   now: { page: "weather", view: "now" },
   hours: { page: "weather", view: "hours" },

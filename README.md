@@ -7,7 +7,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 ## How it works
 
 - **The TV** opens the web app full screen (via the small Android TV app in [`tv/`](tv/README.md), a TV browser, or a cast tab). `Screen` keeps time, refreshes its snapshot every five minutes, and checks `/api/show` every few seconds for requests.
-- **Pages:** home, weather, the week ahead, and ideas. Night replaces home after 9:30 p.m.
+- **Pages:** home, weather, the week ahead, ideas, and nature (on the TV, from its own storage). Night replaces home after 9:30 p.m.
 - **Asking it:** the phone remote at `/remote`, `POST /api/show` with the family key (Siri Shortcuts, Alexa), the TV remote's arrows, or the voice.
 - **The voice** is OpenAI Realtime over WebRTC. The server mints a two-minute key; the browser talks to OpenAI and answers from the snapshot it already has.
 - **Sources:** Open-Meteo (weather, no key), the family's Google Calendar secret iCal address, and James Clear's 3-2-1 (extracted from Gmail; stored privately, never in git).
@@ -23,7 +23,7 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 ### Siri
 
-Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
+Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`, and `nature` (also `relax`), which plays nature clips one after another on the TV for up to an hour. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
 
 ### Nest thermostats
 

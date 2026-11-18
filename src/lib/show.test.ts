@@ -8,6 +8,10 @@ describe("ShowBody", () => {
     ["calendar", "week"],
     ["home", "home"],
     ["quote", "notebook"],
+    ["nature", "nature"],
+    ["Nature mode", "nature"],
+    ["show nature", "nature"],
+    ["relax", "nature"],
   ])("%s means %s", (page, expected) => {
     expect(ShowBody.parse({ page }).page).toBe(expected);
   });
