@@ -1,15 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  MANIFEST_URL,
-  MODE_PRELOAD_S,
-  clipsOf,
-  srcOf,
-  volumeOf,
-  type Clip,
-  type Picked,
-} from "@/lib/nature";
+import { ambientOf, prepareAmbient, setAudible, sleepAmbient, soundOf } from "@/lib/ambient";
+import { MANIFEST_URL, MODE_PRELOAD_S, clipsOf, srcOf, type Clip, type Picked } from "@/lib/nature";
 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
@@ -195,6 +188,7 @@ export function NatureWindow({
       if (!document.hidden) return;
       window.clearTimeout(stall);
       v.pause();
+      sleepAmbient();
     };
     // A whole clip, played to its end: it sinks, then the screen moves on.
     const end = () => alive && setEnded(n);
@@ -223,12 +217,19 @@ export function NatureWindow({
     v.addEventListener("timeupdate", time);
     v.addEventListener("ended", end);
     document.addEventListener("visibilitychange", away);
-    // With sound if the browser allows it (the TV does); else silent, never skipped for it.
+    // With sound if the browser allows it (the TV does); else silent, never
+    // skipped for it. The sound goes through the ambient graph where there is
+    // one (lib/ambient.ts), else the element's own volume.
     v.volume = 0;
     v.muted = false;
-    v.play().then(first, () => {
-      v.muted = true;
-      v.play().then(first, give);
+    prepareAmbient(v).then((graph) => {
+      if (!alive) return;
+      // Through the graph, the element plays at full and the graph sets the level.
+      if (graph) v.volume = 1;
+      v.play().then(first, () => {
+        v.muted = true;
+        v.play().then(first, give);
+      });
     });
     return () => {
       alive = false;
@@ -283,8 +284,24 @@ export function NatureWindow({
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    const to = audible && held ? volumeOf(held.clip, volume) : 0;
+    const graph = ambientOf(v);
+    const sound = soundOf(held?.clip.gain, volume, Boolean(graph));
+    const to = audible && held ? (graph ? sound.out : sound.volume) : 0;
     const ms = audible ? SOUND_IN_MS : NATURE_GONE_MS;
+    const done = () => {
+      if (!audible) setAudible(v, false);
+      if (!on || ended === n) v.pause();
+    };
+    if (audible) setAudible(v, true);
+    // Through the graph: the fade runs on the audio clock, on its last gain.
+    if (graph) {
+      v.volume = 1;
+      graph.pre.value = sound.pre;
+      graph.fade(to, ms);
+      const t = window.setTimeout(done, ms);
+      return () => window.clearTimeout(t);
+    }
+    // Without it: the element's volume, stepped.
     const from = v.volume;
     const t0 = performance.now();
     const t = window.setInterval(() => {
@@ -292,7 +309,7 @@ export function NatureWindow({
       v.volume = from + (to - from) * k;
       if (k < 1) return;
       window.clearInterval(t);
-      if (!on || ended === n) v.pause();
+      done();
     }, 100);
     return () => window.clearInterval(t);
   }, [audible, volume, held, on, ended, n]);

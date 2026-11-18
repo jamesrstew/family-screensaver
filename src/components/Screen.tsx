@@ -16,7 +16,7 @@ import {
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
-  VOLUME,
+  levelAt,
   isReady,
   modeFailed,
   modeGivesUp,
@@ -463,7 +463,7 @@ export function Screen({
   const natureBusy = busyA || busyB;
   const clipPhase = curIn === "B" ? phaseB : phaseA;
   const stripClip = wilds ?? (shown === "nature" ? cur?.clip : null) ?? null;
-  const volume = paper === "night" ? VOLUME.night : twilight ? VOLUME.twilight : VOLUME.day;
+  const volume = levelAt(paper, twilight);
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const stripUp = clipPhase === "full" || clipPhase === "closing";
   const drawn =

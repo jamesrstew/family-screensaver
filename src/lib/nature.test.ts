@@ -17,7 +17,6 @@ import {
   noteReady,
   pickFor,
   readyFor,
-  volumeOf,
   type Clip,
   type Mode,
 } from "./nature";
@@ -83,12 +82,6 @@ describe("nature clips", () => {
     expect(clipsOf(json).map((c) => c.id)).toEqual(["keep-me1", "no-place"]);
     expect(clipsOf(null)).toEqual([]);
     expect(clipsOf({ clips: "no" })).toEqual([]);
-  });
-
-  it("evens out the clips' loudness with their gain, never past full", () => {
-    expect(volumeOf({ ...clip("aaaaaaaa"), gain: 0.5 }, 0.3)).toBeCloseTo(0.15);
-    expect(volumeOf({ ...clip("aaaaaaaa"), gain: 4 }, 0.3)).toBe(1);
-    expect(volumeOf(clip("aaaaaaaa"), 0.1)).toBe(0.1);
   });
 });
 
