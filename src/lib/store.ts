@@ -61,6 +61,11 @@ export const store: Store = url && token ? redis(new Redis({ url, token })) : me
 export const KEYS = {
   show: "family:show",
   notebook: "family:notebook",
+  /**
+   * The games as last gathered (sports.ts), so a cold server has them at
+   * once. One per environment: a dev server never writes production's.
+   */
+  games: `family:games:${process.env.VERCEL_ENV || "dev"}`,
   /** Tries at the family key this hour, from one address or "all" (see auth.ts). */
   tries: (hour: number, who: string) => `family:tries:${hour}:${who}`,
 } as const;

@@ -4,6 +4,7 @@
 import { WEATHER_VIEWS, type WeatherView } from "./carousel";
 import { forecastLine } from "./forecast";
 import { freshIndoor } from "./indoor";
+import { chanceOf, dayLabel, freshGames, joinWord, whenWord } from "./games";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
 import { PAGES, type Snapshot, type Page } from "./types";
 
@@ -72,6 +73,27 @@ export async function runTool(
           what: h.title,
         })),
       }));
+    }
+    case "read_games": {
+      const games = freshGames(snapshot, now);
+      if (!games) return { available: false };
+      return games.map((g) => {
+        const odds = chanceOf(g);
+        const name = (s: typeof g.home) => (s.rank ? `No. ${s.rank} ${s.name}` : s.name);
+        return {
+          day: dayLabel(dayKey(new Date(g.start), tz), now, tz).toLowerCase(),
+          when: whenWord(g, tz),
+          game: `${name(g.away)} ${joinWord(g)} ${name(g.home)}`,
+          ...(g.tv ? { channel: g.tv } : {}),
+          ...(typeof g.away.score === "number" && typeof g.home.score === "number"
+            ? { score: `${g.away.name} ${g.away.score}, ${g.home.name} ${g.home.score}` }
+            : {}),
+          ...(odds
+            ? { chanceOfWinning: odds.pct === 50 ? "even" : `${odds.side.name} ${odds.pct}%` }
+            : {}),
+          ...(g.home.mine || g.away.mine ? { ourTeam: true } : {}),
+        };
+      });
     }
     case "end_conversation":
       ctx.hangUp();

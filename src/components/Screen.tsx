@@ -13,6 +13,7 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
+import { freshGames } from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
@@ -41,6 +42,7 @@ import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
 import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
+import { SportsPage } from "@/views/SportsPage";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
@@ -77,6 +79,7 @@ const HOLD_MS: Record<Page, number> = {
   weather: 4 * 60_000,
   week: 6 * 60_000,
   notebook: 5 * 60_000,
+  sports: 5 * 60_000,
   // Asked for, nature plays clip after clip a good while, then goes home too.
   nature: 60 * 60_000,
 };
@@ -160,8 +163,12 @@ export function Screen({
   // TV), it's simply home.
   const clips = useClips();
   const askedBase = viewOf(page, mood);
+  // No games to show (the off-season, the scores didn't answer, or the list
+  // has gone stale): home.
+  const games = freshGames(snapshot, now);
   const base =
-    askedBase === "nature" && (design !== "almanac" || clips?.length === 0)
+    (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
+    (askedBase === "sports" && !games?.length)
       ? viewOf("home", mood)
       : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
@@ -348,6 +355,8 @@ export function Screen({
           weather: next.weather ?? prev.weather,
           // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
           indoor: next.indoor ?? prev.indoor,
+          // So do missed scores; freshGames retires them at 30 minutes.
+          ...(next.games ? {} : { games: prev.games, gamesAt: prev.gamesAt }),
         }));
       } catch {
         // Offline: keep printing what we have.
@@ -467,7 +476,14 @@ export function Screen({
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const stripUp = clipPhase === "full" || clipPhase === "closing";
   const drawn =
-    kit && (shown === "home" || slide || shown === "night" || asked || shown === "nature")
+    kit &&
+    (shown === "home" ||
+      slide ||
+      shown === "night" ||
+      asked ||
+      shown === "nature" ||
+      // The games are set in the Almanac's face, on bare paper.
+      (shown === "sports" && design === "almanac"))
       ? kit
       : null;
   return (
@@ -514,7 +530,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn || natureBusy || shown === "nature"}
+            hidden={!drawn || natureBusy || shown === "nature" || shown === "sports"}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -561,6 +577,7 @@ export function Screen({
               ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
+              {shown === "sports" && <SportsPage {...props} games={games ?? []} />}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>

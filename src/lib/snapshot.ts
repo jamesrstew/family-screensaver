@@ -7,6 +7,9 @@ import { passageNear } from "./carousel";
 import { fitsEverywhere } from "@/views/designs/common";
 import { getNotebook } from "./notebook";
 import { forDay, leadDeck, passagesFrom } from "./pick";
+import { teamsFrom } from "./games";
+import { getGames } from "./sports";
+import { within } from "./within";
 import { dayKey } from "./time";
 import type { NotebookItem, Snapshot, Weather } from "./types";
 import { getWeather } from "./weather";
@@ -18,6 +21,8 @@ export function household() {
   return {
     place: process.env.HOME_PLACE?.trim() || "Home",
     timeZone: process.env.HOME_TIME_ZONE?.trim() || "America/Los_Angeles",
+    // The family's teams (lib/games.ts); unset, the games page is the Top 25 alone.
+    teams: teamsFrom(process.env.FAMILY_TEAMS),
     coords: Number.isFinite(lat) && Number.isFinite(lon) && lat && lon ? { lat, lon } : null,
     calendars: (process.env.CALENDAR_ICS_URLS ?? "")
       .split(/[\s,]+/)
@@ -44,7 +49,7 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
   // Round the window to the hour so the calendar cache can do its job.
   const hour = Math.floor(now.getTime() / HOUR) * HOUR;
 
-  const [forecast, air, happenings, notebook, indoor] = await Promise.all([
+  const [forecast, air, happenings, notebook, indoor, sports] = await Promise.all([
     h.coords ? quietly("weather", getWeather(h.coords.lat, h.coords.lon, h.timeZone)) : null,
     h.coords ? quietly("air", getAir(h.coords.lat, h.coords.lon, h.timeZone)) : null,
     h.calendars.length
@@ -56,6 +61,9 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
     quietly("notebook", getNotebook()),
     // The thermostats get a few seconds in all; the rest of the paper doesn't wait on them.
     quietly("nest", within(getIndoor(), NEST_MS)),
+    // The games likewise: a slow scoreboard never holds up the paper (and
+    // getGames answers within its own budget, from the store if need be).
+    quietly("sports", within(getGames(now, h.timeZone, h.teams), SPORTS_MS)),
   ]);
 
   // The air is folded into the weather, and only ever adds to it.
@@ -68,6 +76,8 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
     weather,
     happenings,
     indoor,
+    games: sports?.games ?? null,
+    ...(sports ? { gamesAt: sports.at } : {}),
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     // From a couple of passages back, so a page that appeared a moment ago still finds its own.
     passages: passagesFrom(deckOf(notebook ?? []), passageNear(now.getTime()) - 4),
@@ -84,19 +94,7 @@ function deckOf(notebook: NotebookItem[]): NotebookItem[] {
 }
 
 const NEST_MS = 6000;
-
-/** The promise, or a refusal after `ms` (the work carries on and fills the cache). */
-async function within<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<never>((_, no) => {
-    timer = setTimeout(() => no(new Error(`took over ${ms} ms`)), ms);
-  });
-  try {
-    return await Promise.race([p, late]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const SPORTS_MS = 6000;
 
 function withAirQuietly(w: Weather, air: OpenMeteoAir, tz: string): Weather {
   try {
