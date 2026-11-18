@@ -2,20 +2,21 @@ package com.jamesstewart.family
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
 import java.io.File
-import java.io.FilterInputStream
-import java.io.InputStream
 import java.io.RandomAccessFile
-import java.nio.channels.Channels
 
 private const val TAG = "FamilyNature"
 private const val PREFIX = "/nature/"
 private val NAME = Regex("""^(manifest\.json|[\w-]{1,64}\.mp4)$""")
 private val RANGE = Regex("""^bytes=(\d*)-(\d*)$""")
+// At most this much of a clip per request, read whole and the file closed.
+private const val CHUNK = 2L * 1024 * 1024
+private const val ROOT_TTL_MS = 5_000L
 
 /*
  * The nature clips, served to the page from the TV itself. They live on any of
@@ -30,12 +31,25 @@ private val RANGE = Regex("""^bytes=(\d*)-(\d*)$""")
  */
 class NatureFiles(private val context: Context) {
 
-    /** The first volume holding files/nature/manifest.json, looked up afresh each time: drives come and go. */
-    private fun root(): File? =
-        context.getExternalFilesDirs(null).asSequence()
-            .filterNotNull()
-            .map { File(it, "nature") }
-            .firstOrNull { File(it, "manifest.json").isFile }
+    private var root: File? = null
+    private var rootAt = 0L
+
+    /**
+     * The first volume holding files/nature/manifest.json. Looked up again
+     * every few seconds, not on every range request: drives come and go.
+     */
+    @Synchronized
+    private fun root(): File? {
+        val now = SystemClock.elapsedRealtime()
+        if (now - rootAt > ROOT_TTL_MS || root?.let { File(it, "manifest.json").isFile } != true) {
+            root = context.getExternalFilesDirs(null).asSequence()
+                .filterNotNull()
+                .map { File(it, "nature") }
+                .firstOrNull { File(it, "manifest.json").isFile }
+            rootAt = now
+        }
+        return root
+    }
 
     /** A response for /nature/... on the family app's own origin, or null to let the request through. */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
@@ -58,45 +72,38 @@ class NatureFiles(private val context: Context) {
         return url.scheme == app.scheme && url.host == app.host && url.port == app.port
     }
 
+    /**
+     * Every answer is read whole into memory and the file closed before it
+     * goes: no handle outlives a request, so a drive pulled out never finds the
+     * app holding a file open (Android kills a process that does). A clip is
+     * answered a chunk at a time (206); the player asks for the next.
+     */
     private fun serve(file: File, range: String?): WebResourceResponse {
         val size = file.length()
-        val type = if (file.name.endsWith(".json")) "application/json" else "video/mp4"
-        val headers = mutableMapOf(
-            "Accept-Ranges" to "bytes",
-            "Cache-Control" to "no-store",
-            "Access-Control-Allow-Origin" to "*",
-        )
-        val m = range?.let { RANGE.matchEntire(it.trim()) }
-        if (m == null) {
-            headers["Content-Length"] = size.toString()
-            return WebResourceResponse(type, null, 200, "OK", headers, file.inputStream())
+        val headers = mutableMapOf("Accept-Ranges" to "bytes", "Cache-Control" to "no-store")
+        if (file.name.endsWith(".json")) {
+            val bytes = file.readBytes()
+            headers["Content-Length"] = bytes.size.toString()
+            return WebResourceResponse("application/json", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
         }
+        val m = RANGE.matchEntire(range?.trim() ?: "bytes=0-")
+            ?: return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
         val (a, b) = m.destructured
         val start = if (a.isNotEmpty()) a.toLong() else maxOf(size - b.toLong(), 0)
-        val end = if (a.isNotEmpty() && b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
-        if (start > end || start >= size) {
+        val last = if (a.isNotEmpty() && b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
+        if (start > last || start >= size) {
             headers["Content-Range"] = "bytes */$size"
-            return WebResourceResponse(type, null, 416, "Range Not Satisfiable", headers, empty())
+            return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
+        }
+        val end = minOf(last, start + CHUNK - 1)
+        val bytes = ByteArray((end - start + 1).toInt())
+        RandomAccessFile(file, "r").use { f ->
+            f.seek(start)
+            f.readFully(bytes)
         }
         headers["Content-Range"] = "bytes $start-$end/$size"
-        headers["Content-Length"] = (end - start + 1).toString()
-        return WebResourceResponse(type, null, 206, "Partial Content", headers, slice(file, start, end - start + 1))
-    }
-
-    /** Bytes [start, start + length) of the file, as a stream. */
-    private fun slice(file: File, start: Long, length: Long): InputStream {
-        val raf = RandomAccessFile(file, "r").apply { seek(start) }
-        var left = length
-        return object : FilterInputStream(Channels.newInputStream(raf.channel)) {
-            override fun read(): Int = if (left <= 0) -1 else super.read().also { if (it >= 0) left-- }
-            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                if (left <= 0) return -1
-                val n = super.read(b, off, minOf(len.toLong(), left).toInt())
-                if (n > 0) left -= n
-                return n
-            }
-            override fun close() = raf.close()
-        }
+        headers["Content-Length"] = bytes.size.toString()
+        return WebResourceResponse("video/mp4", null, 206, "Partial Content", headers, ByteArrayInputStream(bytes))
     }
 
     private fun empty() = ByteArrayInputStream(ByteArray(0))
