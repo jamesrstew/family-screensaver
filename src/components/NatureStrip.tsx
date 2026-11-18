@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { nowIsFresh, skyWords } from "@/lib/forecast";
 import type { Clip } from "@/lib/nature";
 import type { Weather } from "@/lib/types";
@@ -27,7 +27,28 @@ export type StripView = "now" | "hours" | "days" | "next";
 export const CAROUSEL_VIEWS: StripView[] = ["now", "next"];
 export const MODE_VIEWS: StripView[] = ["now", "hours", "days", "next"];
 
-export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] }) {
+/**
+ * Where the place, the hour, and the temperatures sit: at the foot, clear of
+ * the footage's mark ("bottom"), or pinned to the top-left corner ("top").
+ * Under trial: dev only, ?strip=top.
+ */
+export type StripLayout = "bottom" | "top";
+const noop = () => () => {};
+export function useStripLayout(): StripLayout {
+  const asked = useSyncExternalStore(
+    noop,
+    () =>
+      process.env.NODE_ENV !== "production"
+        ? new URLSearchParams(window.location.search).get("strip")
+        : null,
+    () => null,
+  );
+  return asked === "top" ? "top" : "bottom";
+}
+
+export function NatureStrip(
+  props: ViewProps & { clip: Clip; views: StripView[]; layout: StripLayout },
+) {
   const { snapshot, now, clip } = props;
   const tz = snapshot.timeZone;
   const w = snapshot.weather && nowIsFresh(snapshot.weather, now) ? snapshot.weather : null;
@@ -40,10 +61,18 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
   const outside = w ? w.now.temp : null;
   const inside = props.inside ?? null;
 
+  const top = props.layout === "top";
   return (
-    // The left block starts well clear of the mark footage carries low on the left.
-    <div className="nature-strip absolute right-0 bottom-0 left-[16rem] flex items-end justify-between">
-      <div>
+    // At the foot, the left block starts well clear of the mark footage
+    // carries low on the left; on top, it takes the top-left corner.
+    <div
+      className={
+        top
+          ? "nature-strip absolute inset-0"
+          : "nature-strip absolute right-0 bottom-0 left-[16rem] flex items-end justify-between"
+      }
+    >
+      <div className={top ? "absolute top-[-0.25rem] left-0" : undefined}>
         {clip.place ? (
           <Ink order={0} mode="seep">
             <p className="mb-[0.5rem] text-[2.2rem] leading-tight text-ink-soft italic">
@@ -76,7 +105,13 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
           </Ink>
         ) : null}
       </div>
-      <Ink k={view ?? "none"} order={3} mode="seep" plain className="text-right">
+      <Ink
+        k={view ?? "none"}
+        order={3}
+        mode="seep"
+        plain
+        className={top ? "absolute right-0 bottom-0 text-right" : "text-right"}
+      >
         {view === "now" && w ? <Now w={w} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}
         {view === "days" && w ? <Days w={w} /> : null}

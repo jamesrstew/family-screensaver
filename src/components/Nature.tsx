@@ -99,6 +99,7 @@ export function NatureWindow({
   onPhase,
   turning,
   skyMs,
+  topScrim = false,
 }: {
   job: Picked | null;
   on: boolean;
@@ -112,6 +113,8 @@ export function NatureWindow({
   onPhase: (phase: Phase) => void;
   /** How long to let the sky sink before surfacing (none when it's already gone). */
   skyMs: number;
+  /** A soft darkening at the top too, for notes pinned there. */
+  topScrim?: boolean;
   /** The paper turning at dusk or dawn: a clip up then gives its slot back to a passage. */
   turning: boolean;
 }) {
@@ -309,6 +312,7 @@ export function NatureWindow({
       <video ref={ref} playsInline preload="auto" disablePictureInPicture />
       {/* A soft dusk at the foot of the picture, so the strip reads over snow or sky. */}
       <div className="nature-scrim" />
+      {topScrim ? <div className="nature-scrim nature-scrim-top" /> : null}
     </div>
   );
 }

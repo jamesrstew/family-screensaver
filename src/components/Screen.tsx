@@ -52,7 +52,7 @@ import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
 import { NATURE_GONE_MS, NatureWindow, SKY_MS, useClips, type Phase } from "./Nature";
-import { CAROUSEL_VIEWS, MODE_VIEWS, NatureStrip } from "./NatureStrip";
+import { CAROUSEL_VIEWS, MODE_VIEWS, NatureStrip, useStripLayout } from "./NatureStrip";
 import { useVoice } from "./useVoice";
 
 /*
@@ -266,6 +266,7 @@ export function Screen({
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
+  const stripLayout = useStripLayout();
   const target = targetOf({
     base,
     slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady)) : null,
@@ -500,6 +501,7 @@ export function Screen({
               // behind it, and the sky is already gone.
               turning={turning && !inMode}
               skyMs={inMode ? 0 : SKY_MS}
+              topScrim={stripLayout === "top"}
             />
           ))
         : null}
@@ -556,6 +558,7 @@ export function Screen({
                     {...props}
                     clip={stripClip}
                     views={wilds ? CAROUSEL_VIEWS : MODE_VIEWS}
+                    layout={stripLayout}
                   />
                 </InkStage.Provider>
               ) : null}

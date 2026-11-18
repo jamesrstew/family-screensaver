@@ -769,6 +769,12 @@
   height: 34%;
   background: linear-gradient(to top, rgb(0 0 0 / 0.65), rgb(0 0 0 / 0.32) 45%, rgb(0 0 0 / 0));
 }
+/* The same at the head of the picture, for notes pinned to the top. */
+.nature-scrim-top {
+  inset: 0 0 auto;
+  height: 28%;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.55), rgb(0 0 0 / 0.26) 45%, rgb(0 0 0 / 0));
+}
 /* While a clip holds the page, the hidden sky stops (§10): nothing animates behind it. */
 .paper[data-nature] .sky * {
   animation-play-state: paused !important;
