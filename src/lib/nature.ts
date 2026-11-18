@@ -14,8 +14,11 @@ import { hashOf } from "./organic";
 /** Clips play at night too, dimmed and softer. False keeps them to the daylight. */
 export const NATURE_AT_NIGHT = true;
 
-/** The clip's volume, a fraction of the TV's: gentle by day, softer at twilight, softest at night. */
-export const VOLUME = { day: 0.3, twilight: 0.18, night: 0.1 } as const;
+/** The clip's level, a fraction of the TV's: gentle by day, softer at twilight, softest at night. */
+export const LEVEL_DAY = 0.22;
+export const LEVEL_TWILIGHT = 0.13;
+export const LEVEL_NIGHT = 0.07;
+export const VOLUME = { day: LEVEL_DAY, twilight: LEVEL_TWILIGHT, night: LEVEL_NIGHT } as const;
 
 /**
  * A clip as manifest.json lists it. `place` is its caption, where it was
@@ -24,10 +27,6 @@ export const VOLUME = { day: 0.3, twilight: 0.18, night: 0.1 } as const;
  * volume is the hour's level times it.
  */
 export type Clip = { id: string; seconds: number; place: string; gain?: number };
-
-/** How loud clip `c` plays at `level` (VOLUME): its gain evens out the library, never past full. */
-export const volumeOf = (c: Clip, level: number) =>
-  Math.min(1, level * (typeof c.gain === "number" && c.gain > 0 ? c.gain : 1));
 
 export const MANIFEST_URL = "/nature/manifest.json";
 export const srcOf = (c: Clip) => `/nature/${encodeURIComponent(c.id)}.mp4`;

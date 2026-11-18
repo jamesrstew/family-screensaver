@@ -1,15 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  MANIFEST_URL,
-  MODE_PRELOAD_S,
-  clipsOf,
-  srcOf,
-  volumeOf,
-  type Clip,
-  type Picked,
-} from "@/lib/nature";
+import { ambientFor, soundOf } from "@/lib/ambient";
+import { MANIFEST_URL, MODE_PRELOAD_S, clipsOf, srcOf, type Clip, type Picked } from "@/lib/nature";
 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
@@ -223,8 +216,15 @@ export function NatureWindow({
     v.addEventListener("timeupdate", time);
     v.addEventListener("ended", end);
     document.addEventListener("visibilitychange", away);
-    // With sound if the browser allows it (the TV does); else silent, never skipped for it.
-    v.volume = 0;
+    // With sound if the browser allows it (the TV does); else silent, never
+    // skipped for it. The sound goes through the ambient graph where there is
+    // one (lib/ambient.ts), else the element's own volume.
+    const graph = ambientFor(v);
+    if (graph) {
+      graph.out.value = 0;
+      graph.resume();
+    }
+    v.volume = graph ? 1 : 0;
     v.muted = false;
     v.play().then(first, () => {
       v.muted = true;
@@ -283,13 +283,27 @@ export function NatureWindow({
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    const to = audible && held ? volumeOf(held.clip, volume) : 0;
+    const graph = held ? ambientFor(v) : null;
+    const sound = soundOf(held?.clip.gain, volume, Boolean(graph));
+    if (graph) graph.pre.value = sound.pre;
+    // Through the graph, the fades move its last gain; without it, the volume.
+    const knob = graph
+      ? graph.out
+      : {
+          get value() {
+            return v.volume;
+          },
+          set value(x: number) {
+            v.volume = x;
+          },
+        };
+    const to = audible && held ? (graph ? sound.out : sound.volume) : 0;
     const ms = audible ? SOUND_IN_MS : NATURE_GONE_MS;
-    const from = v.volume;
+    const from = knob.value;
     const t0 = performance.now();
     const t = window.setInterval(() => {
       const k = Math.min((performance.now() - t0) / ms, 1);
-      v.volume = from + (to - from) * k;
+      knob.value = from + (to - from) * k;
       if (k < 1) return;
       window.clearInterval(t);
       if (!on || ended === n) v.pause();
