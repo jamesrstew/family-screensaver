@@ -21,6 +21,13 @@ export const LEVEL_NIGHT = 0.07;
 export const VOLUME = { day: LEVEL_DAY, twilight: LEVEL_TWILIGHT, night: LEVEL_NIGHT } as const;
 
 /**
+ * The clips' level for the paper's mood: night's once the paper has turned
+ * dark, twilight's while the sky is changing before that, else the day's.
+ */
+export const levelAt = (paper: string, twilight: unknown) =>
+  paper === "night" ? LEVEL_NIGHT : twilight ? LEVEL_TWILIGHT : LEVEL_DAY;
+
+/**
  * A clip as manifest.json lists it. `place` is its caption, where it was
  * filmed (the owner's to edit; empty for none). `gain` brings its sound to
  * the library's one loudness (measured when the manifest is written); the
