@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { nowIsFresh, skyWords } from "@/lib/forecast";
 import type { Clip } from "@/lib/nature";
 import type { Weather } from "@/lib/types";
@@ -8,9 +8,11 @@ import { ClockFace, dayShort, degrees, firstTomorrow, hourWord } from "@/views/d
 import { Ink } from "./Ink";
 
 /*
- * The strip at the foot of a nature clip: a few quiet lines over the picture,
- * like the notes on home. On the left, always, where the clip was filmed, the
- * hour, and outside and inside. On the right, one of the page's own views in
+ * The notes over a nature clip, all at the top, so the foot is the picture's
+ * (and the mark footage carries low on the left sits alone): a few quiet
+ * lines, like the notes on home. In the top-left corner, always, where the
+ * clip was filmed, the hour, and outside and inside. In the top-right, one
+ * of the page's own views in
  * turn, half a minute each, always opening on the weather now: in the
  * carousel's minute, now and what's next; in nature mode, now, the next
  * hours, the days, and what's next. The weather is carried by its engraved
@@ -27,28 +29,7 @@ export type StripView = "now" | "hours" | "days" | "next";
 export const CAROUSEL_VIEWS: StripView[] = ["now", "next"];
 export const MODE_VIEWS: StripView[] = ["now", "hours", "days", "next"];
 
-/**
- * Where the place, the hour, and the temperatures sit: at the foot, clear of
- * the footage's mark ("bottom"), or pinned to the top-left corner ("top").
- * Under trial: dev only, ?strip=top.
- */
-export type StripLayout = "bottom" | "top";
-const noop = () => () => {};
-export function useStripLayout(): StripLayout {
-  const asked = useSyncExternalStore(
-    noop,
-    () =>
-      process.env.NODE_ENV !== "production"
-        ? new URLSearchParams(window.location.search).get("strip")
-        : null,
-    () => null,
-  );
-  return asked === "top" ? "top" : "bottom";
-}
-
-export function NatureStrip(
-  props: ViewProps & { clip: Clip; views: StripView[]; layout: StripLayout },
-) {
+export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] }) {
   const { snapshot, now, clip } = props;
   const tz = snapshot.timeZone;
   const w = snapshot.weather && nowIsFresh(snapshot.weather, now) ? snapshot.weather : null;
@@ -61,18 +42,10 @@ export function NatureStrip(
   const outside = w ? w.now.temp : null;
   const inside = props.inside ?? null;
 
-  const top = props.layout === "top";
   return (
-    // At the foot, the left block starts well clear of the mark footage
-    // carries low on the left; on top, it takes the top-left corner.
-    <div
-      className={
-        top
-          ? "nature-strip absolute inset-0"
-          : "nature-strip absolute right-0 bottom-0 left-[16rem] flex items-end justify-between"
-      }
-    >
-      <div className={top ? "absolute top-[-0.25rem] left-0" : undefined}>
+    <div className="nature-strip absolute inset-0">
+      {/* The page's top margin is 3.25 rem; the notes sit at 3. */}
+      <div className="absolute top-[-0.25rem] left-0">
         {clip.place ? (
           <Ink order={0} mode="seep">
             <p className="mb-[0.5rem] text-[2.2rem] leading-tight text-ink-soft italic">
@@ -110,7 +83,7 @@ export function NatureStrip(
         order={3}
         mode="seep"
         plain
-        className={top ? "absolute right-0 bottom-0 text-right" : "text-right"}
+        className="absolute top-[-0.25rem] right-0 text-right"
       >
         {view === "now" && w ? <Now w={w} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}

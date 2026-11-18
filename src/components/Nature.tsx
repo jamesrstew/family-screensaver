@@ -13,7 +13,7 @@ import {
 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
- * TV, pixel for pixel), under the page's strip of notes (NatureStrip.tsx).
+ * TV, pixel for pixel), under the page's notes at the top (NatureStrip.tsx).
  * A minute of one now and then in home's carousel; in nature mode, clip
  * after clip (nature.ts, carousel.ts).
  *
@@ -99,7 +99,6 @@ export function NatureWindow({
   onPhase,
   turning,
   skyMs,
-  topScrim = false,
 }: {
   job: Picked | null;
   on: boolean;
@@ -113,8 +112,6 @@ export function NatureWindow({
   onPhase: (phase: Phase) => void;
   /** How long to let the sky sink before surfacing (none when it's already gone). */
   skyMs: number;
-  /** A soft darkening at the top too, for notes pinned there. */
-  topScrim?: boolean;
   /** The paper turning at dusk or dawn: a clip up then gives its slot back to a passage. */
   turning: boolean;
 }) {
@@ -310,9 +307,8 @@ export function NatureWindow({
       }}
     >
       <video ref={ref} playsInline preload="auto" disablePictureInPicture />
-      {/* A soft dusk at the foot of the picture, so the strip reads over snow or sky. */}
+      {/* A soft darkening at the head of the picture, so the notes read over snow or sky. */}
       <div className="nature-scrim" />
-      {topScrim ? <div className="nature-scrim nature-scrim-top" /> : null}
     </div>
   );
 }
