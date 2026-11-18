@@ -87,8 +87,6 @@ const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 // The clock shows minutes; the carousel's turns get a timer of their own.
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
-// Nature mode's first session (a page opened straight onto nature).
-const FIRST_SESSION = modeStart(null, 0);
 // A nature clip starts loading this long before its slot.
 const PRELOAD_MS = 25_000;
 
@@ -195,7 +193,9 @@ export function Screen({
 
   // Nature mode: a session per asking (lib/nature.ts), clip after clip, the
   // next loading in the other window while the current one plays out.
-  const [mode, setMode] = useState<Mode>(FIRST_SESSION);
+  // A page opened straight onto nature starts where the clock says, like any
+  // asking (from the snapshot's time, the same on server and TV).
+  const [mode, setMode] = useState<Mode>(() => modeStart(null, Date.parse(initial.issuedAt)));
   const [cur, setCur] = useState<Picked | null>(null);
   const [next, setNext] = useState<Picked | null>(null);
   const [nearN, setNearN] = useState<number | null>(null);
