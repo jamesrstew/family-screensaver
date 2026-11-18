@@ -85,11 +85,12 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
         plain
         className="absolute top-[-0.25rem] right-0 text-right"
       >
-        {view === "now" && w ? <Now w={w} /> : null}
+        {view === "now" && w ? <Now w={w} low={Boolean(clip.place)} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}
         {view === "days" && w ? <Days w={w} /> : null}
         {view === "next" && next ? (
-          <p className="text-[2.8rem] leading-none text-ink">
+          // On the clock's line, across from it.
+          <p className={`text-[2.8rem] leading-none text-ink ${clip.place ? "mt-[3.25rem]" : ""}`}>
             <span className="text-ink-soft italic">{next.label}, </span>
             {next.title}
             {next.when ? <span className="text-ink-soft">, {next.when}</span> : null}
@@ -100,10 +101,10 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
   );
 }
 
-/** The sky now, in its engraving and in words. */
-function Now({ w }: { w: Weather }) {
+/** The sky now, in its engraving and in words, on the clock's line (`low` when a place sits above the clock). */
+function Now({ w, low }: { w: Weather; low: boolean }) {
   return (
-    <div className="flex items-end gap-[1.4rem]">
+    <div className={`flex items-end gap-[1.4rem] ${low ? "mt-[3.25rem]" : ""}`}>
       <Sky code={w.now.code} isDay={w.now.isDay} className="h-[4.4rem] w-[4.4rem]" />
       <p className="text-[3.6rem] leading-none text-ink italic">
         {skyWords(w.now.code, w.now.isDay)}
@@ -112,23 +113,21 @@ function Now({ w }: { w: Weather }) {
   );
 }
 
-/** The next hours, every other one: the hour, its sky, its temperature. */
+/** The next five hours, every other one: the hour, its sky, its temperature. */
 function Hours({ w, now, tz }: { w: Weather; now: Date; tz: string }) {
   const hours = w.hours
     .filter((h) => Date.parse(h.time) + HOUR > now.getTime())
     .filter((_, i) => i % 2 === 0)
-    .slice(0, 6);
+    .slice(1, 6);
   return (
     <div className="flex items-end gap-[2.6rem]">
-      {hours.map((h, i) => (
+      {hours.map((h) => (
         <div key={h.time} className="text-center">
-          <p className="text-[2rem] leading-none text-ink italic">
-            {i === 0 ? "Now" : hourWord(h.time, tz)}
-          </p>
+          <p className="text-[2rem] leading-none text-ink italic">{hourWord(h.time, tz)}</p>
           <Sky
             code={h.code ?? w.now.code}
             isDay={h.isDay ?? true}
-            className="mx-auto my-[0.5rem] h-[3rem] w-[3rem]"
+            className="mx-auto my-[0.5rem] h-[3.4rem] w-[3.4rem]"
           />
           <p className="text-[2.6rem] leading-none text-ink">{degrees(h.temp)}</p>
         </div>
@@ -144,7 +143,7 @@ function Days({ w }: { w: Weather }) {
       {w.days.slice(0, 5).map((d, i) => (
         <div key={d.date} className="text-center">
           <p className="text-[2rem] leading-none text-ink italic">{dayShort(d.date, i)}</p>
-          <Sky code={d.code} isDay className="mx-auto my-[0.5rem] h-[3rem] w-[3rem]" />
+          <Sky code={d.code} isDay className="mx-auto my-[0.5rem] h-[3.4rem] w-[3.4rem]" />
           <p className="text-[2.6rem] leading-none whitespace-nowrap text-ink">
             {degrees(d.high)} <span className="text-ink-soft">{degrees(d.low)}</span>
           </p>

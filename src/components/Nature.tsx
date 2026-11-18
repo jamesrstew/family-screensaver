@@ -30,7 +30,7 @@ import {
 export const SKY_MS = 2500;
 const IN_MS = 4000;
 /** The clip sinks no faster than the ink leaves; the screen waits for it. */
-export const NATURE_OUT_MS = 3000;
+export const NATURE_OUT_MS = 4000;
 const SOUND_IN_MS = 9000;
 /** The strip's ink sinking (Ink's seep, staggered), before the clip begins to. */
 export const STRIP_OUT_MS = 2800;
