@@ -18,7 +18,9 @@ import {
   type Team,
 } from "./games";
 import { KEYS, store } from "./store";
-import type { Game, League } from "./types";
+import { TEAM_QUERY, readTeams, resolveTeam, type TeamEntry } from "./team-query";
+import { readSchedule, teamView } from "./team-view";
+import type { Game, League, TeamView } from "./types";
 import { within } from "./within";
 
 // The games, from ESPN's public site API, and their chances from Kalshi's
@@ -131,23 +133,91 @@ export async function gather(
   if (!ok.length) throw new Error("no scoreboard answered");
   // Twice as many as will show: the chances rule out the foregone ones.
   const games = curate(withTeams(ok.flat(), teams), now, tz, MAX_GAMES * 2);
-  // The market's chance where it trades; otherwise ESPN's predictor (a
-  // request each, kept an hour). Whatever doesn't answer in time goes
-  // without: the games come back either way.
-  const book = new Map(
-    leagues.map((l, i) => [l, within(books[i], left()).catch(() => [] as Market[])]),
-  );
-  const chanced = await Promise.all(
+  const book = new Map(leagues.map((l, i) => [l, books[i]]));
+  return trim(await chancesFor(games, book, left));
+}
+
+/**
+ * Each game still to come with its chance: the market's where it trades;
+ * otherwise ESPN's predictor (a request each, kept an hour). Whatever
+ * doesn't answer within `left()` goes without: the games come back either way.
+ */
+async function chancesFor(
+  games: Game[],
+  books: Map<League, Promise<Market[]>>,
+  left: () => number,
+): Promise<Game[]> {
+  return Promise.all(
     games.map(async (g) => {
       if (g.state !== "pre") return g;
-      const day = dayKey(new Date(g.start), ESPN_TZ);
-      const market = marketChance(g, (await book.get(g.league)) ?? [], day);
+      const book = await within(books.get(g.league) ?? Promise.resolve([]), left()).catch(
+        () => [] as Market[],
+      );
+      const market = marketChance(g, book, dayKey(new Date(g.start), ESPN_TZ));
       if (market) return withChance(g, market, "market");
       const espn = await within(chance(g.league, g.id), left()).catch(() => null);
       return withChance(g, espn, "espn");
     }),
   );
-  return trim(chanced);
+}
+
+// ---- One team's page, asked for by name ("show Kentucky basketball").
+
+const LEAGUES: League[] = ["cfb", "cbb", "nfl"];
+
+/**
+ * The team someone asked for, by ESPN's lists for all three leagues (kept a
+ * day), or null. The query is checked before anything is fetched, and never
+ * goes into a URL: only the ids it resolves to do.
+ */
+export async function findTeam(
+  q: string,
+  family: readonly Team[],
+  now: Date,
+): Promise<Team | null> {
+  if (!TEAM_QUERY.test(q)) return null;
+  const lists = await Promise.all(
+    LEAGUES.map((l) => within(teamList(l), FETCH_MS).catch(() => [] as TeamEntry[])),
+  );
+  return resolveTeam(q, lists.flat(), family, now);
+}
+
+/** A league's teams (ESPN's full list; it changes a few times a year). */
+async function teamList(league: League): Promise<TeamEntry[]> {
+  "use cache";
+  cacheLife({ stale: 3600, revalidate: 86_400, expire: 7 * 86_400 });
+  const res = await fetch(`${SITE}/${PATH[league]}/teams?limit=1000`, {
+    signal: AbortSignal.timeout(FETCH_MS),
+  });
+  if (!res.ok) throw new Error(`espn teams ${res.status}`);
+  return readTeams(await res.json(), league);
+}
+
+/**
+ * One team's page: its schedules (regular season and postseason), each game
+ * ahead with its chance, within the budget. Null if ESPN doesn't know the
+ * team or didn't answer.
+ */
+export async function getTeamView(league: League, id: string, now: Date): Promise<TeamView | null> {
+  if (!LEAGUES.includes(league) || !/^\d{1,8}$/.test(id)) return null;
+  const began = Date.now();
+  const left = () => Math.max(0, BUDGET_MS - (Date.now() - began));
+  const book = new Map([[league, markets(league).catch(() => [] as Market[])]]);
+  const got = await Promise.allSettled([2, 3].map((type) => schedule(league, id, type)));
+  const ok = got.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const view = teamView(ok, league, id, now);
+  if (!view) return null;
+  const ahead = await chancesFor(view.ahead, book, left);
+  return { ...view, ahead };
+}
+
+async function schedule(league: League, id: string, type: number) {
+  "use cache";
+  cacheLife({ stale: 60, revalidate: 240, expire: 3600 });
+  const url = `${SITE}/${PATH[league]}/teams/${id}/schedule?seasontype=${type}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS) });
+  if (!res.ok) throw new Error(`espn schedule ${res.status}`);
+  return readSchedule(await res.json(), league);
 }
 
 async function events(league: League, url: string): Promise<Game[]> {

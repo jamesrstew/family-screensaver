@@ -27,7 +27,8 @@ export type WeatherView = (typeof WEATHER_VIEWS)[number];
 export type Slide =
   | { kind: "passage"; n: number }
   | { kind: "weather"; view: WeatherView }
-  | { kind: "nature"; n: number };
+  | { kind: "nature"; n: number }
+  | { kind: "games"; n: number };
 
 // Every so often a cycle's last minute is a window onto a real place (a
 // nature clip, nature.ts) in place of its other slides: every tenth cycle by
@@ -38,6 +39,19 @@ export const isNatureCycle = (n: number) => n % NATURE_EVERY === 0;
 
 /** Asks the screen whether nature slot `n` has its clip ready. */
 export type NatureReady = (n: number) => boolean;
+
+// The games (the sports page's first leaf) take a cycle's last slide, in
+// place of a passage: every third cycle by the clock, every other one on a
+// day one of the family's teams plays. Never the first cycle after home
+// appears (it opens on the weather and a passage), never a nature cycle, and
+// only when there are games within the page's few days.
+export const GAMES_EVERY = { usual: 3, ours: 2 } as const;
+
+/** What the screen knows of the games: any to show, and whether a family team plays today. */
+export type GamesCue = { any: boolean; ours: boolean };
+
+export const isGamesCycle = (n: number, ours: boolean) =>
+  n % (ours ? GAMES_EVERY.ours : GAMES_EVERY.usual) === 1;
 
 /** Midnight to noon, by the family's clock: the weather's half of the day. */
 export const weatherFirst = (t: number, timeZone: string) => parts(new Date(t), timeZone).hour < 12;
@@ -92,6 +106,7 @@ export function slideOf(
   hasWeather: boolean,
   timeZone: string,
   nature: NatureReady = () => false,
+  games: GamesCue = { any: false, ours: false },
 ): Slide {
   const { since } = start;
   const elapsed = Math.max(now.getTime() - since, 0);
@@ -110,6 +125,7 @@ export function slideOf(
     return wild && second ? { kind: "nature", n } : { kind: "passage", n: base + (second ? 1 : 0) };
   }
   if (wild && pos >= 1) return { kind: "nature", n };
+  if (pos === 2 && c >= 1 && games.any && isGamesCycle(n, games.ours)) return { kind: "games", n };
   if (pos < w) {
     // Back from the Weather page, the first cycle's views were never shown:
     // the next one is "now" again.
@@ -166,12 +182,12 @@ export function nextTurnIn(now: number, since: number, hasWeather = true): numbe
   return step - (Math.max(now - since, 0) % step);
 }
 
-export const slideKey = (s: Slide) =>
+export const slideKey = (s: Slide): string =>
   s.kind === "weather" ? `weather-${s.view}` : `${s.kind}-${s.n}`;
 
 export function slideFromKey(key: string): Slide | undefined {
   const [kind, rest] = key.split("-");
-  if ((kind === "passage" || kind === "nature") && /^\d+$/.test(rest))
+  if ((kind === "passage" || kind === "nature" || kind === "games") && /^\d+$/.test(rest))
     return { kind, n: Number(rest) };
   const view = WEATHER_VIEWS.find((v) => v === rest);
   return kind === "weather" && view ? { kind, view } : undefined;

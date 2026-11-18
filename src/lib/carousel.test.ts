@@ -234,3 +234,67 @@ describe("nature", () => {
     expect(slideFromKey(slideKey({ kind: "nature", n: 12 }))).toEqual({ kind: "nature", n: 12 });
   });
 });
+
+describe("the games on home", () => {
+  const games = (ours = false) => ({ any: true, ours });
+  /** Each cycle's last slide, for cycles 0 to `n`, counting from `since`. */
+  const lasts = (since: number, n: number, cue = games(), nature = () => false) =>
+    Array.from({ length: n }, (_, c) => {
+      const s = slideOf(
+        new Date(since + c * CYCLE_MS + 2 * SLIDE_MS),
+        { since },
+        true,
+        tz,
+        nature,
+        cue,
+      );
+      return s.kind === "games" ? Math.floor((since + c * CYCLE_MS) / CYCLE_MS) : null;
+    });
+
+  it("takes a cycle's last slide every third cycle, never the first after home appears", () => {
+    const got = lasts(afternoon, 12).filter((n) => n !== null) as number[];
+    expect(got.length).toBeGreaterThanOrEqual(3);
+    for (const n of got) expect(n % 3).toBe(1);
+    // The first cycle is weather and passages, whatever the clock.
+    const first = Math.floor(afternoon / CYCLE_MS);
+    expect(lasts(afternoon, 1)[0]).toBeNull();
+    expect(lasts(first * CYCLE_MS - CYCLE_MS + 1, 1)[0]).toBeNull();
+  });
+
+  it("comes round every other cycle when a family team plays today", () => {
+    const got = lasts(afternoon, 12, games(true)).filter((n) => n !== null) as number[];
+    expect(got.length).toBeGreaterThanOrEqual(5);
+    for (const n of got) expect(n % 2).toBe(1);
+  });
+
+  it("never shows when there are no games, and gives way to nature", () => {
+    expect(lasts(afternoon, 30, { any: false, ours: false }).every((n) => n === null)).toBe(true);
+    const all = () => true;
+    for (const n of lasts(afternoon, 30, games(true), all))
+      if (n !== null) expect(n % 10).not.toBe(0);
+  });
+
+  it("never takes the weather's slides, morning or afternoon", () => {
+    for (const since of [morning, afternoon]) {
+      for (let s = 0; s < 36; s++) {
+        const slide = slideOf(
+          new Date(since + s * SLIDE_MS),
+          { since },
+          true,
+          tz,
+          undefined,
+          games(true),
+        );
+        if (slide.kind === "games") expect(s % 3).toBe(2);
+      }
+    }
+  });
+
+  it("keeps its name across sunset, like the weather's", () => {
+    const key = slideKey({ kind: "games", n: 7 });
+    expect(slideFromKey(key)).toEqual({ kind: "games", n: 7 });
+    expect(targetOf({ base: "night", slide: key, asked: null, fromUrl: "now" })).toBe(
+      "carousel:games-7",
+    );
+  });
+});

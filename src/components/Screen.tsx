@@ -13,7 +13,7 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames } from "@/lib/games";
+import { freshGames, gamesCue } from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
@@ -43,6 +43,8 @@ import { HomePage } from "@/views/HomePage";
 import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
 import { SportsPage } from "@/views/SportsPage";
+import { TeamPage } from "@/views/TeamPage";
+import { useTeam, type TeamRef } from "./useTeam";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
@@ -114,16 +116,33 @@ function clockNow(): number {
   return Date.now() + clockOffset;
 }
 
+/** The team someone named, as the server finds it; null if no team answers to it. */
+async function findTeamFor(team: string): Promise<TeamRef | null> {
+  try {
+    const res = await fetch("/api/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team }),
+    });
+    return res.ok ? ((await res.json()) as { team: TeamRef | null }).team : null;
+  } catch {
+    return null;
+  }
+}
+
 const viewOf = (page: Page, mood: Mood): Page | "night" =>
   page === "home" && mood === "night" ? "night" : page;
 
 export function Screen({
   initial,
   initialPage,
+  initialTeam = null,
   design = null,
 }: {
   initial: Snapshot;
   initialPage: Page;
+  /** Dev only: a made-up team page to open on (?team=season|live|off). */
+  initialTeam?: TeamRef | null;
   design?: Design | null;
 }) {
   const kit = design ? DESIGNS[design] : null;
@@ -140,6 +159,9 @@ export function Screen({
     [latest, fresh],
   );
   const [page, setPage] = useState<Page>(initialPage);
+  // One team's games, asked for by name (voice or Siri).
+  const [teamRef, setTeamRef] = useState<TeamRef | null>(initialTeam);
+  const team = useTeam(teamRef);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
   // night honest even if the forecast is gone for a while.
@@ -168,7 +190,7 @@ export function Screen({
   const games = freshGames(snapshot, now);
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
-    (askedBase === "sports" && !games?.length)
+    (askedBase === "sports" && !games?.length && !team.view && !team.pending)
       ? viewOf("home", mood)
       : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
@@ -275,7 +297,9 @@ export function Screen({
   const fromUrl = useAsked();
   const target = targetOf({
     base,
-    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady)) : null,
+    slide: carousel
+      ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, gamesCue(games, now, tz)))
+      : null,
     asked: view0,
     fromUrl,
   }) as View;
@@ -300,14 +324,16 @@ export function Screen({
   }, [leaving, target, turning, view]);
 
   const show = useCallback(
-    (p: Page, v?: WeatherView) => {
+    (p: Page, v?: WeatherView, t?: TeamRef | null) => {
       pageSince.current = Date.now();
       setPage(p);
       setView0(viewAsked(p, v));
+      // One team's games, or none: any other asking clears it.
+      setTeamRef(p === "sports" && t ? t : null);
       // Asking for nature starts a fresh session, whatever happened to the last.
       if (p === "nature") setMode((m) => modeStart(m, clockNow()));
     },
-    [setMode],
+    [setMode, setView0, setTeamRef],
   );
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
@@ -384,7 +410,7 @@ export function Screen({
         if (!("page" in ask) || ask.seq === known) return;
         // Only a recent request counts (a TV waking up shouldn't obey
         // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view);
+        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view, ask.team);
       } catch {
         // Try again next time.
       }
@@ -408,7 +434,11 @@ export function Screen({
         runTool(name, args, {
           snapshot: snapshotRef.current,
           now: new Date(),
-          show,
+          show: async (p, v, team) => {
+            // A team, as said: the server finds it (or doesn't, and it's the games as usual).
+            const t = team ? await findTeamFor(team) : null;
+            show(p, v, t);
+          },
           hangUp: () => {},
         }),
       [show],
@@ -541,7 +571,7 @@ export function Screen({
             // or arc dots through them, the body faint behind them.
             arc={shown === "home" || shown === "night" || Boolean(slide)}
             quiet={!slide && (asked ?? "now") !== "now"}
-            words={slide?.kind === "weather"}
+            words={slide?.kind === "weather" || slide?.kind === "games"}
             seed={seed}
             epoch={epoch}
             twilight={twilight}
@@ -561,6 +591,7 @@ export function Screen({
               {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
+              {drawn && slide?.kind === "games" && <SportsPage {...props} games={games ?? []} />}
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
@@ -577,7 +608,14 @@ export function Screen({
               ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
-              {shown === "sports" && <SportsPage {...props} games={games ?? []} />}
+              {shown === "sports" &&
+                // One team's page once it's here (blank paper the moment before, never
+                // the agenda swapped out); the games as usual if it can't be had.
+                (team.view ? (
+                  <TeamPage {...props} team={team.view} />
+                ) : team.pending ? null : (
+                  <SportsPage {...props} games={games ?? []} />
+                ))}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>

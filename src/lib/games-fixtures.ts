@@ -6,7 +6,7 @@
 // The "family's teams" here are stand-ins, not the family's (those are in env).
 
 import { withTeams, type Team } from "./games";
-import type { Game, League, Side } from "./types";
+import type { Game, League, Side, TeamView } from "./types";
 
 /** Stand-in teams: Iowa football, Gonzaga basketball, the Chicago Bears. */
 export const FIXTURE_TEAMS: Team[] = [
@@ -168,4 +168,148 @@ export function fakeGames(slate: FakeSlate, now: Date): Game[] {
     };
   });
   return withTeams(games, FIXTURE_TEAMS);
+}
+
+// ---- One team's page, made up (?team=season|live|off in dev): a stand-in
+// basketball team mid-season, the same with a game under way, and the same
+// after its season.
+
+export const FAKE_TEAMS = ["season", "live", "off"] as const;
+export type FakeTeam = (typeof FAKE_TEAMS)[number];
+
+export function fakeTeam(kind: FakeTeam, now: Date): TeamView {
+  const t0 = Math.round(now.getTime() / (HOUR / 2)) * (HOUR / 2);
+  const DAY = 24 * HOUR;
+  const us = (score?: number, chance?: number): Side => ({
+    id: "2250",
+    name: "Gonzaga",
+    short: "Gonzaga",
+    rank: 12,
+    mine: true,
+    ...(score !== undefined ? { score } : {}),
+    ...(chance !== undefined ? { chance } : {}),
+  });
+  const them = (
+    id: string,
+    name: string,
+    rank?: number,
+    score?: number,
+    chance?: number,
+  ): Side => ({
+    id,
+    name,
+    short: name,
+    ...(rank ? { rank } : {}),
+    ...(score !== undefined ? { score } : {}),
+    ...(chance !== undefined ? { chance } : {}),
+  });
+  const game = (
+    i: number,
+    at: number,
+    home: boolean,
+    other: Side,
+    mine: Side,
+    tv: string,
+    state: Game["state"] = "pre",
+    period?: string,
+  ): Game => ({
+    id: `team-${i}`,
+    league: "cbb",
+    start: new Date(t0 + at).toISOString(),
+    timed: true,
+    state,
+    ...(period ? { period } : {}),
+    neutral: false,
+    tv,
+    home: home ? mine : other,
+    away: home ? other : mine,
+  });
+  const results = [
+    game(
+      1,
+      -9 * DAY,
+      true,
+      them("2439", "Nevada", undefined, 61),
+      us(78),
+      "ESPN+",
+      "post",
+      "Final",
+    ),
+    game(2, -5 * DAY, false, them("41", "UConn", 3, 74), us(70), "Fox", "post", "Final"),
+    game(
+      3,
+      -2 * DAY,
+      true,
+      them("2608", "Saint Mary's", undefined, 66),
+      us(81),
+      "ESPN2",
+      "post",
+      "Final",
+    ),
+  ];
+  const ahead = [
+    game(
+      4,
+      2 * DAY,
+      true,
+      them("2541", "Santa Clara", undefined, undefined, 18),
+      us(undefined, 82),
+      "ESPNU",
+    ),
+    game(5, 5 * DAY, false, them("150", "Duke", 5, undefined, 58), us(undefined, 42), "ESPN"),
+    game(
+      6,
+      8 * DAY,
+      true,
+      them("2492", "Pepperdine", undefined, undefined, 9),
+      us(undefined, 91),
+      "ESPN+",
+    ),
+    game(
+      7,
+      12 * DAY,
+      false,
+      them("2539", "San Francisco", undefined, undefined, 30),
+      us(undefined, 70),
+      "CBS",
+    ),
+    game(
+      8,
+      15 * DAY,
+      true,
+      them("2440", "Loyola Marymount", undefined, undefined, 12),
+      us(undefined, 88),
+      "ESPN+",
+    ),
+    game(
+      9,
+      19 * DAY,
+      false,
+      them("2350", "Portland", undefined, undefined, 50),
+      us(undefined, 50),
+      "ESPNU",
+    ),
+  ];
+  const live = game(
+    10,
+    -1 * HOUR,
+    true,
+    them("279", "Pacific", undefined, 31),
+    us(44),
+    "ESPN2",
+    "in",
+    "2nd half",
+  );
+  return {
+    league: "cbb",
+    id: "2250",
+    name: "Gonzaga Bulldogs",
+    short: "Gonzaga",
+    record: kind === "off" ? "27-7" : "9-2",
+    rank: kind === "off" ? undefined : 12,
+    live: kind === "live" ? live : null,
+    results: kind === "live" ? results.slice(1) : results,
+    ahead: kind === "off" ? [] : ahead,
+    at: now.toISOString(),
+  };
 }

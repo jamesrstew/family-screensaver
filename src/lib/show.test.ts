@@ -77,3 +77,23 @@ describe("the page a target draws", () => {
     expect(pageKey("week")).toBe("week");
   });
 });
+
+describe("a team's games", () => {
+  it("carries a team, as said, beside the games page only", () => {
+    expect(ShowBody.parse({ page: "sports", team: " Kentucky basketball " })).toEqual({
+      page: "sports",
+      team: "Kentucky basketball",
+    });
+    expect(ShowBody.parse({ page: "games", team: "the Zags" })).toEqual({
+      page: "sports",
+      team: "the Zags",
+    });
+    expect(ShowBody.parse({ page: "weather", team: "Duke" })).toEqual({ page: "weather" });
+  });
+
+  it("drops a team that isn't a few plain words, and refuses one too long", () => {
+    expect(ShowBody.parse({ page: "sports", team: "duke<script>" })).toEqual({ page: "sports" });
+    expect(ShowBody.parse({ page: "sports", team: "a/../b" })).toEqual({ page: "sports" });
+    expect(ShowBody.safeParse({ page: "sports", team: "x".repeat(61) }).success).toBe(false);
+  });
+});

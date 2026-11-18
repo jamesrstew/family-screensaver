@@ -6,6 +6,8 @@ import {
   curate,
   dayLabel,
   freshGames,
+  gamesCue,
+  slideGames,
   periodOf,
   leafAt,
   leavesOf,
@@ -669,5 +671,25 @@ describe("freshGames", () => {
       lastNight,
       soon,
     ]);
+  });
+});
+
+describe("the games on home", () => {
+  it("knows when there's anything within the few days, and a family game today", () => {
+    const sat = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+    const nextWeek = game("2026-11-26T20:30:00Z", { mine: true }, {});
+    const tonight = game("2026-11-19T03:00:00Z", { mine: true }, {});
+    expect(gamesCue([sat, nextWeek], NOW, TZ)).toEqual({ any: true, ours: false });
+    expect(gamesCue([nextWeek], NOW, TZ)).toEqual({ any: false, ours: false });
+    expect(gamesCue([sat, tonight], NOW, TZ)).toEqual({ any: true, ours: true });
+    expect(gamesCue(null, NOW, TZ)).toEqual({ any: false, ours: false });
+  });
+
+  it("leads today with the family's game, and leaves out what's past the few days", () => {
+    const early = game("2026-11-18T20:00:00Z", { rank: 1 }, {});
+    const ours = game("2026-11-19T03:00:00Z", { mine: true }, {});
+    const sat = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+    const nextWeek = game("2026-11-26T20:30:00Z", { mine: true }, {});
+    expect(slideGames([early, ours, sat, nextWeek], NOW, TZ)).toEqual([ours, early, sat]);
   });
 });

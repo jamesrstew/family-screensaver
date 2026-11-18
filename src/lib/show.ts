@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { WEATHER_VIEWS, type WeatherView } from "./carousel";
+import { TEAM_QUERY } from "./team-query";
 import { PAGES, type Page } from "./types";
 
 // Requests to show a page come from the phone remote, Siri, Alexa, and the
 // voice. A request is just "show this page" (and, for the weather, which view
 // of it). The TV decides the rest.
 
-type Asked = { page: Page; view?: WeatherView };
+type Asked = { page: Page; view?: WeatherView; team?: string };
 
 const ALIASES: Record<string, Asked> = {
   home: { page: "home" },
@@ -52,16 +53,28 @@ const ALIASES: Record<string, Asked> = {
 const words = (s: string) =>
   s.trim().toLowerCase().replace(/[’]/g, "'").replace(/[-_]+/g, " ").replace(/\s+/g, " ");
 
-/** `{"page": "hourly"}`, or `{"page": "weather", "view": "days"}`. */
+/**
+ * `{"page": "hourly"}`, `{"page": "weather", "view": "days"}`, or one team's
+ * games: `{"page": "sports", "team": "kentucky basketball"}` (a few words;
+ * resolved to a team on the server, never passed on as said).
+ */
 export const ShowBody = z
-  .object({ page: z.string(), view: z.string().optional() })
-  .transform(({ page, view }, ctx): Asked => {
+  .object({
+    page: z.string().max(40),
+    view: z.string().max(40).optional(),
+    team: z.string().max(60).optional(),
+  })
+  .transform(({ page, view, team }, ctx): Asked => {
     const p = words(page);
     const asked: Asked | undefined =
       ALIASES[p] ?? (PAGES.includes(p as Page) ? { page: p as Page } : undefined);
     if (!asked) {
       ctx.addIssue({ code: "custom", message: "Unknown page" });
       return z.NEVER;
+    }
+    if (asked.page === "sports") {
+      const q = team?.trim();
+      return q && TEAM_QUERY.test(q) ? { page: "sports", team: q } : asked;
     }
     if (view === undefined || asked.page !== "weather") return asked;
     const v = words(view);
@@ -90,7 +103,13 @@ export function targetOf(o: {
   // A weather slide keeps its name across sunset and sunrise; a passage
   // turns into the night page's (or home's) with the mood.
   // So does a nature clip (which plays by day, and by night while NATURE_AT_NIGHT).
-  if (o.slide?.startsWith("weather") || o.slide?.startsWith("nature")) return `carousel:${o.slide}`;
+  // So do the games (by night in night's ink, like the weather).
+  if (
+    o.slide?.startsWith("weather") ||
+    o.slide?.startsWith("nature") ||
+    o.slide?.startsWith("games")
+  )
+    return `carousel:${o.slide}`;
   if (o.slide) return `${o.base === "night" ? "night" : "home"}:${o.slide}`;
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;

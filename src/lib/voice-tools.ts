@@ -11,7 +11,8 @@ import { PAGES, type Snapshot, type Page } from "./types";
 export type ToolContext = {
   snapshot: Snapshot;
   now: Date;
-  show: (page: Page, view?: WeatherView) => void | Promise<void>;
+  /** `team`: for the games page, one team as said ("Kentucky basketball"). */
+  show: (page: Page, view?: WeatherView, team?: string) => void | Promise<void>;
   hangUp: () => void;
 };
 
@@ -28,7 +29,8 @@ export async function runTool(
       const page = String(args.page) as Page;
       if (!PAGES.includes(page)) return { ok: false, error: "No such page" };
       const view = WEATHER_VIEWS.find((v) => v === args.view);
-      await ctx.show(page, page === "weather" ? view : undefined);
+      const team = page === "sports" && typeof args.team === "string" ? args.team.slice(0, 60) : "";
+      await ctx.show(page, page === "weather" ? view : undefined, team || undefined);
       return { ok: true };
     }
     case "read_weather": {

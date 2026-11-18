@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Ink } from "@/components/Ink";
-import { ahead, chanceOf, joinWord, leafAt, leavesOf, ours, whenWord } from "@/lib/games";
+import {
+  ahead,
+  chanceOf,
+  joinWord,
+  leafAt,
+  leavesOf,
+  ours,
+  slideGames,
+  whenWord,
+} from "@/lib/games";
 import type { Game, Side } from "@/lib/types";
 import type { ViewProps } from "./parts";
 
@@ -27,12 +36,24 @@ export const ROWS = 10;
 const FEW = 3;
 const LARGER = 1.2;
 
-/** `games`: the snapshot's, as fresh as they are now (freshGames, in Screen). */
-export function SportsPage({ snapshot, now, mood, games }: ViewProps & { games: Game[] }) {
+/**
+ * `games`: the snapshot's, as fresh as they are now (freshGames, in Screen).
+ * As one of home's slides, it's the first leaf alone, of the page's few days,
+ * a family team's game today leading.
+ */
+export function SportsPage({
+  snapshot,
+  now,
+  mood,
+  slide,
+  games: all,
+}: ViewProps & { games: Game[] }) {
   const tz = snapshot.timeZone;
+  const one = slide?.kind === "games";
+  const games = one ? slideGames(all, now, tz) : all;
   // The leaves turn from the moment the page appears (it remounts each time).
   const [since] = useState(() => now.getTime());
-  const leaves = leavesOf(games, now, tz, ROWS);
+  const leaves = leavesOf(games, now, tz, ROWS).slice(0, one ? 1 : undefined);
   const n = leafAt(now.getTime(), since, leaves.length);
   const leaf = leaves[n] ?? [];
   // The family's next game still to finish carries the accent (on whichever
@@ -50,9 +71,10 @@ export function SportsPage({ snapshot, now, mood, games }: ViewProps & { games: 
     // One leaf sits in the middle of the page; a turning agenda hangs from the
     // top, so its lines stay put from leaf to leaf.
     <div
-      className={`flex h-full flex-col ${leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
+      className={`relative isolate flex h-full flex-col ${leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
       style={{ fontSize: `${games.length <= FEW ? LARGER : 1}rem` }}
     >
+      {one ? <div className="sky-word-clearing games-clearing" aria-hidden /> : null}
       {Array.from({ length: places }, (_, i) => {
         const line = leaf[i];
         return (
@@ -166,7 +188,7 @@ function Team({ side, long, ink }: { side: Side; long: boolean; ink: string }) {
  */
 const FOOTBALL = "M8 50 C25 22 75 22 92 50 C75 78 25 78 8 50 Z";
 
-function Ball({ league }: { league: Game["league"] }) {
+export function Ball({ league }: { league: Game["league"] }) {
   const id = `ball-${league}`;
   return (
     <svg

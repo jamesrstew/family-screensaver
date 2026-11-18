@@ -22,11 +22,12 @@ const PAGES: Array<Ask & { title: string; line: string }> = [
 ];
 const id = (a: Ask) => (a.view ? `${a.page}:${a.view}` : a.page);
 
-async function show(page: Page, view?: WeatherView) {
+// One team's games has no button: it's asked for by voice (or Siri) only.
+async function show(page: Page, view?: WeatherView, team?: string) {
   const res = await fetch("/api/show", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(view ? { page, view } : { page }),
+    body: JSON.stringify({ page, ...(view ? { view } : {}), ...(team ? { team } : {}) }),
   });
   if (!res.ok) throw new Error(`show ${res.status}`);
 }
@@ -35,9 +36,9 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
   const [sent, setSent] = useState<{ id: string; ok: boolean } | null>(null);
   const clear = useRef<number | undefined>(undefined);
 
-  const send = useCallback(async (page: Page, view?: WeatherView) => {
+  const send = useCallback(async (page: Page, view?: WeatherView, team?: string) => {
     window.clearTimeout(clear.current);
-    const ok = await show(page, view).then(
+    const ok = await show(page, view, team).then(
       () => true,
       () => false,
     );

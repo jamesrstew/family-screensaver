@@ -250,6 +250,18 @@
 }
 /* The corner note's: smaller and softer, so the land fades under the words
    instead of stopping at a rim. */
+/* The games on home: one wide clearing under the whole list, so the sun and
+   the clouds pass behind the lines, never through them. */
+.sky-word-clearing.games-clearing {
+  inset: -4rem -10rem;
+  border-radius: 0;
+  background: radial-gradient(
+    farthest-side,
+    color-mix(in srgb, var(--paper) 95%, transparent),
+    color-mix(in srgb, var(--paper) 92%, transparent) 85%,
+    transparent
+  );
+}
 .sky-word-clearing.corner-clearing {
   inset: -1.25rem -1.5rem;
   background: radial-gradient(

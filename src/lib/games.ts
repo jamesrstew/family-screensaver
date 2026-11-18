@@ -495,6 +495,35 @@ export function freshGames(s: Pick<Snapshot, "games" | "gamesAt">, now: Date): G
   });
 }
 
+/** The games within the page's few days (the carousel shows only these). */
+export function horizon(games: Game[], now: Date, tz: string): Game[] {
+  const last = addDays(dayKey(now, tz), AHEAD_DAYS);
+  return games.filter((g) => dayKey(new Date(g.start), tz) <= last);
+}
+
+/** Whether home's carousel has games to show, and whether a family team plays today. */
+export function gamesCue(games: Game[] | null, now: Date, tz: string) {
+  const near = horizon(games ?? [], now, tz);
+  const today = dayKey(now, tz);
+  return {
+    any: near.length > 0,
+    ours: near.some((g) => ours(g) && dayKey(new Date(g.start), tz) === today),
+  };
+}
+
+/**
+ * The games for home's slide: those within the few days, a family team's
+ * game today leading today's (the reason the slide comes round more often).
+ */
+export function slideGames(games: Game[], now: Date, tz: string): Game[] {
+  const today = dayKey(now, tz);
+  const key = (g: Game) => dayKey(new Date(g.start), tz);
+  const lead = (g: Game) => (key(g) === today && ours(g) ? 0 : 1);
+  return horizon(games, now, tz).sort(
+    (a, b) => key(a).localeCompare(key(b)) || lead(a) - lead(b) || byStart(a, b),
+  );
+}
+
 /** The leader (or the winner), for setting in full ink. */
 export function ahead(g: Game): Side | null {
   if (g.state === "pre" || g.home.score === undefined || g.away.score === undefined) return null;
