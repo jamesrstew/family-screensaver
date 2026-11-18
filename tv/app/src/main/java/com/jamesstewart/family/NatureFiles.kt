@@ -73,10 +73,10 @@ class NatureFiles(private val context: Context) {
     }
 
     /**
-     * Every answer is read whole into memory and the file closed before it
-     * goes: no handle outlives a request, so a drive pulled out never finds the
-     * app holding a file open (Android kills a process that does). A clip is
-     * answered a chunk at a time (206); the player asks for the next.
+     * Every range is read whole into memory and the file closed before the
+     * answer goes: no handle outlives a request, so a drive pulled out never
+     * finds the app holding a file open (Android kills a process that does). A
+     * clip is answered a chunk at a time (206); the player asks for the next.
      */
     private fun serve(file: File, range: String?): WebResourceResponse {
         val size = file.length()
@@ -86,8 +86,13 @@ class NatureFiles(private val context: Context) {
             headers["Content-Length"] = bytes.size.toString()
             return WebResourceResponse("application/json", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
         }
-        val m = RANGE.matchEntire(range?.trim() ?: "bytes=0-")
-            ?: return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
+        // No range asked (or one we can't read): the whole clip, as a plain 200.
+        // The player always asks for ranges, so this stream is rare.
+        val m = range?.let { RANGE.matchEntire(it.trim()) }
+        if (m == null) {
+            headers["Content-Length"] = size.toString()
+            return WebResourceResponse("video/mp4", null, 200, "OK", headers, file.inputStream())
+        }
         val (a, b) = m.destructured
         val start = if (a.isNotEmpty()) a.toLong() else maxOf(size - b.toLong(), 0)
         val last = if (a.isNotEmpty() && b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
