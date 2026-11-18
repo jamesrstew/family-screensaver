@@ -1,6 +1,9 @@
 package com.jamesstewart.family
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
@@ -9,6 +12,8 @@ import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.RandomAccessFile
+import java.util.Collections
+import java.util.WeakHashMap
 
 private const val TAG = "FamilyNature"
 private const val PREFIX = "/nature/"
@@ -28,6 +33,10 @@ private const val ROOT_TTL_MS = 5_000L
  * and the page simply goes on without that clip.
  */
 class NatureFiles(private val context: Context) {
+
+    init {
+        watchDrives(context.applicationContext)
+    }
 
     private var root: File? = null
     private var rootAt = 0L
@@ -76,7 +85,10 @@ class NatureFiles(private val context: Context) {
      * stream's end). So the stream stands for the file from its first byte up
      * to the range's end, and WebView's skip lands on the range's start. (A
      * stream that began at the range's start would be skipped past its own
-     * end, and every seek would fail.) The file is open only for each read.
+     * end, and every seek would fail.) The file stays open while the range
+     * streams (opening it per read costs dropped frames: the TV's storage
+     * layer makes every open slow) and closes at the end, when WebView lets
+     * go, or the moment any drive is being removed (watchDrives).
      */
     private fun serve(file: File, range: String?): WebResourceResponse {
         val headers = mutableMapOf("Accept-Ranges" to "bytes", "Cache-Control" to "no-store")
@@ -104,14 +116,20 @@ class NatureFiles(private val context: Context) {
     private fun empty() = ByteArrayInputStream(ByteArray(0))
 
     /**
-     * The file, read from wherever WebView skips to. Each read opens the file,
-     * seeks, reads and closes it, so no handle stays open while the player
-     * holds a range for minutes: a drive pulled out finds nothing open (Android
-     * kills a process that holds files on a volume being removed), and the
-     * next read fails gently instead.
+     * The file, read from wherever WebView skips to, a large block at a time
+     * (fewer, bigger reads through the TV's storage layer). Every open stream
+     * is known, so a drive being removed closes them all at once (watchDrives).
      */
     private class SeekingStream(private val file: File, private val size: Long) : java.io.InputStream() {
+        private var f: RandomAccessFile? = null
         private var pos = 0L
+        private val buf = ByteArray(BLOCK)
+        private var bufStart = 0L
+        private var bufLen = 0
+
+        init {
+            live.add(this)
+        }
 
         override fun skip(n: Long): Long {
             if (n <= 0) return 0
@@ -127,16 +145,60 @@ class NatureFiles(private val context: Context) {
             return if (read(b, 0, 1) == 1) b[0].toInt() and 0xff else -1
         }
 
+        @Synchronized
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             if (len == 0) return 0
-            if (pos >= size) return -1
-            val n = RandomAccessFile(file, "r").use { f ->
-                f.seek(pos)
-                f.read(b, off, minOf(len.toLong(), size - pos).toInt())
+            if (pos >= size) { close(); return -1 }
+            if (pos < bufStart || pos >= bufStart + bufLen) {
+                val raf = f ?: RandomAccessFile(file, "r").also { f = it }
+                raf.seek(pos)
+                val n = raf.read(buf, 0, minOf(BLOCK.toLong(), size - pos).toInt())
+                if (n <= 0) { close(); return -1 }
+                bufStart = pos
+                bufLen = n
             }
-            if (n < 0) return -1
+            val at = (pos - bufStart).toInt()
+            val n = minOf(len, bufLen - at)
+            System.arraycopy(buf, at, b, off, n)
             pos += n
             return n
+        }
+
+        @Synchronized
+        override fun close() {
+            live.remove(this)
+            try { f?.close() } catch (_: Exception) {}
+            f = null
+            bufLen = 0
+        }
+    }
+
+    private companion object {
+        const val BLOCK = 512 * 1024
+        val live: MutableSet<SeekingStream> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
+        @Volatile var watching = false
+
+        /**
+         * When any drive is being removed, close every open clip: Android kills a
+         * process that still holds files on a volume it unmounts. The next read
+         * reopens the file if it's still there, or fails gently if it isn't.
+         */
+        fun watchDrives(app: Context) {
+            if (watching) return
+            watching = true
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_MEDIA_EJECT)
+                addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+                addAction(Intent.ACTION_MEDIA_BAD_REMOVAL)
+                addAction(Intent.ACTION_MEDIA_REMOVED)
+                addDataScheme("file")
+            }
+            app.registerReceiver(object : BroadcastReceiver() {
+                override fun onReceive(c: Context, i: Intent) {
+                    Log.i(TAG, "A drive is going (${i.action}); closing open clips")
+                    synchronized(live) { live.toList() }.forEach { it.close() }
+                }
+            }, filter)
         }
     }
 
