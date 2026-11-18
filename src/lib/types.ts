@@ -218,5 +218,5 @@ export type ShowRequest = {
   at: string;
   view?: WeatherView;
   /** The games page, for one team: resolved on the server from what was said (team-query.ts). */
-  team?: { league: League; id: string };
+  team?: { league: League; id: string; name?: string };
 };

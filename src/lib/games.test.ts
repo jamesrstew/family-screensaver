@@ -7,7 +7,9 @@ import {
   dayLabel,
   freshGames,
   gamesCue,
+  nightGame,
   slideGames,
+  standing,
   periodOf,
   leafAt,
   leavesOf,
@@ -685,11 +687,53 @@ describe("the games on home", () => {
     expect(gamesCue(null, NOW, TZ)).toEqual({ any: false, ours: false });
   });
 
-  it("leads today with the family's game, and leaves out what's past the few days", () => {
+  it("keeps strict time order, and leaves out what's past the few days", () => {
     const early = game("2026-11-18T20:00:00Z", { rank: 1 }, {});
     const ours = game("2026-11-19T03:00:00Z", { mine: true }, {});
     const sat = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
     const nextWeek = game("2026-11-26T20:30:00Z", { mine: true }, {});
-    expect(slideGames([early, ours, sat, nextWeek], NOW, TZ)).toEqual([ours, early, sat]);
+    expect(slideGames([sat, ours, early, nextWeek], NOW, TZ)).toEqual([early, ours, sat]);
+  });
+
+  it("counts a family game day only while the game is still to come or under way", () => {
+    const over = game("2026-11-18T17:00:00Z", { mine: true }, {}, { state: "post" });
+    expect(gamesCue([over], NOW, TZ)).toEqual({ any: true, ours: false });
+  });
+
+  it("brings the night only a family game under way or about to start", () => {
+    const soon = game("2026-11-18T19:30:00Z", { mine: true }, {});
+    const later = game("2026-11-18T23:00:00Z", { mine: true }, {});
+    const live = game(
+      "2026-11-18T17:00:00Z",
+      { mine: true, short: "Bears", score: 24 },
+      { score: 20 },
+      { state: "in" },
+    );
+    const ranked = game("2026-11-18T18:30:00Z", { rank: 1 }, {});
+    expect(nightGame([later, ranked], NOW)).toBeNull();
+    expect(nightGame([later, soon, ranked], NOW)).toBe(soon);
+    expect(nightGame([soon, live], NOW)).toBe(live);
+    expect(standing(live)).toBe("Bears lead 24\u201320");
+    expect(standing({ ...live, home: { ...live.home, score: 31 } })).toBe("Bears trail 24\u201331");
+    expect(standing({ ...live, home: { ...live.home, score: 24 } })).toBe("Tied 24\u201324");
+  });
+});
+
+describe("names", () => {
+  it("sets a team's apostrophe as a true one", () => {
+    const [g] = readEvents(
+      {
+        events: [
+          board({
+            id: "40",
+            date: "2026-11-21T17:00Z",
+            away: ["1", "Saint Mary's"],
+            home: ["2", "B"],
+          }),
+        ],
+      },
+      "cbb",
+    );
+    expect(g.away.name).toBe("Saint Mary’s");
   });
 });

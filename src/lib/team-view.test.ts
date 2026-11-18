@@ -87,7 +87,7 @@ describe("teamView", () => {
       NOW,
     )!;
     expect(v.live?.id).toBe("130");
-    expect(resultWord(v.live!, "904")).toBe("40–31");
+    expect(resultWord(v.live!, "904")).toBe("leads 40–31");
     expect(v.ahead.map((g) => g.id)).toEqual(["132"]);
   });
 

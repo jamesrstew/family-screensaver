@@ -91,30 +91,42 @@ describe("parseQuery", () => {
 
 describe("resolveTeam", () => {
   it("finds a team by place, nickname, full name, or abbreviation, with the sport deciding", () => {
-    expect(find("Kentucky basketball")).toEqual({ league: "cbb", id: "901" });
-    expect(find("Kentucky football")).toEqual({ league: "cfb", id: "901" });
-    expect(find("Bucs")).toEqual({ league: "nfl", id: "906" });
-    expect(find("Chicago Bears")).toEqual({ league: "nfl", id: "908" });
-    expect(find("the Zags")).toEqual({ league: "cbb", id: "904" });
-    expect(find("Michigan St")).toEqual({ league: "cfb", id: "909" });
-    expect(find("KSU")).toEqual({ league: "cfb", id: "903" });
+    expect(find("Kentucky basketball")).toMatchObject({ league: "cbb", id: "901" });
+    expect(find("Kentucky football")).toMatchObject({ league: "cfb", id: "901" });
+    expect(find("Bucs")).toMatchObject({ league: "nfl", id: "906" });
+    expect(find("Chicago Bears")).toMatchObject({ league: "nfl", id: "908" });
+    expect(find("the Zags")).toMatchObject({ league: "cbb", id: "904" });
+    expect(find("Michigan St")).toMatchObject({ league: "cfb", id: "909" });
+    expect(find("KSU")).toMatchObject({ league: "cfb", id: "903" });
   });
 
   it("prefers the family's team among equals", () => {
-    expect(find("Wildcats", [{ league: "cbb", id: "902" }])).toEqual({ league: "cbb", id: "902" });
-    expect(find("Bulldogs", [{ league: "cfb", id: "905" }])).toEqual({ league: "cfb", id: "905" });
-    expect(find("Miami", [{ league: "nfl", id: "910" }])).toEqual({ league: "nfl", id: "910" });
-    expect(find("Miami", [{ league: "cbb", id: "907" }])).toEqual({ league: "cbb", id: "907" });
+    expect(find("Wildcats", [{ league: "cbb", id: "902" }])).toMatchObject({
+      league: "cbb",
+      id: "902",
+    });
+    expect(find("Bulldogs", [{ league: "cfb", id: "905" }])).toMatchObject({
+      league: "cfb",
+      id: "905",
+    });
+    expect(find("Miami", [{ league: "nfl", id: "910" }])).toMatchObject({
+      league: "nfl",
+      id: "910",
+    });
+    expect(find("Miami", [{ league: "cbb", id: "907" }])).toMatchObject({
+      league: "cbb",
+      id: "907",
+    });
   });
 
   it("without the family, prefers the season that's on", () => {
     // In February, basketball's heart: "Kentucky" is the basketball team.
-    expect(find("Kentucky", [], new Date("2027-02-10T18:00:00Z"))).toEqual({
+    expect(find("Kentucky", [], new Date("2027-02-10T18:00:00Z"))).toMatchObject({
       league: "cbb",
       id: "901",
     });
     // In October, football's.
-    expect(find("Kentucky", [], new Date("2026-10-10T18:00:00Z"))).toEqual({
+    expect(find("Kentucky", [], new Date("2026-10-10T18:00:00Z"))).toMatchObject({
       league: "cfb",
       id: "901",
     });

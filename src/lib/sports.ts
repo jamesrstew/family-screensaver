@@ -18,7 +18,7 @@ import {
   type Team,
 } from "./games";
 import { KEYS, store } from "./store";
-import { TEAM_QUERY, readTeams, resolveTeam, type TeamEntry } from "./team-query";
+import { TEAM_QUERY, readTeams, resolveTeam, type Found, type TeamEntry } from "./team-query";
 import { readSchedule, teamView } from "./team-view";
 import type { Game, League, TeamView } from "./types";
 import { within } from "./within";
@@ -174,7 +174,7 @@ export async function findTeam(
   q: string,
   family: readonly Team[],
   now: Date,
-): Promise<Team | null> {
+): Promise<Found | null> {
   if (!TEAM_QUERY.test(q)) return null;
   const lists = await Promise.all(
     LEAGUES.map((l) => within(teamList(l), FETCH_MS).catch(() => [] as TeamEntry[])),

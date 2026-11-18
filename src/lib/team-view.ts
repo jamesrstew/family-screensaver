@@ -2,7 +2,7 @@
 // few results, and its next games. Pure; built from the team's schedules
 // (sports.ts fetches them).
 
-import { readEvents } from "./games";
+import { curly, readEvents } from "./games";
 import type { Game, League, Side, TeamView } from "./types";
 
 /** Results shown, and games ahead. */
@@ -36,14 +36,15 @@ export function readSchedule(
 ): { team: TeamInfo | null; games: Game[] } {
   const t = obj(obj(json).team);
   const id = str(t.id);
-  const name = str(t.displayName);
+  const said = str(t.displayName);
+  const name = said && curly(said);
   const team =
     id && name
       ? {
           id,
           name,
-          ...(str(t.location) ? { place: str(t.location) } : {}),
-          ...(str(t.name) ? { nick: str(t.name) } : {}),
+          ...(str(t.location) ? { place: curly(str(t.location)!) } : {}),
+          ...(str(t.name) ? { nick: curly(str(t.name)!) } : {}),
           ...(str(t.recordSummary) ? { record: str(t.recordSummary) } : {}),
         }
       : null;
@@ -98,7 +99,10 @@ export function teamView(
 export function resultWord(g: Game, id: string): string {
   const { us, them } = sides(g, id);
   if (us.score === undefined || them.score === undefined) return g.period ?? "";
-  if (g.state !== "post") return `${us.score}\u2013${them.score}`;
+  if (g.state !== "post") {
+    const word = us.score > them.score ? "leads" : us.score < them.score ? "trails" : "tied";
+    return `${word} ${us.score}\u2013${them.score}`;
+  }
   const mark = us.score > them.score ? "W" : us.score < them.score ? "L" : "T";
   return `${mark} ${us.score}–${them.score}`;
 }

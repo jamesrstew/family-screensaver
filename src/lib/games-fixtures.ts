@@ -178,8 +178,9 @@ export const FAKE_TEAMS = ["season", "live", "off"] as const;
 export type FakeTeam = (typeof FAKE_TEAMS)[number];
 
 export function fakeTeam(kind: FakeTeam, now: Date): TeamView {
-  const t0 = Math.round(now.getTime() / (HOUR / 2)) * (HOUR / 2);
   const DAY = 24 * HOUR;
+  // Evening tip-offs: 3 a.m. UTC is 7 p.m. on the West Coast, 10 on the East.
+  const t0 = Math.floor(now.getTime() / DAY) * DAY + 3 * HOUR;
   const us = (score?: number, chance?: number): Side => ({
     id: "2250",
     name: "Gonzaga",
@@ -240,7 +241,7 @@ export function fakeTeam(kind: FakeTeam, now: Date): TeamView {
       3,
       -2 * DAY,
       true,
-      them("2608", "Saint Mary's", undefined, 66),
+      them("2608", "Saint Mary’s", undefined, 66),
       us(81),
       "ESPN2",
       "post",
@@ -292,7 +293,7 @@ export function fakeTeam(kind: FakeTeam, now: Date): TeamView {
   ];
   const live = game(
     10,
-    -1 * HOUR,
+    now.getTime() - HOUR - t0,
     true,
     them("279", "Pacific", undefined, 31),
     us(44),

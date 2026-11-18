@@ -13,7 +13,7 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames, gamesCue } from "@/lib/games";
+import { freshGames, gamesCue, nightGame } from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
@@ -42,8 +42,8 @@ import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
 import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
-import { SportsPage } from "@/views/SportsPage";
-import { TeamPage } from "@/views/TeamPage";
+import { NightGame, SportsPage } from "@/views/SportsPage";
+import { TeamPage, stubTeam } from "@/views/TeamPage";
 import { useTeam, type TeamRef } from "./useTeam";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
@@ -188,6 +188,12 @@ export function Screen({
   // No games to show (the off-season, the scores didn't answer, or the list
   // has gone stale): home.
   const games = freshGames(snapshot, now);
+  // Home's games slide: by day, the agenda; by night, only a family game
+  // under way or about to start, alone (§4).
+  const cue =
+    mood === "night"
+      ? { any: Boolean(nightGame(games, now)), ours: true, anyHour: true }
+      : gamesCue(games, now, snapshot.timeZone);
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
     (askedBase === "sports" && !games?.length && !team.view && !team.pending)
@@ -297,9 +303,7 @@ export function Screen({
   const fromUrl = useAsked();
   const target = targetOf({
     base,
-    slide: carousel
-      ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, gamesCue(games, now, tz)))
-      : null,
+    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, cue)) : null,
     asked: view0,
     fromUrl,
   }) as View;
@@ -438,6 +442,7 @@ export function Screen({
             // A team, as said: the server finds it (or doesn't, and it's the games as usual).
             const t = team ? await findTeamFor(team) : null;
             show(p, v, t);
+            return team ? t !== null : undefined;
           },
           hangUp: () => {},
         }),
@@ -591,7 +596,13 @@ export function Screen({
               {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
-              {drawn && slide?.kind === "games" && <SportsPage {...props} games={games ?? []} />}
+              {drawn &&
+                slide?.kind === "games" &&
+                (mood === "night" ? (
+                  <NightGame {...props} games={games ?? []} />
+                ) : (
+                  <SportsPage {...props} games={games ?? []} />
+                ))}
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
@@ -609,11 +620,19 @@ export function Screen({
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
               {shown === "sports" &&
-                // One team's page once it's here (blank paper the moment before, never
-                // the agenda swapped out); the games as usual if it can't be had.
+                // One team's page: its name at once (from the asking), its games
+                // inking in below as they arrive; the games as usual if it can't be had.
                 (team.view ? (
                   <TeamPage {...props} team={team.view} />
-                ) : team.pending ? null : (
+                ) : team.pending ? (
+                  teamRef?.name ? (
+                    <TeamPage
+                      {...props}
+                      team={stubTeam({ ...teamRef, name: teamRef.name })}
+                      loading
+                    />
+                  ) : null
+                ) : (
                   <SportsPage {...props} games={games ?? []} />
                 ))}
             </div>

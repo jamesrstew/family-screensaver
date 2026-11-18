@@ -251,10 +251,10 @@ describe("the games on home", () => {
       return s.kind === "games" ? Math.floor((since + c * CYCLE_MS) / CYCLE_MS) : null;
     });
 
-  it("takes a cycle's last slide every third cycle, never the first after home appears", () => {
-    const got = lasts(afternoon, 12).filter((n) => n !== null) as number[];
+  it("takes an afternoon cycle's last slide every fourth cycle, never the first after home appears", () => {
+    const got = lasts(afternoon, 16).filter((n) => n !== null) as number[];
     expect(got.length).toBeGreaterThanOrEqual(3);
-    for (const n of got) expect(n % 3).toBe(1);
+    for (const n of got) expect(n % 4).toBe(1);
     // The first cycle is weather and passages, whatever the clock.
     const first = Math.floor(afternoon / CYCLE_MS);
     expect(lasts(afternoon, 1)[0]).toBeNull();
@@ -272,6 +272,12 @@ describe("the games on home", () => {
     const all = () => true;
     for (const n of lasts(afternoon, 30, games(true), all))
       if (n !== null) expect(n % 10).not.toBe(0);
+  });
+
+  it("leaves the morning its one passage, unless a family game is on tonight's page", () => {
+    expect(lasts(morning, 16, games(true)).every((n) => n === null)).toBe(true);
+    const night = { any: true, ours: true, anyHour: true };
+    expect(lasts(morning, 16, night).some((n) => n !== null)).toBe(true);
   });
 
   it("never takes the weather's slides, morning or afternoon", () => {

@@ -1,10 +1,10 @@
 import { Ink } from "@/components/Ink";
-import { dayLabel, whenWord } from "@/lib/games";
+import { dayLabel } from "@/lib/games";
 import { resultWord, sides } from "@/lib/team-view";
 import { addDays, dayKey, shortDate, weekdayOf } from "@/lib/time";
 import type { Game, League, TeamView } from "@/lib/types";
 import type { ViewProps } from "./parts";
-import { Ball } from "./SportsPage";
+import { Ball, When } from "./SportsPage";
 
 /*
  * One team's page, asked for by name ("show Kentucky basketball"): the team
@@ -22,9 +22,21 @@ const SPORT: Record<League, string> = {
 };
 
 // The date, the hour, the opponent, the channel, the chance or result.
-const COLS = "grid grid-cols-[15em_11em_1fr_11em_9em] gap-x-[2em] items-baseline";
+const COLS = "grid grid-cols-[15em_11em_1fr_17em_14em] gap-x-[2em] items-baseline";
 
-export function TeamPage({ snapshot, now, mood, team }: ViewProps & { team: TeamView }) {
+/** The page before its games arrive: the name, at once, from the asking. */
+export function stubTeam(t: { league: League; id: string; name: string }): TeamView {
+  return { ...t, short: t.name, live: null, results: [], ahead: [], at: "" };
+}
+
+/** `loading`: the title alone, while the games are on their way (they ink in below it). */
+export function TeamPage({
+  snapshot,
+  now,
+  mood,
+  team,
+  loading = false,
+}: ViewProps & { team: TeamView; loading?: boolean }) {
   const tz = snapshot.timeZone;
   const facts = [
     SPORT[team.league],
@@ -38,8 +50,9 @@ export function TeamPage({ snapshot, now, mood, team }: ViewProps & { team: Team
   const at = { order: 0 };
   const next = () => (at.order += 0.35);
   return (
-    <div className="flex h-full flex-col justify-center pb-[1rem]">
-      <Ink k={`${team.league}:${team.id}`} order={0} className="mb-[1.2rem]">
+    // Hung from the top, so the title stays put as the games arrive below it.
+    <div className="flex h-full flex-col justify-start pt-[3rem]">
+      <Ink k={`${team.league}:${team.id}`} order={0}>
         <div className="flex items-center gap-[2rem]">
           <span className="text-[1.5rem]">
             <Ball league={team.league} />
@@ -50,39 +63,43 @@ export function TeamPage({ snapshot, now, mood, team }: ViewProps & { team: Team
             {team.name}
           </h1>
         </div>
-        <p className="mt-[0.8rem] pl-[6.8rem] text-[2.5rem] text-ink-soft italic">
-          {facts.join(" · ")}
-        </p>
       </Ink>
-      {team.live ? (
+      <Ink k={facts.join()} order={0.2} className="mt-[0.8rem] mb-[1.2rem]">
+        <p className="pl-[6.8rem] text-[2.5rem] text-ink-soft italic">{facts.join(" · ")}</p>
+      </Ink>
+      {loading ? null : (
         <>
-          <Head k="now" order={next()} label="Now" />
-          <Ink k={`live:${team.live.id}`} order={next()} plain>
-            <Line g={team.live} team={team} tz={tz} now={now} />
-          </Ink>
-        </>
-      ) : null}
-      {results.length ? (
-        <>
-          <Head k="lately" order={next()} label="Lately" />
-          {results.map((g) => (
-            <Ink key={g.id} k={`r:${g.id}`} order={next()} plain>
-              <Line g={g} team={team} tz={tz} now={now} />
+          {team.live ? (
+            <>
+              <Head k="now" order={next()} label="Now" />
+              <Ink k={`live:${team.live.id}`} order={next()} plain>
+                <Line g={team.live} team={team} tz={tz} now={now} />
+              </Ink>
+            </>
+          ) : null}
+          {results.length ? (
+            <>
+              <Head k="lately" order={next()} label="Lately" />
+              {results.map((g) => (
+                <Ink key={g.id} k={`r:${g.id}`} order={next()} plain>
+                  <Line g={g} team={team} tz={tz} now={now} />
+                </Ink>
+              ))}
+            </>
+          ) : null}
+          <Head k="next" order={next()} label="Next" />
+          {ahead.length ? (
+            ahead.map((g) => (
+              <Ink key={g.id} k={`a:${g.id}`} order={next()} plain>
+                <Line g={g} team={team} tz={tz} now={now} />
+              </Ink>
+            ))
+          ) : (
+            <Ink k="none" order={next()} plain>
+              <p className="py-[0.5rem] text-[2.8rem] text-ink-soft italic">No games ahead yet.</p>
             </Ink>
-          ))}
+          )}
         </>
-      ) : null}
-      <Head k="next" order={next()} label="Next" />
-      {ahead.length ? (
-        ahead.map((g) => (
-          <Ink key={g.id} k={`a:${g.id}`} order={next()} plain>
-            <Line g={g} team={team} tz={tz} now={now} />
-          </Ink>
-        ))
-      ) : (
-        <Ink k="none" order={next()} plain>
-          <p className="py-[0.5rem] text-[2.8rem] text-ink-soft italic">No games ahead yet.</p>
-        </Ink>
       )}
     </div>
   );
@@ -125,7 +142,7 @@ function Line({ g, team, tz, now }: { g: Game; team: TeamView; tz: string; now: 
         } ${g.state === "post" ? "italic" : ""}`}
       >
         {/* A result's line says only that it's over; its score is at the end. */}
-        {g.state === "post" ? "" : whenWord(g, tz)}
+        {g.state === "post" ? "" : <When g={g} tz={tz} />}
       </p>
       <p className="truncate text-[3rem] leading-[1.3] text-ink">
         <span className="text-[0.8em] text-ink-faint italic">
@@ -136,7 +153,7 @@ function Line({ g, team, tz, now }: { g: Game; team: TeamView; tz: string; now: 
         ) : null}
         {them.short.length > 18 ? them.short : them.name}
       </p>
-      <p className="text-[2.6rem] leading-[1.3] whitespace-nowrap text-ink-soft italic">
+      <p className="truncate text-[2.6rem] leading-[1.3] whitespace-nowrap text-ink-soft italic">
         {g.tv ?? ""}
       </p>
       {/* Right-aligned as a row: a long result runs left, never past the margin. */}
@@ -145,7 +162,10 @@ function Line({ g, team, tz, now }: { g: Game; team: TeamView; tz: string; now: 
           pct === undefined ? null : pct === 50 ? (
             <span className="text-ink-soft italic">Even</span>
           ) : (
-            <span className="text-ink">{pct}%</span>
+            <>
+              <span className="mr-[0.25em] text-[0.85em] text-ink-soft italic">{team.short}</span>
+              <span className="text-ink">{pct}%</span>
+            </>
           )
         ) : (
           <span className={g.state === "in" ? "text-ink" : "text-ink-soft"}>

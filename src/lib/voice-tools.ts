@@ -11,8 +11,11 @@ import { PAGES, type Snapshot, type Page } from "./types";
 export type ToolContext = {
   snapshot: Snapshot;
   now: Date;
-  /** `team`: for the games page, one team as said ("Kentucky basketball"). */
-  show: (page: Page, view?: WeatherView, team?: string) => void | Promise<void>;
+  /**
+   * `team`: for the games page, one team as said ("Kentucky basketball").
+   * Says whether that team was found (undefined when none was asked for).
+   */
+  show: (page: Page, view?: WeatherView, team?: string) => unknown;
   hangUp: () => void;
 };
 
@@ -30,7 +33,16 @@ export async function runTool(
       if (!PAGES.includes(page)) return { ok: false, error: "No such page" };
       const view = WEATHER_VIEWS.find((v) => v === args.view);
       const team = page === "sports" && typeof args.team === "string" ? args.team.slice(0, 60) : "";
-      await ctx.show(page, page === "weather" ? view : undefined, team || undefined);
+      const found = await ctx.show(page, page === "weather" ? view : undefined, team || undefined);
+      // The truth when no team answers to it: the games page is up instead.
+      if (team && found === false) {
+        return {
+          ok: true,
+          teamFound: false,
+          shown: "the games (the family's teams and the Top 25)",
+          say: "I couldn't find that team; here are the games.",
+        };
+      }
       return { ok: true };
     }
     case "read_weather": {

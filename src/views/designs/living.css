@@ -250,15 +250,17 @@
 }
 /* The corner note's: smaller and softer, so the land fades under the words
    instead of stopping at a rim. */
-/* The games on home: one wide clearing under the whole list, so the sun and
-   the clouds pass behind the lines, never through them. */
+/* The games on home: a layer of paper the list's full height and the
+   sheet's full width, so the sun, the clouds, and the land pass behind the
+   lines, never through them. */
 .sky-word-clearing.games-clearing {
-  inset: -4rem -10rem;
+  inset: -2.5rem -5.5rem;
   border-radius: 0;
-  background: radial-gradient(
-    farthest-side,
-    color-mix(in srgb, var(--paper) 95%, transparent),
-    color-mix(in srgb, var(--paper) 92%, transparent) 85%,
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--paper) 94%, transparent) 2.5rem,
+    color-mix(in srgb, var(--paper) 94%, transparent) calc(100% - 2.5rem),
     transparent
   );
 }

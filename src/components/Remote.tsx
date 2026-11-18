@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { family } from "@/config";
 import type { WeatherView } from "@/lib/carousel";
-import type { Page, Snapshot } from "@/lib/types";
+import type { Page, ShowRequest, Snapshot } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { useVoice } from "./useVoice";
 
@@ -30,6 +30,7 @@ async function show(page: Page, view?: WeatherView, team?: string) {
     body: JSON.stringify({ page, ...(view ? { view } : {}), ...(team ? { team } : {}) }),
   });
   if (!res.ok) throw new Error(`show ${res.status}`);
+  return (await res.json()) as ShowRequest;
 }
 
 export function Remote({ snapshot }: { snapshot: Snapshot }) {
@@ -38,12 +39,12 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
 
   const send = useCallback(async (page: Page, view?: WeatherView, team?: string) => {
     window.clearTimeout(clear.current);
-    const ok = await show(page, view, team).then(
-      () => true,
-      () => false,
-    );
+    const asked = await show(page, view, team).catch(() => null);
+    const ok = asked !== null;
     setSent({ id: id({ page, view }), ok });
     clear.current = window.setTimeout(() => setSent(null), 3000);
+    // For the voice: whether the team asked for was found.
+    return team ? Boolean(asked?.team) : undefined;
   }, []);
 
   const voice = useVoice(

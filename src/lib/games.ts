@@ -53,6 +53,9 @@ type Json = Record<string, unknown>;
 const obj = (x: unknown): Json => (x && typeof x === "object" ? (x as Json) : {});
 const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
 const str = (x: unknown): string | undefined => (typeof x === "string" && x ? x : undefined);
+
+/** "Saint Mary’s": names set with a true apostrophe. */
+export const curly = (s: string) => s.replace(/'/g, "\u2019");
 const num = (x: unknown): number | undefined => {
   const n = typeof x === "string" ? Number(x) : x;
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
@@ -108,10 +111,11 @@ function readSide(s: Json, league: League, state: string): Side | null {
   const id = str(t.id);
   if (!id) return null;
   // The NFL by nickname ("Bears"); colleges by place ("Iowa").
-  const name =
+  const said =
     league === "nfl"
       ? (str(t.name) ?? str(t.shortDisplayName))
       : (str(t.location) ?? str(t.shortDisplayName));
+  const name = said && curly(said);
   if (!name) return null;
   const rank = num(obj(s.curatedRank).current) ?? num(s.rank);
   const sc = obj(s.score);
@@ -119,7 +123,7 @@ function readSide(s: Json, league: League, state: string): Side | null {
   return {
     id,
     name,
-    short: str(t.shortDisplayName) ?? name,
+    short: curly(str(t.shortDisplayName) ?? name),
     ...(str(t.abbreviation) ? { abbr: str(t.abbreviation) } : {}),
     ...(str(t.location) ? { place: str(t.location) } : {}),
     // ESPN writes 99 for unranked.
@@ -507,21 +511,45 @@ export function gamesCue(games: Game[] | null, now: Date, tz: string) {
   const today = dayKey(now, tz);
   return {
     any: near.length > 0,
-    ours: near.some((g) => ours(g) && dayKey(new Date(g.start), tz) === today),
+    ours: near.some(
+      (g) => ours(g) && g.state !== "post" && dayKey(new Date(g.start), tz) === today,
+    ),
   };
 }
 
+/** How near a family game must be to come to the night page. */
+export const NIGHT_SOON_MS = 2 * 3_600_000;
+
 /**
- * The games for home's slide: those within the few days, a family team's
- * game today leading today's (the reason the slide comes round more often).
+ * The night's one game, if any: a family game under way, or one starting
+ * within two hours (night shows one quiet piece, §4, never a list).
  */
-export function slideGames(games: Game[], now: Date, tz: string): Game[] {
-  const today = dayKey(now, tz);
-  const key = (g: Game) => dayKey(new Date(g.start), tz);
-  const lead = (g: Game) => (key(g) === today && ours(g) ? 0 : 1);
-  return horizon(games, now, tz).sort(
-    (a, b) => key(a).localeCompare(key(b)) || lead(a) - lead(b) || byStart(a, b),
+export function nightGame(games: Game[] | null, now: Date): Game | null {
+  const t = now.getTime();
+  const mine = (games ?? []).filter(ours);
+  return (
+    mine.find((g) => g.state === "in") ??
+    mine.find((g) => g.state === "pre" && Date.parse(g.start) - t <= NIGHT_SOON_MS) ??
+    null
   );
+}
+
+/** The family's side of a game (the home side if both are). */
+export const oursIn = (g: Game): Side => (g.home.mine || !g.away.mine ? g.home : g.away);
+
+/** "Bears lead 24–20", "Bears trail 20–24", "Tied 20–20": a family game under way. */
+export function standing(g: Game): string | null {
+  const us = oursIn(g);
+  const them = us === g.home ? g.away : g.home;
+  if (us.score === undefined || them.score === undefined) return null;
+  const score = `${us.score}\u2013${them.score}`;
+  if (us.score === them.score) return `Tied ${score}`;
+  return `${us.short} ${us.score > them.score ? "lead" : "trail"} ${score}`;
+}
+
+/** The games for home's slide: those within the few days, in order (the accent marks the family's). */
+export function slideGames(games: Game[], now: Date, tz: string): Game[] {
+  return horizon(games, now, tz).sort(byStart);
 }
 
 /** The leader (or the winner), for setting in full ink. */

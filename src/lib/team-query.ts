@@ -4,7 +4,7 @@
 // URL only ever see the ESPN league and id it resolves to. Pure functions;
 // the fetching is in sports.ts.
 
-import type { Team } from "./games";
+import { curly, type Team } from "./games";
 import type { League } from "./types";
 
 /** One team in ESPN's list for a league. */
@@ -22,6 +22,9 @@ export type TeamEntry = {
   /** "ARIZ", "SF". */
   abbr: string;
 };
+
+/** A team found: its league and ESPN id, and its full name (for the page's title at once). */
+export type Found = Team & { name: string };
 
 /** What a team request may look like: a few words, nothing else. */
 export const TEAM_QUERY = /^[\p{L}\p{N} .'&-]{1,60}$/u;
@@ -140,7 +143,7 @@ export function resolveTeam(
   lists: TeamEntry[],
   family: readonly Team[],
   now: Date,
-): Team | null {
+): Found | null {
   if (!TEAM_QUERY.test(q)) return null;
   const { leagues, team } = parseQuery(q);
   if (!team) return null;
@@ -156,5 +159,5 @@ export function resolveTeam(
         seasonOf(b.t.league, now) - seasonOf(a.t.league, now) ||
         Number(a.t.id) - Number(b.t.id),
     )[0];
-  return best ? { league: best.t.league, id: best.t.id } : null;
+  return best ? { league: best.t.league, id: best.t.id, name: curly(best.t.full) } : null;
 }
