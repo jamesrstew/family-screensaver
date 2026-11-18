@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MANIFEST_URL, clipsOf, srcOf, volumeOf, type Clip, type Picked } from "@/lib/nature";
+import {
+  MANIFEST_URL,
+  MODE_PRELOAD_S,
+  clipsOf,
+  srcOf,
+  volumeOf,
+  type Clip,
+  type Picked,
+} from "@/lib/nature";
 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
@@ -19,7 +27,7 @@ import { MANIFEST_URL, clipsOf, srcOf, volumeOf, type Clip, type Picked } from "
  * frame.
  */
 /** How long the sky takes to sink (living.css), before the clip surfaces. */
-const SKY_MS = 2500;
+export const SKY_MS = 2500;
 const IN_MS = 4000;
 /** The clip sinks no faster than the ink leaves; the screen waits for it. */
 export const NATURE_OUT_MS = 3000;
@@ -87,8 +95,10 @@ export function NatureWindow({
   onFail,
   onBusy,
   onEnd,
+  onNear,
   onPhase,
   turning,
+  skyMs,
 }: {
   job: Picked | null;
   on: boolean;
@@ -97,7 +107,11 @@ export function NatureWindow({
   onFail: (n: number) => void;
   onBusy: (busy: boolean) => void;
   onEnd: (n: number) => void;
+  /** A whole clip is near its end: the next one may start loading (nature mode). */
+  onNear: (n: number) => void;
   onPhase: (phase: Phase) => void;
+  /** How long to let the sky sink before surfacing (none when it's already gone). */
+  skyMs: number;
   /** The paper turning at dusk or dawn: a clip up then gives its slot back to a passage. */
   turning: boolean;
 }) {
@@ -175,10 +189,24 @@ export function NatureWindow({
       stall = window.setTimeout(give, STALL_MS);
     };
     const going = () => framedYet && window.clearTimeout(stall);
-    const away = () => document.hidden && give();
+    // The TV leaving the app pauses the clip at once; it never counts as a
+    // failure (the screen takes the turn away while the app is hidden).
+    const away = () => {
+      if (!document.hidden) return;
+      window.clearTimeout(stall);
+      v.pause();
+    };
     // A whole clip, played to its end: it sinks, then the screen moves on.
     const end = () => alive && setEnded(n);
-    const time = () => until !== undefined && v.currentTime >= until && end();
+    let near = false;
+    const time = () => {
+      if (until === undefined) return;
+      if (!near && until - v.currentTime <= MODE_PRELOAD_S) {
+        near = true;
+        onNear(n);
+      }
+      if (v.currentTime >= until) end();
+    };
     const first = () => {
       if (!alive) return;
       const done = () => {
@@ -211,16 +239,16 @@ export function NatureWindow({
       v.removeEventListener("ended", end);
       document.removeEventListener("visibilitychange", away);
     };
-  }, [on, n, until, onFail, turning]);
+  }, [on, n, until, onFail, onNear, turning]);
 
   // The sky sinks first; then, on bare paper, the clip surfaces.
   const live = on && n !== null && framed === n;
   const [shown, setShown] = useState<number | null>(null);
   useEffect(() => {
     if (!live) return;
-    const t = window.setTimeout(() => setShown(n), SKY_MS);
+    const t = window.setTimeout(() => setShown(n), skyMs);
     return () => window.clearTimeout(t);
-  }, [live, n]);
+  }, [live, n, skyMs]);
   const want = live && shown === n && ended !== n;
 
   // Up: it surfaces, then it's full (and the strip may come). Down: the

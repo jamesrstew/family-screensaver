@@ -76,7 +76,7 @@ export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] 
           </Ink>
         ) : null}
       </div>
-      <Ink k={view ?? "none"} order={3} mode="seep" className="text-right">
+      <Ink k={view ?? "none"} order={3} mode="seep" plain className="text-right">
         {view === "now" && w ? <Now w={w} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}
         {view === "days" && w ? <Days w={w} /> : null}

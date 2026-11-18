@@ -5,11 +5,21 @@ import {
   clipFor,
   clipsOf,
   excerptAt,
+  isReady,
+  modeFailed,
+  modeGivesUp,
+  modeJob,
+  modeN,
+  modeOnward,
+  modeReady,
+  modeSlot,
+  modeStart,
+  noteReady,
   pickFor,
   readyFor,
-  wholeAt,
   volumeOf,
   type Clip,
+  type Mode,
 } from "./nature";
 
 const clip = (id: string, seconds = 200): Clip => ({ id, seconds, place: `Place ${id}` });
@@ -86,20 +96,27 @@ describe("a nature slot", () => {
   const clips = ["a", "b", "c"].map((x) => clip(x.repeat(8)));
   const from = 1_000_000;
   const job = pickFor(null, 40, clips)!;
+  const word = (at: number, n = 40, id = job.clip.id) => [{ n, id, at }];
 
-  it("shows its clip only if that clip was ready before the slot began", () => {
-    expect(readyFor(40, job, { n: 40, id: job.clip.id, at: from - 5_000 }, from)).toBe(true);
+  it("shows its clip only if that very clip was ready before the slot began", () => {
+    expect(readyFor(40, job, word(from - 5_000), from)).toBe(true);
     // Ready late: the slot stays a passage, never turning into a clip halfway.
-    expect(readyFor(40, job, { n: 40, id: job.clip.id, at: from + 1 }, from)).toBe(false);
+    expect(readyFor(40, job, word(from + 1), from)).toBe(false);
     // Ready for another slot, or another clip.
-    expect(readyFor(40, job, { n: 30, id: job.clip.id, at: from - 5_000 }, from)).toBe(false);
-    expect(readyFor(40, job, { n: 40, id: "zzzzzzzz", at: from - 5_000 }, from)).toBe(false);
+    expect(readyFor(40, job, word(from - 5_000, 30), from)).toBe(false);
+    expect(readyFor(40, job, word(from - 5_000, 40, "zzzzzzzz"), from)).toBe(false);
   });
 
-  it("gives itself back when its clip fails mid-slot", () => {
-    const ready = { n: 40, id: job.clip.id, at: from - 5_000 };
-    // A failed slot has no job (Screen drops it): the slide turns back to a passage.
-    expect(readyFor(40, null, ready, from)).toBe(false);
+  it("keeps word of more than one clip at a time, the latest for each key", () => {
+    let list = noteReady([], { n: 40, id: "aaaaaaaa", at: 1 });
+    list = noteReady(list, { n: -2, id: "bbbbbbbb", at: 2 });
+    list = noteReady(list, { n: 40, id: "cccccccc", at: 3 });
+    expect(list).toEqual([
+      { n: -2, id: "bbbbbbbb", at: 2 },
+      { n: 40, id: "cccccccc", at: 3 },
+    ]);
+    expect(isReady(list, { n: -2, clip: clip("bbbbbbbb"), from: 15 })).toBe(true);
+    expect(isReady(list, { n: -3, clip: clip("bbbbbbbb"), from: 15 })).toBe(false);
   });
 
   it("keeps its clip when the manifest is read again mid-slot", () => {
@@ -112,15 +129,56 @@ describe("a nature slot", () => {
 
 describe("nature mode", () => {
   const clips = ["a", "b", "c"].map((x) => clip(x.repeat(8)));
+  const start = (prev: Mode | null = null) => modeStart(prev, 1_000);
 
   it("plays clips whole, one after another, in the library's order", () => {
-    const first = wholeAt(clips, 7, 0)!;
-    expect(first).toMatchObject({ n: -1, from: 15, until: 199 });
-    const ids = [0, 1, 2, 3].map((k) => wholeAt(clips, 7, k)!.clip.id);
+    const m = start();
+    const first = modeJob(clips, m, 0, 7)!;
+    expect(first).toMatchObject({ from: 15, until: 193 });
+    const ids = [0, 1, 2, 3].map((k) => modeJob(clips, m, k, 7)!.clip.id);
     expect(new Set(ids.slice(0, 3)).size).toBe(3);
     expect(ids[3]).toBe(ids[0]);
-    // Never the same key as a carousel slot.
-    expect(wholeAt(clips, 7, 4)!.n).toBeLessThan(0);
-    expect(wholeAt([], 7, 0)).toBeNull();
+    expect(modeJob([], m, 0, 7)).toBeNull();
+  });
+
+  it("gives every session its own keys, never a carousel slot's", () => {
+    const a = start();
+    const b = start(a);
+    expect(b.session).toBe(a.session + 1);
+    const keys = [a, b].flatMap((m) => [0, 1, 2].map((k) => modeN(m, k)));
+    expect(new Set(keys).size).toBe(6);
+    expect(keys.every((n) => n < 0)).toBe(true);
+    // Consecutive clips take turns between the two windows.
+    expect([0, 1, 2, 3].map((k) => modeSlot(modeN(b, k)))).toEqual([0, 1, 0, 1]);
+  });
+
+  it("moves on when the current clip ends, and only then", () => {
+    const m = start();
+    expect(modeOnward(m, modeN(m, 0)).k).toBe(1);
+    // Word from the clip loading ahead, or from an old session, changes nothing.
+    expect(modeOnward(m, modeN(m, 1))).toBe(m);
+    expect(modeOnward(start(m), modeN(m, 0)).k).toBe(0);
+  });
+
+  it("passes over a clip that won't play, counts it, and gives up after five in a row", () => {
+    let m = start();
+    for (let i = 0; i < 4; i++) m = modeFailed(m, modeN(m, m.k));
+    expect(m).toMatchObject({ k: 4, fails: 4 });
+    expect(modeGivesUp(m)).toBe(false);
+    // One loading ahead that won't: counted, but the current one plays on.
+    const ahead = modeFailed(m, modeN(m, m.k + 1));
+    expect(ahead).toMatchObject({ k: 4, fails: 5 });
+    expect(modeGivesUp(ahead)).toBe(true);
+    // A clip that loads ends the run of failures.
+    expect(modeReady(m, modeN(m, m.k)).fails).toBe(0);
+    // Asking again starts over, whatever happened before.
+    expect(start(ahead)).toMatchObject({ k: 0, fails: 0 });
+  });
+
+  it("ignores word from another session", () => {
+    const old = start();
+    const m = start(old);
+    expect(modeFailed(m, modeN(old, 0))).toBe(m);
+    expect(modeReady({ ...m, fails: 3 }, modeN(old, 0)).fails).toBe(3);
   });
 });

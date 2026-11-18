@@ -88,18 +88,59 @@ export const orderOf = (clips: Clip[], id: string) =>
 export type Picked = { n: number; clip: Clip; from: number; until?: number };
 
 // Nature mode plays clips whole, from just after the opening credit (gone by
-// about 13 seconds) to a moment before the end.
+// about 13 seconds) to a few seconds before the end, so it sinks while it
+// still plays, never on a frozen last frame.
 const WHOLE_FROM_S = 15;
-const WHOLE_TAIL_S = 1;
+const WHOLE_TAIL_S = 7;
+/** In nature mode, the next clip starts loading this long before the current one ends. */
+export const MODE_PRELOAD_S = 20;
+/** Clips in a row that won't play before nature mode gives up and goes home. */
+export const MODE_GIVE_UP = 5;
 
 /**
- * Nature mode's `k`th clip, walking the same order from `start`: each one
- * whole. Its `n` is negative, so it never meets a carousel slot's.
+ * A nature-mode session: asked for at `at`, on its `k`th clip, with `fails`
+ * clips in a row that wouldn't play. Each session has its own number, so
+ * nothing about one session's clips carries into the next.
  */
-export function wholeAt(clips: Clip[], start: number, k: number): Picked | null {
-  const clip = clipAt(clips, start + k);
-  return clip ? { n: -1 - k, clip, from: WHOLE_FROM_S, until: clip.seconds - WHOLE_TAIL_S } : null;
+export type Mode = { session: number; at: number; k: number; fails: number };
+
+export const modeStart = (prev: Mode | null, at: number): Mode => ({
+  session: (prev?.session ?? 0) + 1,
+  at,
+  k: 0,
+  fails: 0,
+});
+
+/** The `k`th clip's key in this session: negative, never a carousel slot's, never another session's. */
+export const modeN = (m: Mode, k: number) => -(m.session * 1_000_000 + k + 1);
+
+/** Which of the two windows plays the clip keyed `n`: they take turns, so the next can load. */
+export const modeSlot = (n: number) => ((-n - 1) % 1_000_000) % 2;
+
+/** The session's `k`th clip, whole, walking the library's order from `first`. */
+export function modeJob(clips: Clip[], m: Mode, k: number, first: number): Picked | null {
+  const clip = clipAt(clips, first + k);
+  return clip
+    ? { n: modeN(m, k), clip, from: WHOLE_FROM_S, until: clip.seconds - WHOLE_TAIL_S }
+    : null;
 }
+
+/** The current clip has played out (or was given up): on to the next. Anything else changes nothing. */
+export const modeOnward = (m: Mode, n: number): Mode =>
+  n === modeN(m, m.k) ? { ...m, k: m.k + 1 } : m;
+
+/** A clip wouldn't play: the current one is passed over; one loading ahead is tried again in its turn. */
+export function modeFailed(m: Mode, n: number): Mode {
+  if (n === modeN(m, m.k)) return { ...m, k: m.k + 1, fails: m.fails + 1 };
+  if (n === modeN(m, m.k + 1)) return { ...m, fails: m.fails + 1 };
+  return m;
+}
+
+/** A clip of this session is ready: the run of failures is over. */
+export const modeReady = (m: Mode, n: number): Mode =>
+  m.fails && (n === modeN(m, m.k) || n === modeN(m, m.k + 1)) ? { ...m, fails: 0 } : m;
+
+export const modeGivesUp = (m: Mode) => m.fails >= MODE_GIVE_UP;
 
 /**
  * The clip for slot `n`, keeping the one already picked for it: a manifest
@@ -111,16 +152,24 @@ export function pickFor(prev: Picked | null, n: number, clips: Clip[]): Picked |
   return clip ? { n, clip, from: excerptAt(clip, n) } : null;
 }
 
-/** Word from the window: this clip, loaded for slot `n`, at `at` on the screen's clock. */
+/** Word from a window: this clip, loaded for key `n`, at `at` on the screen's clock. */
 export type Ready = { n: number; id: string; at: number };
 
+/** Keep word of the last few clips ready (two windows, one loading ahead). */
+export const noteReady = (list: Ready[], r: Ready): Ready[] =>
+  [...list.filter((x) => x.n !== r.n), r].slice(-4);
+
+/** That very clip is loaded for its key. */
+export const isReady = (list: Ready[], job: Picked | null) =>
+  Boolean(job && list.some((r) => r.n === job.n && r.id === job.clip.id));
+
 /**
- * Slot `n` shows its clip only if that very clip was ready before the slot
- * began: a slot never turns into a clip halfway, and a failed one (`job`
- * gone) gives itself back.
+ * Carousel slot `n` shows its clip only if that very clip was ready before
+ * the slot began: a slot never turns into a clip halfway, and a failed one
+ * (`job` gone) gives itself back.
  */
-export const readyFor = (n: number, job: Picked | null, ready: Ready | null, from: number) =>
-  job?.n === n && ready?.n === n && ready.id === job.clip.id && ready.at < from;
+export const readyFor = (n: number, job: Picked | null, list: Ready[], from: number) =>
+  job?.n === n && list.some((r) => r.n === n && r.id === job.clip.id && r.at < from);
 
 /** Where slot `n` starts in the clip, in seconds: a different minute each time it comes round. */
 export function excerptAt(c: Clip, n: number): number {
