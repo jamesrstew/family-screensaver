@@ -1,8 +1,7 @@
-import type { CSSProperties } from "react";
-import { nowIsFresh, precipKind, skyWords } from "@/lib/forecast";
+import { useState } from "react";
+import { nowIsFresh, skyWords } from "@/lib/forecast";
 import type { Clip } from "@/lib/nature";
 import type { Weather } from "@/lib/types";
-import { CLOUD_BOX, Cloud } from "@/views/Engraving";
 import { Sky } from "@/views/Sky";
 import type { ViewProps } from "@/views/parts";
 import { ClockFace, dayShort, degrees, firstTomorrow, hourWord } from "@/views/designs/common";
@@ -10,33 +9,43 @@ import { Ink } from "./Ink";
 
 /*
  * The strip at the foot of a nature clip: a few quiet lines over the picture,
- * like the notes on home. On the left, always, where the clip was filmed and
- * the hour. On the right, one of the page's own views in turn, half a minute
- * each: the weather now, the next hours, the days, what's next. Behind the
- * right, the real weather drawn small: an engraved cloud or two drifting,
- * rain or snow falling, by transform alone.
+ * like the notes on home. On the left, always, where the clip was filmed, the
+ * hour, and outside and inside. On the right, one of the page's own views in
+ * turn, half a minute each, always opening on the weather now: in the
+ * carousel's minute, now and what's next; in nature mode, now, the next
+ * hours, the days, and what's next. The weather is carried by its engraved
+ * symbols alone: drawn clouds or rain over a photograph read as outlines
+ * floating on it, so there are none.
+ *
+ * It's put on the page only once the clip is fully up, and sinks before the
+ * clip does (Screen, Nature.tsx): no type over a picture still surfacing.
  */
 
 const TURN_MS = 30_000;
 const HOUR = 3_600_000;
-type View = "now" | "hours" | "days" | "next";
+export type StripView = "now" | "hours" | "days" | "next";
+export const CAROUSEL_VIEWS: StripView[] = ["now", "next"];
+export const MODE_VIEWS: StripView[] = ["now", "hours", "days", "next"];
 
-export function NatureStrip(props: ViewProps & { clip: Clip }) {
+export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] }) {
   const { snapshot, now, clip } = props;
   const tz = snapshot.timeZone;
   const w = snapshot.weather && nowIsFresh(snapshot.weather, now) ? snapshot.weather : null;
   const next = firstTomorrow(props);
-  const views = (["now", "hours", "days", "next"] as View[]).filter((v) =>
-    v === "next" ? Boolean(next) : Boolean(w),
-  );
-  const view = views.length ? views[Math.floor(now.getTime() / TURN_MS) % views.length] : null;
+  const views = props.views.filter((v) => (v === "next" ? Boolean(next) : Boolean(w)));
+  // Counted from when the strip came (it's keyed by the clip), so it opens on the first.
+  const [since] = useState(() => now.getTime());
+  const turn = Math.max(Math.floor((now.getTime() - since) / TURN_MS), 0);
+  const view = views.length ? views[turn % views.length] : null;
+  const outside = w ? w.now.temp : null;
+  const inside = props.inside ?? null;
 
   return (
-    <div className="nature-strip absolute inset-x-0 bottom-0 flex items-end justify-between">
-      {w ? <StripSky w={w} /> : null}
-      <div className="relative">
+    // The left block starts well clear of the mark footage carries low on the left.
+    <div className="nature-strip absolute right-0 bottom-0 left-[16rem] flex items-end justify-between">
+      <div>
         {clip.place ? (
-          <Ink k={clip.id} order={0} mode="seep">
+          <Ink order={0} mode="seep">
             <p className="mb-[0.5rem] text-[2.2rem] leading-tight text-ink-soft italic">
               {clip.place}
             </p>
@@ -47,9 +56,28 @@ export function NatureStrip(props: ViewProps & { clip: Clip }) {
             <ClockFace now={now} tz={tz} />
           </p>
         </Ink>
+        {outside != null || inside != null ? (
+          <Ink order={2} mode="seep">
+            <p className="mt-[0.8rem] text-[2rem] leading-none whitespace-nowrap text-ink">
+              {outside != null ? (
+                <>
+                  {degrees(outside)} <span className="text-ink-soft italic">outside</span>
+                </>
+              ) : null}
+              {outside != null && inside != null ? (
+                <span className="text-ink-faint"> · </span>
+              ) : null}
+              {inside != null ? (
+                <>
+                  {degrees(inside)} <span className="text-ink-soft italic">inside</span>
+                </>
+              ) : null}
+            </p>
+          </Ink>
+        ) : null}
       </div>
-      <Ink k={view ?? "none"} order={2} mode="seep" className="relative text-right">
-        {view === "now" && w ? <Now w={w} inside={props.inside ?? null} /> : null}
+      <Ink k={view ?? "none"} order={3} mode="seep" className="text-right">
+        {view === "now" && w ? <Now w={w} /> : null}
         {view === "hours" && w ? <Hours w={w} now={now} tz={tz} /> : null}
         {view === "days" && w ? <Days w={w} /> : null}
         {view === "next" && next ? (
@@ -64,26 +92,14 @@ export function NatureStrip(props: ViewProps & { clip: Clip }) {
   );
 }
 
-/** "53° Sunny", and under it the day's high and low, and the house. */
-function Now({ w, inside }: { w: Weather; inside: number | null }) {
+/** The sky now, in its engraving and in words. */
+function Now({ w }: { w: Weather }) {
   return (
     <div className="flex items-end gap-[1.4rem]">
-      <Sky code={w.now.code} isDay={w.now.isDay} className="mb-[0.2rem] h-[4.4rem] w-[4.4rem]" />
-      <div>
-        <p className="text-[3.6rem] leading-none text-ink">
-          {degrees(w.now.temp)}{" "}
-          <span className="text-ink-soft italic">{skyWords(w.now.code, w.now.isDay)}</span>
-        </p>
-        <p className="mt-[0.7rem] text-[2rem] leading-none text-ink-soft">
-          High {degrees(w.today.high)}, low {degrees(w.today.low)}
-          {inside != null ? (
-            <>
-              <span className="text-ink-faint"> · </span>
-              {degrees(inside)} <span className="italic">inside</span>
-            </>
-          ) : null}
-        </p>
-      </div>
+      <Sky code={w.now.code} isDay={w.now.isDay} className="h-[4.4rem] w-[4.4rem]" />
+      <p className="text-[3.6rem] leading-none text-ink italic">
+        {skyWords(w.now.code, w.now.isDay)}
+      </p>
     </div>
   );
 }
@@ -98,7 +114,7 @@ function Hours({ w, now, tz }: { w: Weather; now: Date; tz: string }) {
     <div className="flex items-end gap-[2.6rem]">
       {hours.map((h, i) => (
         <div key={h.time} className="text-center">
-          <p className="text-[1.85rem] leading-none text-ink-soft italic">
+          <p className="text-[2rem] leading-none text-ink italic">
             {i === 0 ? "Now" : hourWord(h.time, tz)}
           </p>
           <Sky
@@ -119,7 +135,7 @@ function Days({ w }: { w: Weather }) {
     <div className="flex items-end gap-[2.6rem]">
       {w.days.slice(0, 5).map((d, i) => (
         <div key={d.date} className="text-center">
-          <p className="text-[1.85rem] leading-none text-ink-soft italic">{dayShort(d.date, i)}</p>
+          <p className="text-[2rem] leading-none text-ink italic">{dayShort(d.date, i)}</p>
           <Sky code={d.code} isDay className="mx-auto my-[0.5rem] h-[3rem] w-[3rem]" />
           <p className="text-[2.6rem] leading-none whitespace-nowrap text-ink">
             {degrees(d.high)} <span className="text-ink-soft">{degrees(d.low)}</span>
@@ -127,60 +143,5 @@ function Days({ w }: { w: Weather }) {
         </div>
       ))}
     </div>
-  );
-}
-
-/**
- * The weather now, drawn small behind the strip's right side: a cloud or
- * two drifting slowly to and fro, and rain or snow falling. Each is one
- * layer moved by transform; nothing repaints.
- */
-function StripSky({ w }: { w: Weather }) {
-  const code = w.now.code;
-  const clouds = code === 0 ? 0 : code === 1 ? 1 : code === 2 ? 2 : 3;
-  const fall = precipKind(code);
-  return (
-    <div aria-hidden className="strip-sky">
-      {Array.from({ length: clouds }, (_, i) => (
-        <svg
-          key={i}
-          viewBox={CLOUD_BOX}
-          className="strip-cloud"
-          style={{ "--i": i } as CSSProperties}
-          fill="none"
-          stroke="currentColor"
-        >
-          <Cloud id={`strip-cloud-${i}`} fine />
-        </svg>
-      ))}
-      {fall === "snow" ? <Fall kind="snow" /> : fall ? <Fall kind="rain" /> : null}
-    </div>
-  );
-}
-
-/** Rain as fine slanting strokes, snow as dots: two identical tiles, falling one tile, again and again. */
-function Fall({ kind }: { kind: "rain" | "snow" }) {
-  const marks = Array.from({ length: 36 }, (_, i) => {
-    const x = (i * 37) % 100;
-    const y = (i * 53) % 50;
-    return kind === "rain" ? (
-      <line key={i} x1={x} y1={y} x2={x - 1.2} y2={y + 4} />
-    ) : (
-      <circle key={i} cx={x} cy={y} r={0.45} />
-    );
-  });
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className={`strip-fall strip-fall-${kind}`}
-      stroke="currentColor"
-      fill="currentColor"
-      strokeWidth={0.25}
-      vectorEffect="non-scaling-stroke"
-    >
-      <g>{marks}</g>
-      <g transform="translate(0 50)">{marks}</g>
-    </svg>
   );
 }

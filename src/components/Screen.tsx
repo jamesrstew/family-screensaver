@@ -41,8 +41,8 @@ import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
-import { NATURE_OUT_MS, NatureWindow, useClips } from "./Nature";
-import { NatureStrip } from "./NatureStrip";
+import { NATURE_GONE_MS, NatureWindow, useClips, type Phase } from "./Nature";
+import { CAROUSEL_VIEWS, MODE_VIEWS, NatureStrip } from "./NatureStrip";
 import { useVoice } from "./useVoice";
 
 /*
@@ -217,6 +217,8 @@ export function Screen({
   const natureReady = (n: number) => n === readyN;
   // From a clip's first frame until it has sunk, the page is the clip's: no sky.
   const [natureBusy, setNatureBusy] = useState(false);
+  // Where the clip is in coming and going: the strip comes only once it's full.
+  const [clipPhase, setClipPhase] = useState<Phase>("hidden");
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
@@ -239,7 +241,7 @@ export function Screen({
     wasTurning.current = turning;
     // A clip sinks slower than ink; the next page waits for it.
     const clip = view === "nature" || view.startsWith("carousel:nature");
-    const out = clip ? Math.max(leaveMs(), NATURE_OUT_MS) : leaveMs();
+    const out = clip ? Math.max(leaveMs(), NATURE_GONE_MS) : leaveMs();
     const wait = swapDelay(leaving, turning, justTurned, out);
     if (wait === null) return;
     const t = window.setTimeout(() => setView(target), wait);
@@ -408,6 +410,7 @@ export function Screen({
     : Boolean(wilds) && !leaving;
   const volume = paper === "night" ? VOLUME.night : twilight ? VOLUME.twilight : VOLUME.day;
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
+  const stripUp = clipPhase === "full" || clipPhase === "closing";
   const drawn =
     kit && (shown === "home" || slide || shown === "night" || asked || shown === "nature")
       ? kit
@@ -432,6 +435,7 @@ export function Screen({
           onReady={onReady}
           onFail={onFail}
           onBusy={setNatureBusy}
+          onPhase={setClipPhase}
           onEnd={onward}
           // In nature mode the clip plays on while the paper turns behind it.
           turning={turning && !inMode}
@@ -482,10 +486,21 @@ export function Screen({
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
-              {drawn && wilds && <NatureStrip {...props} clip={wilds} />}
-              {drawn && shown === "nature" && modeJob && (
-                <NatureStrip {...props} clip={modeJob.clip} />
-              )}
+              {drawn && (wilds || (shown === "nature" && modeJob)) && stripUp ? (
+                // The strip sinks before the clip does: it leaves as the clip closes.
+                <InkStage.Provider value={leaving || turning || clipPhase === "closing"}>
+                  {wilds ? (
+                    <NatureStrip key={wilds.id} {...props} clip={wilds} views={CAROUSEL_VIEWS} />
+                  ) : modeJob ? (
+                    <NatureStrip
+                      key={modeJob.clip.id}
+                      {...props}
+                      clip={modeJob.clip}
+                      views={MODE_VIEWS}
+                    />
+                  ) : null}
+                </InkStage.Provider>
+              ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
             </div>

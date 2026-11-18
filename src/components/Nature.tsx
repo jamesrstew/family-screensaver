@@ -24,6 +24,10 @@ const IN_MS = 4000;
 /** The clip sinks no faster than the ink leaves; the screen waits for it. */
 export const NATURE_OUT_MS = 3000;
 const SOUND_IN_MS = 9000;
+/** The strip's ink sinking (Ink's seep, staggered), before the clip begins to. */
+export const STRIP_OUT_MS = 2800;
+/** From a clip's turn ending until it has gone: the strip sinks, then the picture. */
+export const NATURE_GONE_MS = STRIP_OUT_MS + NATURE_OUT_MS;
 const STALL_MS = 6000;
 // The manifest is asked for again now and then: a drive can be plugged in or pulled out.
 const MANIFEST_EVERY_MS = 10 * 60_000;
@@ -68,10 +72,13 @@ const same = (a: Clip[], b: Clip[]) =>
  * The window itself. `job` is the next clip (or null); `on` says its turn
  * has come; `volume` is the hour's level (the clip's gain evens it out). It
  * tells the screen when the clip is ready, when it fails, when it has played
- * to its end and sunk (`onEnd`, for a clip with an `until`), and while it
- * holds the page (`onBusy`: from its first frame until it has sunk), so the
- * sky stays away for exactly that long.
+ * to its end and sunk (`onEnd`, for a clip with an `until`), while it holds
+ * the page (`onBusy`: from its first frame until it has sunk, so the sky
+ * stays away for exactly that long), and its phase (`onPhase`), so the strip
+ * comes only once the clip is full and sinks before it does.
  */
+export type Phase = "hidden" | "surfacing" | "full" | "closing" | "sinking";
+
 export function NatureWindow({
   job,
   on,
@@ -80,6 +87,7 @@ export function NatureWindow({
   onFail,
   onBusy,
   onEnd,
+  onPhase,
   turning,
 }: {
   job: Picked | null;
@@ -89,6 +97,7 @@ export function NatureWindow({
   onFail: (n: number) => void;
   onBusy: (busy: boolean) => void;
   onEnd: (n: number) => void;
+  onPhase: (phase: Phase) => void;
   /** The paper turning at dusk or dawn: a clip up then gives its slot back to a passage. */
   turning: boolean;
 }) {
@@ -98,7 +107,7 @@ export function NatureWindow({
   if (job && job !== held) setHeld(job);
   useEffect(() => {
     if (job || !held) return;
-    const t = window.setTimeout(() => setHeld(null), NATURE_OUT_MS + 300);
+    const t = window.setTimeout(() => setHeld(null), NATURE_GONE_MS + 300);
     return () => window.clearTimeout(t);
   }, [job, held]);
 
@@ -204,12 +213,6 @@ export function NatureWindow({
     };
   }, [on, n, until, onFail, turning]);
 
-  useEffect(() => {
-    if (ended === null || ended !== n) return;
-    const t = window.setTimeout(() => onEnd(ended), NATURE_OUT_MS);
-    return () => window.clearTimeout(t);
-  }, [ended, n, onEnd]);
-
   // The sky sinks first; then, on bare paper, the clip surfaces.
   const live = on && n !== null && framed === n;
   const [shown, setShown] = useState<number | null>(null);
@@ -218,24 +221,42 @@ export function NatureWindow({
     const t = window.setTimeout(() => setShown(n), SKY_MS);
     return () => window.clearTimeout(t);
   }, [live, n]);
-  const visible = live && shown === n && ended !== n;
+  const want = live && shown === n && ended !== n;
 
-  // The page is the clip's from its first frame until it has fully sunk.
+  // Up: it surfaces, then it's full (and the strip may come). Down: the
+  // strip sinks first (closing), then the picture (sinking), then it's gone.
+  const [phase, setPhase] = useState<Phase>("hidden");
   useEffect(() => {
-    if (live) {
-      onBusy(true);
-      return;
-    }
-    const t = window.setTimeout(() => onBusy(false), NATURE_OUT_MS);
-    return () => window.clearTimeout(t);
-  }, [live, onBusy]);
+    const at = (ms: number, f: (p: Phase) => Phase) => window.setTimeout(() => setPhase(f), ms);
+    const ts = want
+      ? [at(0, () => "surfacing"), at(IN_MS, (p) => (p === "surfacing" ? "full" : p))]
+      : [
+          at(0, (p) => (p === "hidden" || p === "sinking" ? p : "closing")),
+          at(STRIP_OUT_MS, (p) => (p === "closing" ? "sinking" : p)),
+          at(NATURE_GONE_MS, (p) => (p === "sinking" ? "hidden" : p)),
+        ];
+    return () => ts.forEach((t) => window.clearTimeout(t));
+  }, [want]);
+  useEffect(() => onPhase(phase), [phase, onPhase]);
+  const visible = phase === "surfacing" || phase === "full" || phase === "closing";
 
-  // The sound rises slower than the picture and sinks as slowly; then the clip stops.
+  // A whole clip that has played out moves on once it has gone.
+  useEffect(() => {
+    if (ended !== null && ended === n && phase === "hidden") onEnd(ended);
+  }, [ended, n, phase, onEnd]);
+
+  // The page is the clip's from its first frame until it has fully gone.
+  const busy = live || phase !== "hidden";
+  useEffect(() => onBusy(busy), [busy, onBusy]);
+
+  // The sound rises slower than the picture and falls from the moment the
+  // strip begins to sink, over as long as the picture takes; then the clip stops.
+  const audible = phase === "surfacing" || phase === "full";
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    const to = visible && held ? volumeOf(held.clip, volume) : 0;
-    const ms = visible ? SOUND_IN_MS : NATURE_OUT_MS;
+    const to = audible && held ? volumeOf(held.clip, volume) : 0;
+    const ms = audible ? SOUND_IN_MS : NATURE_GONE_MS;
     const from = v.volume;
     const t0 = performance.now();
     const t = window.setInterval(() => {
@@ -243,17 +264,19 @@ export function NatureWindow({
       v.volume = from + (to - from) * k;
       if (k < 1) return;
       window.clearInterval(t);
-      if (!on) v.pause();
+      if (!on || ended === n) v.pause();
     }, 100);
     return () => window.clearInterval(t);
-  }, [visible, volume, held, on]);
+  }, [audible, volume, held, on, ended, n]);
 
   return (
     <div
       aria-hidden
       className="nature-window pointer-events-none fixed inset-0"
       data-visible={visible ? "" : undefined}
-      style={{ transition: `opacity ${visible ? IN_MS : NATURE_OUT_MS}ms ease-in-out` }}
+      style={{
+        transition: `opacity ${phase === "surfacing" ? IN_MS : NATURE_OUT_MS}ms ease-in-out`,
+      }}
     >
       <video ref={ref} playsInline preload="auto" disablePictureInPicture />
       {/* A soft dusk at the foot of the picture, so the strip reads over snow or sky. */}
