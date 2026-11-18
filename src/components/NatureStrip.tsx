@@ -10,10 +10,9 @@ import { Ink } from "./Ink";
 /*
  * The notes over a nature clip, like the notes on home. In the top-left
  * corner, always, the hour and outside and inside; in the top-right, one
- * of the page's own views in
- * turn, half a minute each, always opening on the weather now: in the
- * carousel's minute, now and what's next; in nature mode, now, the next
- * hours, the days, and what's next. The weather is carried by its engraved
+ * of the page's own views in turn, half a minute each, always opening on
+ * the weather now: now, the next hours, the days, and what's next. At the
+ * foot, in the middle, where the clip was filmed. The weather is carried by its engraved
  * symbols alone: drawn clouds or rain over a photograph read as outlines
  * floating on it, so there are none.
  *
@@ -23,16 +22,15 @@ import { Ink } from "./Ink";
 
 const TURN_MS = 30_000;
 const HOUR = 3_600_000;
-export type StripView = "now" | "hours" | "days" | "next";
-export const CAROUSEL_VIEWS: StripView[] = ["now", "next"];
-export const MODE_VIEWS: StripView[] = ["now", "hours", "days", "next"];
+type StripView = "now" | "hours" | "days" | "next";
+const VIEWS: StripView[] = ["now", "hours", "days", "next"];
 
-export function NatureStrip(props: ViewProps & { clip: Clip; views: StripView[] }) {
+export function NatureStrip(props: ViewProps & { clip: Clip }) {
   const { snapshot, now, clip } = props;
   const tz = snapshot.timeZone;
   const w = snapshot.weather && nowIsFresh(snapshot.weather, now) ? snapshot.weather : null;
   const next = firstTomorrow(props);
-  const views = props.views.filter((v) => (v === "next" ? Boolean(next) : Boolean(w)));
+  const views = VIEWS.filter((v) => (v === "next" ? Boolean(next) : Boolean(w)));
   // Counted from when the strip came (it's keyed by the clip), so it opens on the first.
   const [since] = useState(() => now.getTime());
   const turn = Math.max(Math.floor((now.getTime() - since) / TURN_MS), 0);

@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { natureNext } from "./carousel";
 import {
-  EXCERPT_S,
-  clipFor,
+  clipAt,
   clipsOf,
-  excerptAt,
   isReady,
   modeFailed,
   modeGivesUp,
@@ -15,55 +12,21 @@ import {
   modeSlot,
   modeStart,
   noteReady,
-  pickFor,
-  readyFor,
   type Clip,
   type Mode,
 } from "./nature";
 
 const clip = (id: string, seconds = 200): Clip => ({ id, seconds, place: `Place ${id}` });
 
-/** The nature cycles the carousel really reaches, one after another, from home appearing at `since`. */
-function slots(since: number, count: number): number[] {
-  const out: number[] = [];
-  let t = since;
-  while (out.length < count) {
-    const next = natureNext(t, { since }, true);
-    if (!next) break;
-    out.push(next.n);
-    t = next.to;
-  }
-  return out;
-}
-
 describe("nature clips", () => {
-  it("shows a minute from the middle: from 20 s or 15% in, ending 20 s short", () => {
-    for (const seconds of [100, 137, 306, 1200]) {
-      const c = clip("abcdefgh", seconds);
-      for (let n = 0; n < 200; n++) {
-        const at = excerptAt(c, n);
-        expect(at).toBeGreaterThanOrEqual(Math.max(20, Math.floor(seconds * 0.15)));
-        expect(at + EXCERPT_S).toBeLessThanOrEqual(seconds - 20);
-      }
-    }
-    const long = clip("abcdefgh", 306);
-    expect(new Set(Array.from({ length: 20 }, (_, n) => excerptAt(long, n))).size).toBeGreaterThan(
-      5,
-    );
-  });
-
-  it("plays every clip once before any comes back, over the slots the carousel reaches", () => {
-    const since = Date.parse("2026-11-18T09:00:07-08:00");
-    const ns = slots(since, 24);
-    expect(ns.every((n) => n % 10 === 0)).toBe(true);
-    // Pool sizes that share factors with the ten cycles between slots.
-    for (const size of [2, 4, 5, 6, 10, 12]) {
-      const all = Array.from({ length: size }, (_, i) => clip(`clip-${i}-xx`));
-      const seen = ns.slice(0, size).map((n) => clipFor(all, n)?.id);
-      expect(new Set(seen).size).toBe(size);
-      expect(clipFor(all, ns[size])?.id).toBe(seen[0]);
-    }
-    expect(clipFor([], 30)).toBeNull();
+  it("walks the library in one shuffled order, every clip before any comes back", () => {
+    const all = ["a", "b", "c", "d", "e"].map((x) => clip(x.repeat(8)));
+    const seen = [0, 1, 2, 3, 4].map((i) => clipAt(all, i)?.id);
+    expect(new Set(seen).size).toBe(5);
+    expect(clipAt(all, 5)?.id).toBe(seen[0]);
+    // The order is the clips' own, whatever order the manifest lists them in.
+    expect(clipAt([...all].reverse(), 2)?.id).toBe(seen[2]);
+    expect(clipAt([], 3)).toBeNull();
   });
 
   it("reads the manifest: leaves out the excluded, the too short, and the malformed", () => {
@@ -72,7 +35,7 @@ describe("nature clips", () => {
         clip("keep-me1"),
         { ...clip("no-place"), place: "" },
         clip("not-this"),
-        clip("tooshort", 90),
+        clip("tooshort", 45),
         { id: "../etc", seconds: 200, place: "x" },
         { id: "noplace1", seconds: 200 },
         null,
@@ -82,41 +45,6 @@ describe("nature clips", () => {
     expect(clipsOf(json).map((c) => c.id)).toEqual(["keep-me1", "no-place"]);
     expect(clipsOf(null)).toEqual([]);
     expect(clipsOf({ clips: "no" })).toEqual([]);
-  });
-});
-
-describe("a nature slot", () => {
-  const clips = ["a", "b", "c"].map((x) => clip(x.repeat(8)));
-  const from = 1_000_000;
-  const job = pickFor(null, 40, clips)!;
-  const word = (at: number, n = 40, id = job.clip.id) => [{ n, id, at }];
-
-  it("shows its clip only if that very clip was ready before the slot began", () => {
-    expect(readyFor(40, job, word(from - 5_000), from)).toBe(true);
-    // Ready late: the slot stays a passage, never turning into a clip halfway.
-    expect(readyFor(40, job, word(from + 1), from)).toBe(false);
-    // Ready for another slot, or another clip.
-    expect(readyFor(40, job, word(from - 5_000, 30), from)).toBe(false);
-    expect(readyFor(40, job, word(from - 5_000, 40, "zzzzzzzz"), from)).toBe(false);
-  });
-
-  it("keeps word of more than one clip at a time, the latest for each key", () => {
-    let list = noteReady([], { n: 40, id: "aaaaaaaa", at: 1 });
-    list = noteReady(list, { n: -2, id: "bbbbbbbb", at: 2 });
-    list = noteReady(list, { n: 40, id: "cccccccc", at: 3 });
-    expect(list).toEqual([
-      { n: -2, id: "bbbbbbbb", at: 2 },
-      { n: 40, id: "cccccccc", at: 3 },
-    ]);
-    expect(isReady(list, { n: -2, clip: clip("bbbbbbbb"), from: 15 })).toBe(true);
-    expect(isReady(list, { n: -3, clip: clip("bbbbbbbb"), from: 15 })).toBe(false);
-  });
-
-  it("keeps its clip when the manifest is read again mid-slot", () => {
-    const refreshed = [clip("dddddddd"), clip("eeeeeeee"), ...clips.reverse()];
-    expect(pickFor(job, 40, refreshed)).toBe(job);
-    // The next slot picks afresh.
-    expect(pickFor(job, 50, refreshed)?.n).toBe(50);
   });
 });
 
@@ -134,7 +62,22 @@ describe("nature mode", () => {
     expect(modeJob([], m, 0, 7)).toBeNull();
   });
 
-  it("gives every session its own keys, never a carousel slot's", () => {
+  it("keeps word of more than one clip at a time, the latest for each key", () => {
+    const m = start();
+    const [a, b] = [modeN(m, 0), modeN(m, 1)];
+    let list = noteReady([], { n: a, id: "aaaaaaaa", at: 1 });
+    list = noteReady(list, { n: b, id: "bbbbbbbb", at: 2 });
+    list = noteReady(list, { n: a, id: "cccccccc", at: 3 });
+    expect(list).toEqual([
+      { n: b, id: "bbbbbbbb", at: 2 },
+      { n: a, id: "cccccccc", at: 3 },
+    ]);
+    const job = (n: number, id: string) => ({ n, clip: clip(id), from: 15, until: 193 });
+    expect(isReady(list, job(b, "bbbbbbbb"))).toBe(true);
+    expect(isReady(list, job(a, "aaaaaaaa"))).toBe(false);
+  });
+
+  it("gives every session its own keys", () => {
     const a = start();
     const b = start(a);
     expect(b.session).toBe(a.session + 1);

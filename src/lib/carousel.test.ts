@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CYCLE_MS,
   SLIDE_MS,
-  isNatureCycle,
   latchCue,
-  natureNext,
   WEATHER_VIEWS,
   nextTurnIn,
   passageNear,
@@ -184,71 +182,12 @@ describe("the cadence, pinned", () => {
   });
 });
 
-describe("nature", () => {
-  // A cycle by the clock that is a nature cycle, and home appearing a cycle before.
-  const quarter = Date.parse("2026-11-18T10:15:00-08:00");
-  const since = quarter - CYCLE_MS + 7;
-  const yes = () => true;
-  const at = (ms: number, weather = true, ready = yes) =>
-    slideOf(new Date(since + ms), { since }, weather, tz, ready);
-
-  it("takes a cycle's last minute every quarter hour, after the weather", () => {
-    expect(isNatureCycle(Math.floor((since + CYCLE_MS) / CYCLE_MS))).toBe(true);
-    expect(at(CYCLE_MS).kind).toBe("weather");
-    expect(at(CYCLE_MS + SLIDE_MS)).toEqual({
-      kind: "nature",
-      n: (since + CYCLE_MS - 7) / CYCLE_MS,
-    });
-    expect(at(CYCLE_MS + 2 * SLIDE_MS).kind).toBe("nature");
-    expect(at(2 * CYCLE_MS).kind).toBe("weather");
-    // The next is ten cycles on: fifteen minutes.
-    const kinds = Array.from({ length: 30 * 3 }, (_, i) => at(i * SLIDE_MS).kind);
-    // Cycles 1, 11, and 21 of 30, two slides each.
-    expect(kinds.filter((k) => k === "nature")).toHaveLength(6);
-  });
-
-  it("never in the first cycle after home appears", () => {
-    const s = quarter + 1;
-    for (let ms = 0; ms < CYCLE_MS; ms += SLIDE_MS)
-      expect(slideOf(new Date(s + ms), { since: s }, true, tz, yes).kind).not.toBe("nature");
-  });
-
-  it("is a passage instead when the clip isn't ready", () => {
-    expect(at(CYCLE_MS + 2 * SLIDE_MS, true, () => false).kind).toBe("passage");
-  });
-
-  it("without the weather, takes the cycle's second half", () => {
-    expect(at(CYCLE_MS, false).kind).toBe("passage");
-    expect(at(CYCLE_MS + CYCLE_MS / 2, false).kind).toBe("nature");
-  });
-
-  it("knows when the next one starts, so its clip can load in time", () => {
-    const next = natureNext(since, { since }, true);
-    expect(next?.from).toBe(since + CYCLE_MS + SLIDE_MS);
-    expect(next?.to).toBe(since + 2 * CYCLE_MS);
-    expect(natureNext(since + 2 * CYCLE_MS, { since }, true)?.from).toBe(
-      since + 11 * CYCLE_MS + SLIDE_MS,
-    );
-  });
-
-  it("keys round-trip", () => {
-    expect(slideFromKey(slideKey({ kind: "nature", n: 12 }))).toEqual({ kind: "nature", n: 12 });
-  });
-});
-
 describe("the games on home", () => {
   const games = (ours = false) => ({ any: true, ours });
   /** Each cycle's last slide, for cycles 0 to `n`, counting from `since`. */
-  const lasts = (since: number, n: number, cue = games(), nature = () => false) =>
+  const lasts = (since: number, n: number, cue = games()) =>
     Array.from({ length: n }, (_, c) => {
-      const s = slideOf(
-        new Date(since + c * CYCLE_MS + 2 * SLIDE_MS),
-        { since },
-        true,
-        tz,
-        nature,
-        cue,
-      );
+      const s = slideOf(new Date(since + c * CYCLE_MS + 2 * SLIDE_MS), { since }, true, tz, cue);
       return s.kind === "games" ? Math.floor((since + c * CYCLE_MS) / CYCLE_MS) : null;
     });
 
@@ -268,11 +207,8 @@ describe("the games on home", () => {
     for (const n of got) expect(n % 2).toBe(1);
   });
 
-  it("never shows when there are no games, and gives way to nature", () => {
+  it("never shows when there are no games", () => {
     expect(lasts(afternoon, 30, { any: false, ours: false }).every((n) => n === null)).toBe(true);
-    const all = () => true;
-    for (const n of lasts(afternoon, 30, games(true), all))
-      if (n !== null) expect(n % 10).not.toBe(0);
   });
 
   it("leaves the morning its one passage, unless a family game is on tonight's page", () => {
@@ -284,14 +220,7 @@ describe("the games on home", () => {
   it("never takes the weather's slides, morning or afternoon", () => {
     for (const since of [morning, afternoon]) {
       for (let s = 0; s < 36; s++) {
-        const slide = slideOf(
-          new Date(since + s * SLIDE_MS),
-          { since },
-          true,
-          tz,
-          undefined,
-          games(true),
-        );
+        const slide = slideOf(new Date(since + s * SLIDE_MS), { since }, true, tz, games(true));
         if (slide.kind === "games") expect(s % 3).toBe(2);
       }
     }

@@ -7,20 +7,17 @@ import { MANIFEST_URL, MODE_PRELOAD_S, clipsOf, srcOf, type Clip, type Picked } 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
  * TV, pixel for pixel), under the page's notes at the top (NatureStrip.tsx).
- * A minute of one now and then in home's carousel; in nature mode, clip
- * after clip (nature.ts, carousel.ts).
+ * Asked for, nature mode plays clip after clip (nature.ts).
  *
  * The clip is loaded and seeked before its turn. When the turn comes it
- * starts, unseen; once its first frame is on the glass, the sky sinks, and
- * then the clip surfaces from the paper (by opacity: the TV can't filter
+ * starts, unseen; once its first frame is on the glass (the sky is already
+ * gone), the clip surfaces from the paper (by opacity: the TV can't filter
  * moving pictures), its sound rising slower still. At the end it sinks
  * completely before anything else comes. A clip that won't load, never shows
  * a frame, or stalls (a drive pulled out) gives its turn back; one playing
  * when the TV leaves the app stops at once. Never a spinner, never a black
  * frame.
  */
-/** How long the sky takes to sink (living.css), before the clip surfaces. */
-export const SKY_MS = 2500;
 const IN_MS = 4000;
 /** The clip sinks no faster than the ink leaves; the screen waits for it. */
 export const NATURE_OUT_MS = 4000;
@@ -90,8 +87,6 @@ export function NatureWindow({
   onEnd,
   onNear,
   onPhase,
-  turning,
-  skyMs,
 }: {
   job: Picked | null;
   on: boolean;
@@ -103,10 +98,6 @@ export function NatureWindow({
   /** A whole clip is near its end: the next one may start loading (nature mode). */
   onNear: (n: number) => void;
   onPhase: (phase: Phase) => void;
-  /** How long to let the sky sink before surfacing (none when it's already gone). */
-  skyMs: number;
-  /** The paper turning at dusk or dawn: a clip up then gives its slot back to a passage. */
-  turning: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   // Keep the clip while it sinks out, after the screen has moved on.
@@ -118,7 +109,7 @@ export function NatureWindow({
     return () => window.clearTimeout(t);
   }, [job, held]);
 
-  // Load it and seek to its minute; ready once it can play from there.
+  // Load it and seek past its opening; ready once it can play from there.
   useEffect(() => {
     const v = ref.current;
     if (!v || !held) return;
@@ -171,7 +162,6 @@ export function NatureWindow({
       v.pause();
       onFail(n);
     };
-    if (turning) return give();
     // Until the first frame is on the glass, one deadline; after it, a stall
     // ("waiting" without "playing" again) gets its own.
     let framedYet = false;
@@ -240,17 +230,11 @@ export function NatureWindow({
       v.removeEventListener("ended", end);
       document.removeEventListener("visibilitychange", away);
     };
-  }, [on, n, until, onFail, onNear, turning]);
+  }, [on, n, until, onFail, onNear]);
 
-  // The sky sinks first; then, on bare paper, the clip surfaces.
+  // Once a frame is on the glass, the clip surfaces from the paper.
   const live = on && n !== null && framed === n;
-  const [shown, setShown] = useState<number | null>(null);
-  useEffect(() => {
-    if (!live) return;
-    const t = window.setTimeout(() => setShown(n), skyMs);
-    return () => window.clearTimeout(t);
-  }, [live, n, skyMs]);
-  const want = live && shown === n && ended !== n;
+  const want = live && ended !== n;
 
   // Up: it surfaces, then it's full (and the strip may come). Down: the
   // strip sinks first (closing), then the picture (sinking), then it's gone.
