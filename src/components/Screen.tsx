@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SHOW_TTL_MS, pageKey, targetOf, viewAsked } from "@/lib/show";
+import { SHOW_TTL_MS, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
 import {
+  CYCLE_MS,
+  latchCue,
   natureNext,
   nextTurnIn,
   startAfter,
@@ -10,10 +12,12 @@ import {
   slideKey,
   slideOf,
   turns,
+  type GamesCue,
+  type Slide,
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames } from "@/lib/games";
+import { freshGames, gamesCue, nightGame, slideGames } from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
@@ -42,7 +46,9 @@ import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
 import { NightPage } from "@/views/NightPage";
 import { NotebookPage } from "@/views/NotebookPage";
-import { SportsPage } from "@/views/SportsPage";
+import { NightGame, SportsPage } from "@/views/SportsPage";
+import { TeamPage, stubTeam } from "@/views/TeamPage";
+import { useTeam, type TeamRef } from "./useTeam";
 import { WeatherPage } from "@/views/WeatherPage";
 import { WeekPage } from "@/views/WeekPage";
 import { useAsked } from "@/views/designs/almanac-weather";
@@ -114,16 +120,33 @@ function clockNow(): number {
   return Date.now() + clockOffset;
 }
 
+/** The team someone named, as the server finds it; null if no team answers to it. */
+async function findTeamFor(team: string): Promise<TeamRef | null> {
+  try {
+    const res = await fetch("/api/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team }),
+    });
+    return res.ok ? ((await res.json()) as { team: TeamRef | null }).team : null;
+  } catch {
+    return null;
+  }
+}
+
 const viewOf = (page: Page, mood: Mood): Page | "night" =>
   page === "home" && mood === "night" ? "night" : page;
 
 export function Screen({
   initial,
   initialPage,
+  initialTeam = null,
   design = null,
 }: {
   initial: Snapshot;
   initialPage: Page;
+  /** Dev only: a made-up team page to open on (?team=season|live|off). */
+  initialTeam?: TeamRef | null;
   design?: Design | null;
 }) {
   const kit = design ? DESIGNS[design] : null;
@@ -140,6 +163,9 @@ export function Screen({
     [latest, fresh],
   );
   const [page, setPage] = useState<Page>(initialPage);
+  // One team's games, asked for by name (voice or Siri).
+  const [teamRef, setTeamRef] = useState<TeamRef | null>(initialTeam);
+  const team = useTeam(teamRef);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
   // night honest even if the forecast is gone for a while.
@@ -168,7 +194,7 @@ export function Screen({
   const games = freshGames(snapshot, now);
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
-    (askedBase === "sports" && !games?.length)
+    (askedBase === "sports" && !games?.length && !team.view && !team.pending)
       ? viewOf("home", mood)
       : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
@@ -273,9 +299,27 @@ export function Screen({
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
+  // Home's games slide: by day, the agenda; by night, only a family game
+  // under way or about to start, alone (§4). Decided as each cycle begins,
+  // so a slide never turns mid-slot when a game ends or the night falls.
+  const cycle = Math.floor(Math.max(now.getTime() - homeStart.since, 0) / CYCLE_MS);
+  const tonight = mood === "night" ? nightGame(games, now) : null;
+  const cueNow: GamesCue =
+    mood === "night"
+      ? {
+          any: Boolean(tonight),
+          ours: true,
+          anyHour: true,
+          ...(tonight ? { game: `${tonight.league}:${tonight.id}` } : {}),
+        }
+      : gamesCue(games, now, tz);
+  const [cueAt, setCueAt] = useState({ cycle, cue: cueNow });
+  const latched = latchCue(cueAt, cycle, cueNow);
+  if (latched !== cueAt) setCueAt(latched);
+  const cue = latched.cue;
   const target = targetOf({
     base,
-    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady)) : null,
+    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, cue)) : null,
     asked: view0,
     fromUrl,
   }) as View;
@@ -300,14 +344,16 @@ export function Screen({
   }, [leaving, target, turning, view]);
 
   const show = useCallback(
-    (p: Page, v?: WeatherView) => {
+    (p: Page, v?: WeatherView, t?: TeamRef | null) => {
       pageSince.current = Date.now();
       setPage(p);
       setView0(viewAsked(p, v));
+      // One team's games, or none: any other asking clears it.
+      setTeamRef(teamFor(p, t));
       // Asking for nature starts a fresh session, whatever happened to the last.
       if (p === "nature") setMode((m) => modeStart(m, clockNow()));
     },
-    [setMode],
+    [setMode, setView0, setTeamRef],
   );
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
@@ -384,7 +430,7 @@ export function Screen({
         if (!("page" in ask) || ask.seq === known) return;
         // Only a recent request counts (a TV waking up shouldn't obey
         // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view);
+        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view, ask.team);
       } catch {
         // Try again next time.
       }
@@ -408,7 +454,12 @@ export function Screen({
         runTool(name, args, {
           snapshot: snapshotRef.current,
           now: new Date(),
-          show,
+          show: async (p, v, team) => {
+            // A team, as said: the server finds it (or doesn't, and it's the games as usual).
+            const t = team ? await findTeamFor(team) : null;
+            show(p, v, t);
+            return team ? t !== null : undefined;
+          },
           hangUp: () => {},
         }),
       [show],
@@ -456,6 +507,14 @@ export function Screen({
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
+  // A games slide with nothing left to show gives its place back to the passage it took.
+  const gamesGone =
+    slide?.kind === "games" &&
+    (mood === "night"
+      ? !(games ?? []).some((g) => `${g.league}:${g.id}` === cue.game)
+      : slideGames(games ?? [], now, tz).length === 0);
+  const instead: Slide | undefined =
+    slide?.kind === "games" ? { kind: "passage", n: 2 * slide.n + 1 } : undefined;
   const wilds = slide?.kind === "nature" && picked?.n === slide.n ? picked.clip : null;
   // The clip plays while its turn is up and the app is in view (in nature
   // mode, once it's loaded), and sinks as the page leaves.
@@ -541,7 +600,7 @@ export function Screen({
             // or arc dots through them, the body faint behind them.
             arc={shown === "home" || shown === "night" || Boolean(slide)}
             quiet={!slide && (asked ?? "now") !== "now"}
-            words={slide?.kind === "weather"}
+            words={slide?.kind === "weather" || slide?.kind === "games"}
             seed={seed}
             epoch={epoch}
             twilight={twilight}
@@ -561,6 +620,21 @@ export function Screen({
               {drawn && slide?.kind === "passage" && at === "home" && <drawn.Home {...props} />}
               {drawn && slide?.kind === "passage" && at === "night" && <drawn.Night {...props} />}
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
+              {drawn &&
+                slide?.kind === "games" &&
+                (gamesGone ? (
+                  // The games it was cued for are gone (over, or the list went
+                  // stale): the cycle's passage, never bare paper.
+                  mood === "night" ? (
+                    <drawn.Night {...props} slide={instead} />
+                  ) : (
+                    <drawn.Home {...props} slide={instead} />
+                  )
+                ) : mood === "night" ? (
+                  <NightGame {...props} games={games ?? []} cued={cue.game} />
+                ) : (
+                  <SportsPage {...props} games={games ?? []} />
+                ))}
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
@@ -577,7 +651,22 @@ export function Screen({
               ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
-              {shown === "sports" && <SportsPage {...props} games={games ?? []} />}
+              {shown === "sports" &&
+                // One team's page: its name at once (from the asking), its games
+                // inking in below as they arrive; the games as usual if it can't be had.
+                (team.view ? (
+                  <TeamPage {...props} team={team.view} />
+                ) : team.pending ? (
+                  teamRef?.name ? (
+                    <TeamPage
+                      {...props}
+                      team={stubTeam({ ...teamRef, name: teamRef.name })}
+                      loading
+                    />
+                  ) : null
+                ) : (
+                  <SportsPage {...props} games={games ?? []} />
+                ))}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>

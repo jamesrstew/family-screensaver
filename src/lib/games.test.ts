@@ -6,6 +6,10 @@ import {
   curate,
   dayLabel,
   freshGames,
+  gamesCue,
+  nightGame,
+  slideGames,
+  standing,
   periodOf,
   leafAt,
   leavesOf,
@@ -669,5 +673,71 @@ describe("freshGames", () => {
       lastNight,
       soon,
     ]);
+  });
+});
+
+describe("the games on home", () => {
+  it("knows when there's anything within the few days, and a family game today", () => {
+    const sat = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+    const nextWeek = game("2026-11-26T20:30:00Z", { mine: true }, {});
+    const tonight = game("2026-11-19T03:00:00Z", { mine: true }, {});
+    expect(gamesCue([sat, nextWeek], NOW, TZ)).toEqual({ any: true, ours: false });
+    expect(gamesCue([nextWeek], NOW, TZ)).toEqual({ any: false, ours: false });
+    expect(gamesCue([sat, tonight], NOW, TZ)).toEqual({ any: true, ours: true });
+    expect(gamesCue(null, NOW, TZ)).toEqual({ any: false, ours: false });
+  });
+
+  it("keeps strict time order, and leaves out what's past the few days", () => {
+    const early = game("2026-11-18T20:00:00Z", { rank: 1 }, {});
+    const ours = game("2026-11-19T03:00:00Z", { mine: true }, {});
+    const sat = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+    const nextWeek = game("2026-11-26T20:30:00Z", { mine: true }, {});
+    expect(slideGames([sat, ours, early, nextWeek], NOW, TZ)).toEqual([early, ours, sat]);
+  });
+
+  it("counts a family game day only while the game is still to come or under way", () => {
+    const over = game("2026-11-18T17:00:00Z", { mine: true }, {}, { state: "post" });
+    expect(gamesCue([over], NOW, TZ)).toEqual({ any: true, ours: false });
+  });
+
+  it("brings the night only a family game under way or about to start", () => {
+    const soon = game("2026-11-18T19:30:00Z", { mine: true }, {});
+    const later = game("2026-11-18T23:00:00Z", { mine: true }, {});
+    const live = game(
+      "2026-11-18T17:00:00Z",
+      { mine: true, short: "Bears", score: 24 },
+      { score: 20 },
+      { state: "in" },
+    );
+    const ranked = game("2026-11-18T18:30:00Z", { rank: 1 }, {});
+    expect(nightGame([later, ranked], NOW)).toBeNull();
+    expect(nightGame([later, soon, ranked], NOW)).toBe(soon);
+    expect(nightGame([soon, live], NOW)).toBe(live);
+    // A placeholder never lingers: no hour set, or started too long ago.
+    expect(nightGame([{ ...soon, timed: false }], NOW)).toBeNull();
+    const stuck = game("2026-11-18T08:00:00Z", { mine: true }, {}, { state: "in" });
+    expect(nightGame([stuck], NOW)).toBeNull();
+    expect(standing(live)).toBe("Bears lead 24\u201320");
+    expect(standing({ ...live, home: { ...live.home, score: 31 } })).toBe("Bears trail 24\u201331");
+    expect(standing({ ...live, home: { ...live.home, score: 24 } })).toBe("Tied 24\u201324");
+  });
+});
+
+describe("names", () => {
+  it("sets a team's apostrophe as a true one", () => {
+    const [g] = readEvents(
+      {
+        events: [
+          board({
+            id: "40",
+            date: "2026-11-21T17:00Z",
+            away: ["1", "Saint Mary's"],
+            home: ["2", "B"],
+          }),
+        ],
+      },
+      "cbb",
+    );
+    expect(g.away.name).toBe("Saint Mary’s");
   });
 });

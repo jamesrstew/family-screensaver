@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { Ink } from "@/components/Ink";
-import { ahead, chanceOf, joinWord, leafAt, leavesOf, ours, whenWord } from "@/lib/games";
+import {
+  ahead,
+  chanceOf,
+  joinWord,
+  leafAt,
+  leavesOf,
+  nightGame,
+  ours,
+  slideGames,
+  standing,
+  whenWord,
+} from "@/lib/games";
 import type { Game, Side } from "@/lib/types";
 import type { ViewProps } from "./parts";
 
@@ -27,12 +38,24 @@ export const ROWS = 10;
 const FEW = 3;
 const LARGER = 1.2;
 
-/** `games`: the snapshot's, as fresh as they are now (freshGames, in Screen). */
-export function SportsPage({ snapshot, now, mood, games }: ViewProps & { games: Game[] }) {
+/**
+ * `games`: the snapshot's, as fresh as they are now (freshGames, in Screen).
+ * As one of home's slides, it's the first leaf alone, of the page's few days,
+ * a family team's game today leading.
+ */
+export function SportsPage({
+  snapshot,
+  now,
+  mood,
+  slide,
+  games: all,
+}: ViewProps & { games: Game[] }) {
   const tz = snapshot.timeZone;
+  const one = slide?.kind === "games";
+  const games = one ? slideGames(all, now, tz) : all;
   // The leaves turn from the moment the page appears (it remounts each time).
   const [since] = useState(() => now.getTime());
-  const leaves = leavesOf(games, now, tz, ROWS);
+  const leaves = leavesOf(games, now, tz, ROWS).slice(0, one ? 1 : undefined);
   const n = leafAt(now.getTime(), since, leaves.length);
   const leaf = leaves[n] ?? [];
   // The family's next game still to finish carries the accent (on whichever
@@ -53,28 +76,36 @@ export function SportsPage({ snapshot, now, mood, games }: ViewProps & { games: 
       className={`flex h-full flex-col ${leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
       style={{ fontSize: `${games.length <= FEW ? LARGER : 1}rem` }}
     >
-      {Array.from({ length: places }, (_, i) => {
-        const line = leaf[i];
-        return (
-          <Ink
-            key={i}
-            k={!line ? "" : line.kind === "day" ? line.key : `${line.game.league}:${line.game.id}`}
-            order={i * 0.35}
-            plain
-          >
-            {!line ? null : line.kind === "day" ? (
-              <div className={`flex items-baseline gap-[2em] ${i ? "pt-[2.2em]" : ""} pb-[0.6em]`}>
-                <p className="text-[3.2em] leading-none whitespace-nowrap text-ink-soft italic">
-                  {line.label}
-                </p>
-                <div className="h-px flex-1 translate-y-[-0.9em] bg-rule" />
-              </div>
-            ) : (
-              <Row game={line.game} tz={tz} accent={line.game === accent} />
-            )}
-          </Ink>
-        );
-      })}
+      <div className="relative isolate">
+        {/* On home, a layer of paper under the list: the sky passes behind, never through a line. */}
+        {one ? <div className="sky-word-clearing games-clearing" aria-hidden /> : null}
+        {Array.from({ length: places }, (_, i) => {
+          const line = leaf[i];
+          return (
+            <Ink
+              key={i}
+              k={
+                !line ? "" : line.kind === "day" ? line.key : `${line.game.league}:${line.game.id}`
+              }
+              order={i * 0.35}
+              plain
+            >
+              {!line ? null : line.kind === "day" ? (
+                <div
+                  className={`flex items-baseline gap-[2em] ${i ? "pt-[2.2em]" : ""} pb-[0.6em]`}
+                >
+                  <p className="text-[3.2em] leading-none whitespace-nowrap text-ink-soft italic">
+                    {line.label}
+                  </p>
+                  <div className="h-px flex-1 translate-y-[-0.9em] bg-rule" />
+                </div>
+              ) : (
+                <Row game={line.game} tz={tz} accent={line.game === accent} />
+              )}
+            </Ink>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -114,7 +145,7 @@ function Row({ game: g, tz, accent }: { game: Game; tz: string; accent: boolean 
           live ? "text-ink" : final ? "text-ink-soft italic" : mine ? "text-ink" : "text-ink-soft"
         }`}
       >
-        {whenWord(g, tz)}
+        <When g={g} tz={tz} />
       </p>
       <Ball league={g.league} />
       <p className="truncate text-[3.3em] leading-[1.3]">
@@ -166,7 +197,7 @@ function Team({ side, long, ink }: { side: Side; long: boolean; ink: string }) {
  */
 const FOOTBALL = "M8 50 C25 22 75 22 92 50 C75 78 25 78 8 50 Z";
 
-function Ball({ league }: { league: Game["league"] }) {
+export function Ball({ league }: { league: Game["league"] }) {
   const id = `ball-${league}`;
   return (
     <svg
@@ -214,5 +245,52 @@ function Ball({ league }: { league: Game["league"] }) {
         </>
       )}
     </svg>
+  );
+}
+
+/**
+ * The night's one game (§4: one quiet piece, never a list): a family game
+ * under way, or about to start. Centered, in night's soft ink, no accent:
+ * "Packers at Bears" over "5:15 p.m., ESPN", or "4th qtr., Bears lead 24–20".
+ */
+export function NightGame({
+  snapshot,
+  now,
+  games,
+  cued,
+}: ViewProps & { games: Game[]; cued?: string }) {
+  // The game the cycle was cued for (its score moves on; the game doesn't change).
+  const g = games.find((x) => `${x.league}:${x.id}` === cued) ?? nightGame(games, now);
+  if (!g) return null;
+  const tz = snapshot.timeZone;
+  const note =
+    g.state === "in"
+      ? [g.period, standing(g)].filter(Boolean).join(", ")
+      : [whenWord(g, tz), g.tv].filter(Boolean).join(", ");
+  return (
+    <div className="flex h-full flex-col items-center justify-center pb-[4rem] text-center">
+      <Ink k={`${g.league}:${g.id}`} order={0} className="relative isolate">
+        <div className="sky-word-clearing text-clearing" aria-hidden />
+        <p className="text-[5.6rem] leading-[1.15] text-ink-soft">
+          <Team side={g.away} long={false} ink="text-ink-soft" />{" "}
+          <span className="text-[0.7em] text-ink-faint italic">{joinWord(g)}</span>{" "}
+          <Team side={g.home} long={false} ink="text-ink-soft" />
+        </p>
+      </Ink>
+      <Ink k={`${g.id}:${note}`} order={1} className="relative isolate mt-[2rem]">
+        <div className="sky-word-clearing text-clearing" aria-hidden />
+        <p className="text-[3.2rem] text-ink-faint italic">{note}</p>
+      </Ink>
+    </div>
+  );
+}
+
+/** The hour, or where a game stands; a kickoff not yet set, "TBA", faint. */
+export function When({ g, tz }: { g: Game; tz: string }) {
+  const word = whenWord(g, tz);
+  return g.state === "pre" && !g.timed && !g.period ? (
+    <span className="text-ink-faint italic">{word}</span>
+  ) : (
+    <>{word}</>
   );
 }

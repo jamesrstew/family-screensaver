@@ -14,7 +14,7 @@ vi.mock("./store", () => ({
   },
 }));
 
-const { gather, getGames } = await import("./sports");
+const { findTeam, gather, getGames, getTeamView, teamList } = await import("./sports");
 
 const TZ = "America/Los_Angeles";
 // Wednesday, Nov. 18, 2026, 10 a.m. Pacific.
@@ -160,5 +160,146 @@ describe("getGames", () => {
     await getGames(NOW, TZ, []);
     await Promise.all(later);
     expect(kept.get("games")).toMatchObject({ at: NOW.toISOString(), teams: "" });
+  });
+});
+
+describe("findTeam", () => {
+  const list = (teams: Array<[string, string, string]>) => ({
+    sports: [
+      {
+        leagues: [
+          {
+            teams: teams.map(([id, location, name]) => ({
+              team: {
+                id,
+                location,
+                name,
+                displayName: `${location} ${name}`,
+                shortDisplayName: location,
+                abbreviation: "X",
+              },
+            })),
+          },
+        ],
+      },
+    ],
+  });
+  const aggies = (u: string) =>
+    u.includes("college-football/teams?")
+      ? json(
+          list([
+            ["911", "Texas A&M", "Aggies"],
+            ["912", "New Mexico State", "Aggies"],
+          ]),
+        )
+      : u.includes("/teams?")
+        ? json(list([]))
+        : u.includes("/rankings")
+          ? json({ rankings: [{ ranks: [] }] })
+          : u.includes("kalshi")
+            ? json({
+                markets: [
+                  {
+                    ticker: "E-26NOV21TAMX-TAM",
+                    event_ticker: "KXNCAAFGAME-26NOV21TAMX",
+                    yes_sub_title: "Texas A&M",
+                    yes_bid_dollars: "0.5",
+                    yes_ask_dollars: "0.51",
+                    volume_fp: "40000",
+                  },
+                ],
+              })
+            : json({ events: [] });
+
+  it("asks ESPN only by league, never with what was said", async () => {
+    serve(aggies);
+    const found = await findTeam("Aggies", [], NOW);
+    expect(found).toEqual({ league: "cfb", id: "911", name: "Texas A&M Aggies" });
+    expect(asked.some((u) => /aggies/i.test(u))).toBe(false);
+  });
+
+  it("finds by the Top 25 first", async () => {
+    serve((u) =>
+      u.includes("college-football/rankings")
+        ? json({ rankings: [{ ranks: [{ team: { id: "912" } }] }] })
+        : aggies(u),
+    );
+    expect(await findTeam("Aggies", [], NOW)).toMatchObject({ id: "912" });
+  });
+
+  it("finds nothing when nothing answers, and asks nothing for a bad query", async () => {
+    serve(() => new Response("down", { status: 503 }));
+    expect(await findTeam("Aggies", [], NOW)).toBeNull();
+    serve(() => json({}));
+    expect(await findTeam("<script>", [], NOW)).toBeNull();
+    expect(asked).toEqual([]);
+  });
+});
+
+describe("getTeamView", () => {
+  const sched = (record: string, events: unknown[]) =>
+    json({
+      team: {
+        id: "904",
+        displayName: "Gonzaga Bulldogs",
+        location: "Gonzaga",
+        recordSummary: record,
+      },
+      events,
+    });
+  const game = {
+    id: "501",
+    date: "2026-11-21T03:00Z",
+    competitions: [
+      {
+        status: { type: { state: "pre", name: "STATUS_SCHEDULED" } },
+        competitors: [
+          { homeAway: "home", team: { id: "904", location: "Gonzaga" } },
+          { homeAway: "away", team: { id: "77", location: "Rival" } },
+        ],
+      },
+    ],
+  };
+
+  it("stands on the postseason when the regular season fails, without its record", async () => {
+    serve((u) =>
+      u.includes("seasontype=2")
+        ? new Response("down", { status: 503 })
+        : u.includes("seasontype=3")
+          ? sched("2-0", [game])
+          : json({ markets: [] }),
+    );
+    const v = await getTeamView("cbb", "904", NOW, 200);
+    expect(v).toMatchObject({ name: "Gonzaga Bulldogs", ahead: [{ id: "501" }] });
+    expect(v?.record).toBeUndefined();
+  });
+
+  it("brings the page back without chances when the predictor is slow", async () => {
+    serve((u) =>
+      u.includes("predictor")
+        ? never()
+        : u.includes("schedule")
+          ? sched("9-2", [game])
+          : json({ markets: [] }),
+    );
+    const began = Date.now();
+    const v = await getTeamView("cbb", "904", NOW, 50);
+    expect(Date.now() - began).toBeLessThan(1000);
+    expect(v?.ahead[0].home.chance).toBeUndefined();
+    expect(v?.record).toBe("9-2");
+  });
+
+  it("refuses a league or id that isn't ESPN's, asking nothing", async () => {
+    serve(() => json({}));
+    expect(await getTeamView("cbb", "../x", NOW)).toBeNull();
+    expect(await getTeamView("nba" as never, "1", NOW)).toBeNull();
+    expect(asked).toEqual([]);
+  });
+});
+
+describe("teamList", () => {
+  it("refuses an empty list, so it's never kept for a day", async () => {
+    serve(() => json({ sports: [{ leagues: [{ teams: [] }] }] }));
+    await expect(teamList("cbb")).rejects.toThrow();
   });
 });

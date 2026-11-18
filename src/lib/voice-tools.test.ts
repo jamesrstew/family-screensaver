@@ -109,3 +109,20 @@ describe("read_games", () => {
     expect(await read({ games: null })).toEqual({ available: false });
   });
 });
+
+describe("show_page with a team", () => {
+  const ask = (found: boolean) =>
+    runTool(
+      "show_page",
+      { page: "sports", team: "Narnia" },
+      { snapshot: snapshot(null), now: new Date(at), show: () => found, hangUp: () => {} },
+    );
+
+  it("says so when no team answers to it, and what's up instead", async () => {
+    expect(await ask(false)).toMatchObject({
+      team: false,
+      say: "I couldn’t find that team; here are the games.".replace("’", "'"),
+    });
+    expect(await ask(true)).toEqual({ ok: true });
+  });
+});

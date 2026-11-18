@@ -258,6 +258,20 @@
     transparent
   );
 }
+/* The games on home: a layer of paper the list's full height and the
+   sheet's full width, so the sun, the clouds, and the land pass behind the
+   lines, never through them. */
+.sky-word-clearing.games-clearing {
+  inset: -2.5rem -5.5rem;
+  border-radius: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--paper) 94%, transparent) 2.5rem,
+    color-mix(in srgb, var(--paper) 94%, transparent) calc(100% - 2.5rem),
+    transparent
+  );
+}
 .sky-clearing-hero {
   left: 8rem;
   top: 29.5rem;

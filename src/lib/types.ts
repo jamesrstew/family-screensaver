@@ -171,6 +171,28 @@ export type Game = {
   home: Side;
 };
 
+/** One team's page (lib/team-view.ts): who they are, how they've done, what's next. */
+export type TeamView = {
+  league: League;
+  id: string;
+  /** "Kentucky Wildcats". */
+  name: string;
+  /** "Kentucky": how the lines name them. */
+  short: string;
+  /** "8-1", as ESPN writes it. */
+  record?: string;
+  /** Their Top 25 rank, if they have one. */
+  rank?: number;
+  /** A game of theirs under way, if one is. */
+  live: Game | null;
+  /** Their last few results, the latest last. */
+  results: Game[];
+  /** Their next games, the soonest first. */
+  ahead: Game[];
+  /** When it was gathered (ISO). */
+  at: string;
+};
+
 export type Snapshot = {
   issuedAt: string; // ISO
   place: string;
@@ -190,4 +212,11 @@ export type Snapshot = {
 };
 
 /** A page to show; for the weather, which view of it. */
-export type ShowRequest = { seq: number; page: Page; at: string; view?: WeatherView };
+export type ShowRequest = {
+  seq: number;
+  page: Page;
+  at: string;
+  view?: WeatherView;
+  /** The games page, for one team: resolved on the server from what was said (team-query.ts). */
+  team?: { league: League; id: string; name?: string };
+};

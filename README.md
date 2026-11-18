@@ -23,7 +23,9 @@ It is built to serve the family, never to hold their attention. Read [DOCTRINE.m
 
 ### Siri
 
-Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`, and `nature` (also `relax`), which plays nature clips one after another on the TV for up to an hour. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours).
+Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https://<site>/api/show`, method POST, header `Authorization: Bearer <family key>`, JSON body `{"page": "weather"}`. Pages: `home`, `weather`, `week`, `notebook`, and `nature` (also `relax`), which plays nature clips one after another on the TV for up to an hour. The weather's views have names of their own, so "Family hourly" sends `{"page": "hourly"}` and "Family seven-day" sends `{"page": "seven-day"}` (also `now`, and `today` for the next 24 hours). `sports` (also `games`, `scores`) shows the games: the family's teams (`FAMILY_TEAMS`) and the Top 25.
+
+One team's games, by name: a Shortcut named, say, "Family team" that starts with **Ask for Input** (Text, prompt "Which team?"), then **Get Contents of URL** as above with the JSON body `{"page": "sports", "team": <Provided Input>}`. Say "Kentucky basketball", "the Zags", "Bucs", or "Alabama football": any college football, men's college basketball, or NFL team. The TV shows that team's page (its record and rank, its last few results, a game under way, its next games with their channels and chances) and goes home on its own. The voice does the same when asked ("show the Bucs' schedule"). A team the server can't find shows the games as usual. There's no button for it on the phone.
 
 ### Nest thermostats
 
