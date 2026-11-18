@@ -1,0 +1,103 @@
+import { NATURE_EVERY } from "./carousel";
+import { hashOf } from "./organic";
+
+/*
+ * Nature: now and then, home's carousel opens a window in the page onto a
+ * minute of a real place, with its own natural sound, softly. The clips are
+ * the family's own and never live in this repo or online: the TV shell serves
+ * them from the TV's storage at /nature/ (manifest.json and <id>.mp4). Where
+ * nothing answers there (a phone, a browser), nature simply never appears.
+ *
+ * Everything here is pure: which clip, which minute of it, how loud.
+ */
+
+/** Clips play at night too, dimmed and softer. False keeps them to the daylight. */
+export const NATURE_AT_NIGHT = true;
+
+/** The clip's volume, a fraction of the TV's: gentle by day, softer at twilight, softest at night. */
+export const VOLUME = { day: 0.3, twilight: 0.18, night: 0.1 } as const;
+
+/**
+ * A clip as manifest.json lists it. `place` is its caption, where it was
+ * filmed (the owner's to edit; empty for none). `gain` brings its sound to
+ * the library's one loudness (measured when the manifest is written); the
+ * volume is the hour's level times it.
+ */
+export type Clip = { id: string; seconds: number; place: string; gain?: number };
+
+/** How loud clip `c` plays at `level` (VOLUME): its gain evens out the library, never past full. */
+export const volumeOf = (c: Clip, level: number) =>
+  Math.min(1, level * (typeof c.gain === "number" && c.gain > 0 ? c.gain : 1));
+
+export const MANIFEST_URL = "/nature/manifest.json";
+export const srcOf = (c: Clip) => `/nature/${encodeURIComponent(c.id)}.mp4`;
+
+// The clips open on a credit and sometimes a map (gone by about 12 seconds),
+// and close on a slow last shot: a minute from the middle is shown, starting
+// at 20 seconds or 15% in, whichever is later, and ending 20 seconds short.
+const LEAD_S = 20;
+const LEAD_SHARE = 0.15;
+const TAIL_S = 20;
+export const EXCERPT_S = 60;
+
+const leadOf = (c: Clip) => Math.max(LEAD_S, c.seconds * LEAD_SHARE);
+/** Seconds to choose a start from; below zero, the clip is too short to show. */
+const roomOf = (c: Clip) => c.seconds - TAIL_S - EXCERPT_S - leadOf(c);
+
+/**
+ * The clips manifest.json lists, less the excluded ones and any too short to
+ * show a minute. Anything malformed is left out, never thrown.
+ */
+export function clipsOf(json: unknown): Clip[] {
+  const m = (json ?? {}) as { clips?: unknown; excluded?: unknown };
+  const out = new Set(Array.isArray(m.excluded) ? m.excluded : []);
+  const list = Array.isArray(m.clips) ? (m.clips as Partial<Clip>[]) : [];
+  return list.flatMap((c) => {
+    const ok =
+      typeof c?.id === "string" &&
+      /^[\w-]{1,64}$/.test(c.id) &&
+      typeof c.seconds === "number" &&
+      typeof c.place === "string";
+    return ok && !out.has(c.id) && roomOf(c as Clip) >= 0 ? [c as Clip] : [];
+  });
+}
+
+/**
+ * The clip for the nature cycle `n` (carousel.ts: every NATURE_EVERY-th
+ * cycle). The clips are shuffled once by their ids, and the nature slots walk
+ * them in turn, so none comes back until every other one has played.
+ */
+export function clipFor(clips: Clip[], n: number): Clip | null {
+  const pool = [...clips].sort((a, b) => hashOf(a.id) - hashOf(b.id));
+  return pool.length ? pool[Math.floor(n / NATURE_EVERY) % pool.length] : null;
+}
+
+/** A nature slot's clip and the minute of it, fixed once picked. */
+export type Picked = { n: number; clip: Clip; from: number };
+
+/**
+ * The clip for slot `n`, keeping the one already picked for it: a manifest
+ * read again mid-slot never swaps the clip under the screen.
+ */
+export function pickFor(prev: Picked | null, n: number, clips: Clip[]): Picked | null {
+  if (prev?.n === n) return prev;
+  const clip = clipFor(clips, n);
+  return clip ? { n, clip, from: excerptAt(clip, n) } : null;
+}
+
+/** Word from the window: this clip, loaded for slot `n`, at `at` on the screen's clock. */
+export type Ready = { n: number; id: string; at: number };
+
+/**
+ * Slot `n` shows its clip only if that very clip was ready before the slot
+ * began: a slot never turns into a clip halfway, and a failed one (`job`
+ * gone) gives itself back.
+ */
+export const readyFor = (n: number, job: Picked | null, ready: Ready | null, from: number) =>
+  job?.n === n && ready?.n === n && ready.id === job.clip.id && ready.at < from;
+
+/** Where slot `n` starts in the clip, in seconds: a different minute each time it comes round. */
+export function excerptAt(c: Clip, n: number): number {
+  const room = Math.floor(roomOf(c));
+  return Math.round(leadOf(c)) + (room > 0 ? hashOf(`${c.id}:${n}`) % room : 0);
+}

@@ -735,3 +735,42 @@
     transition: none !important;
   }
 }
+
+/*
+ * A nature clip's window (Nature.tsx): set into the page like a plate, with
+ * a fine plate mark around it. It surfaces and sinks by opacity alone.
+ */
+.nature-window {
+  opacity: 0;
+  overflow: hidden;
+  outline: 1px solid var(--rule);
+  outline-offset: 0.9rem;
+}
+.nature-window[data-visible] {
+  opacity: 1;
+}
+/*
+ * At night the picture is dimmed to the night paper: over its near-black,
+ * the brightest white comes to about #555, below the night ink, so a bright
+ * clip never lights the room.
+ */
+.paper[data-mood="night"] .nature-window[data-visible] {
+  opacity: 0.3;
+}
+.nature-window video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /*
+   * Footage carries a small mark low on the left (about y 890–980 of 1080).
+   * A slight zoom, centered and held to the top, leaves it below the plate
+   * (the plate shows y 0–864).
+   */
+  transform: scale(1.25);
+  transform-origin: 50% 0;
+}
+/* While a clip holds the page, the hidden sky stops (§10): nothing animates behind it. */
+.paper[data-nature] .sky * {
+  animation-play-state: paused !important;
+}

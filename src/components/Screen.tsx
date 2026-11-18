@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TTL_MS, pageKey, targetOf, viewAsked } from "@/lib/show";
 import {
+  natureNext,
   nextTurnIn,
   startAfter,
   slideFromKey,
@@ -13,6 +14,7 @@ import {
   type WeatherView,
 } from "@/lib/carousel";
 import { freshIndoor } from "@/lib/indoor";
+import { NATURE_AT_NIGHT, VOLUME, pickFor, readyFor, type Picked, type Ready } from "@/lib/nature";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
 import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
@@ -30,6 +32,7 @@ import { swapDelay } from "@/lib/turn";
 import { Dusk, useTurn } from "./Dusk";
 import { Ink, InkModeContext, InkStage, leaveMs } from "./Ink";
 import { Fps } from "./Fps";
+import { NATURE_OUT_MS, NatureNotes, NatureWindow, useClips } from "./Nature";
 import { useVoice } from "./useVoice";
 
 /*
@@ -62,6 +65,8 @@ const ASK_EVERY_MS = { awake: 4_000, asleep: 20_000 };
 // The clock shows minutes; the carousel's turns get a timer of their own.
 const TICK_MS = 10_000;
 const DRIFT_EVERY_MS = 4 * 60_000;
+// A nature clip starts loading this long before its slot.
+const PRELOAD_MS = 25_000;
 
 // Dev only: ?at= runs the TV's clock from that moment (with ?sky=, a made-up
 // sky), so a day scene can be checked at night. Fixed at the first read.
@@ -134,14 +139,36 @@ export function Screen({
     setHomeStart(startAfter(lastBase, base, now.getTime(), homeStart));
   }
   const carousel = turns(base) && design === "almanac";
+  const hasWeather = Boolean(snapshot.weather);
+
+  // ---- Nature: now and then a minute of a real place (at night too, dimmed,
+  // while NATURE_AT_NIGHT says so), and only once its clip is loaded and waiting.
+  const clips = useClips();
+  const tz = snapshot.timeZone;
+  const outdoors = carousel && clips.length > 0 && (NATURE_AT_NIGHT || mood !== "night");
+  const wild = outdoors ? natureNext(now.getTime(), homeStart, hasWeather) : null;
+  // The slot's clip is picked once, shortly before it, and kept.
+  const [picked, setPicked] = useState<Picked | null>(null);
+  if (wild && now.getTime() >= wild.from - PRELOAD_MS && picked?.n !== wild.n) {
+    const p = pickFor(picked, wild.n, clips);
+    if (p) setPicked(p);
+  }
+  const [ready, setReady] = useState<Ready | null>(null);
+  const [failed, setFailed] = useState<number | null>(null);
+  const onReady = useCallback((n: number, id: string) => setReady({ n, id, at: clockNow() }), []);
+  const onFail = useCallback((n: number) => setFailed(n), []);
+  const job = picked && wild && picked.n === wild.n && failed !== picked.n ? picked : null;
+  // Ready before its slot began, or not at all.
+  const readyN = job && wild && readyFor(job.n, job, ready, wild.from) ? job.n : null;
+  const natureReady = (n: number) => n === readyN;
+  // From a clip's first frame until it has sunk, the page is the clip's: no sky.
+  const [natureBusy, setNatureBusy] = useState(false);
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
   const target = targetOf({
     base,
-    slide: carousel
-      ? slideKey(slideOf(now, homeStart, Boolean(snapshot.weather), snapshot.timeZone))
-      : null,
+    slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady)) : null,
     asked: view0,
     fromUrl,
   }) as View;
@@ -156,11 +183,13 @@ export function Screen({
   useEffect(() => {
     const justTurned = wasTurning.current && !turning;
     wasTurning.current = turning;
-    const wait = swapDelay(leaving, turning, justTurned, leaveMs());
+    // A clip sinks slower than ink; the next page waits for it.
+    const out = view.startsWith("carousel:nature") ? Math.max(leaveMs(), NATURE_OUT_MS) : leaveMs();
+    const wait = swapDelay(leaving, turning, justTurned, out);
     if (wait === null) return;
     const t = window.setTimeout(() => setView(target), wait);
     return () => window.clearTimeout(t);
-  }, [leaving, target, turning]);
+  }, [leaving, target, turning, view]);
 
   const show = useCallback((p: Page, v?: WeatherView) => {
     pageSince.current = Date.now();
@@ -312,6 +341,10 @@ export function Screen({
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
+  const wilds = slide?.kind === "nature" && picked?.n === slide.n ? picked.clip : null;
+  // The clip plays while its slot is up, and sinks as the page leaves.
+  const outside = Boolean(wilds) && !leaving;
+  const volume = paper === "night" ? VOLUME.night : twilight ? VOLUME.twilight : VOLUME.day;
   // The design under trial redraws home, night, and weather; Week and Ideas keep their own.
   const drawn = kit && (shown === "home" || slide || shown === "night" || asked) ? kit : null;
   return (
@@ -321,6 +354,7 @@ export function Screen({
       data-design={drawn ? (design ?? undefined) : undefined}
       data-settled={settled ? "" : undefined}
       data-turning={turning ? "" : undefined}
+      data-nature={natureBusy ? "" : undefined}
       className="paper flex h-dvh w-screen cursor-none items-center justify-center overflow-hidden"
       onClick={snapshot.voice ? voice.toggle : undefined}
     >
@@ -335,7 +369,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn}
+            hidden={!drawn || natureBusy}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -369,11 +403,25 @@ export function Screen({
               {shown === "night" && (drawn ? <drawn.Night {...props} /> : <NightPage {...props} />)}
               {asked &&
                 (drawn ? <drawn.Weather {...props} view={asked} /> : <WeatherPage {...props} />)}
+              {drawn && wilds && (
+                <NatureNotes clip={wilds} w={snapshot.weather} now={now} tz={tz} />
+              )}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
             </div>
           </InkStage.Provider>
         </InkModeContext.Provider>
+        {design === "almanac" ? (
+          <NatureWindow
+            job={job}
+            on={outside}
+            volume={volume}
+            onReady={onReady}
+            onFail={onFail}
+            onBusy={setNatureBusy}
+            turning={turning}
+          />
+        ) : null}
         {design === "almanac" ? (
           <Dusk
             twilight={twilight}

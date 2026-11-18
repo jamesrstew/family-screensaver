@@ -77,7 +77,8 @@ export function targetOf(o: {
 }): string {
   // A weather slide keeps its name across sunset and sunrise; a passage
   // turns into the night page's (or home's) with the mood.
-  if (o.slide?.startsWith("weather")) return `carousel:${o.slide}`;
+  // So does a nature clip (which plays by day, and by night while NATURE_AT_NIGHT).
+  if (o.slide?.startsWith("weather") || o.slide?.startsWith("nature")) return `carousel:${o.slide}`;
   if (o.slide) return `${o.base === "night" ? "night" : "home"}:${o.slide}`;
   if (o.base === "weather") return `weather:${o.asked ?? o.fromUrl}`;
   return o.base;
