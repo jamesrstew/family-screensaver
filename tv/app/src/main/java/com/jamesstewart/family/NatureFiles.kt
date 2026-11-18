@@ -76,9 +76,7 @@ class NatureFiles(private val context: Context) {
      * stream's end). So the stream stands for the file from its first byte up
      * to the range's end, and WebView's skip lands on the range's start. (A
      * stream that began at the range's start would be skipped past its own
-     * end, and every seek would fail.) It opens the file on the first read and
-     * closes it at the end or when WebView lets go, so a handle lives only
-     * while a range is being read.
+     * end, and every seek would fail.) The file is open only for each read.
      */
     private fun serve(file: File, range: String?): WebResourceResponse {
         val headers = mutableMapOf("Accept-Ranges" to "bytes", "Cache-Control" to "no-store")
@@ -90,8 +88,9 @@ class NatureFiles(private val context: Context) {
         val m = range?.let { RANGE.matchEntire(it.trim()) }
             ?: return WebResourceResponse("video/mp4", null, 200, "OK", headers, SeekingStream(file, size))
         val (a, b) = m.destructured
-        // A suffix range ("bytes=-500") or a start past the end: not ours to answer.
-        if (a.isEmpty() || a.toLong() >= size) {
+        // A suffix range ("bytes=-500"), a start past the end, or an end before
+        // the start: not ours to answer.
+        if (a.isEmpty() || a.toLong() >= size || (b.isNotEmpty() && b.toLong() < a.toLong())) {
             headers["Content-Range"] = "bytes */$size"
             return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
         }
@@ -104,18 +103,20 @@ class NatureFiles(private val context: Context) {
 
     private fun empty() = ByteArrayInputStream(ByteArray(0))
 
-    /** A file read from wherever WebView skips to; opened lazily, closed at the end. */
+    /**
+     * The file, read from wherever WebView skips to. Each read opens the file,
+     * seeks, reads and closes it, so no handle stays open while the player
+     * holds a range for minutes: a drive pulled out finds nothing open (Android
+     * kills a process that holds files on a volume being removed), and the
+     * next read fails gently instead.
+     */
     private class SeekingStream(private val file: File, private val size: Long) : java.io.InputStream() {
-        private var f: RandomAccessFile? = null
         private var pos = 0L
-
-        private fun open(): RandomAccessFile = f ?: RandomAccessFile(file, "r").also { it.seek(pos); f = it }
 
         override fun skip(n: Long): Long {
             if (n <= 0) return 0
             val step = minOf(n, size - pos)
             pos += step
-            f?.seek(pos)
             return step
         }
 
@@ -127,16 +128,15 @@ class NatureFiles(private val context: Context) {
         }
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
-            if (pos >= size) { close(); return -1 }
-            val n = open().read(b, off, minOf(len.toLong(), size - pos).toInt())
-            if (n < 0) { close(); return -1 }
+            if (len == 0) return 0
+            if (pos >= size) return -1
+            val n = RandomAccessFile(file, "r").use { f ->
+                f.seek(pos)
+                f.read(b, off, minOf(len.toLong(), size - pos).toInt())
+            }
+            if (n < 0) return -1
             pos += n
             return n
-        }
-
-        override fun close() {
-            f?.close()
-            f = null
         }
     }
 
