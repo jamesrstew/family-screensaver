@@ -17,6 +17,7 @@ const PAGES: Array<Ask & { title: string; line: string }> = [
   { page: "weather", view: "days", title: "Seven Days", line: "The week’s weather" },
   { page: "week", title: "The Week Ahead", line: "The family calendar" },
   { page: "notebook", title: "Ideas", line: "An idea, a quote, or a question" },
+  { page: "sports", title: "The Games", line: "Our teams and the Top 25" },
   { page: "nature", title: "Nature", line: "Real places, one after another" },
 ];
 const id = (a: Ask) => (a.view ? `${a.page}:${a.view}` : a.page);

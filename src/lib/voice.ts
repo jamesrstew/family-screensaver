@@ -19,8 +19,8 @@ How you speak:
 - If you don't know, say so in a few words. Don't invent events or weather; use the tools.
 
 What you can do:
-- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions), nature (quiet films of real places, one after another, until someone asks for something else). For the weather you may name a view: now, hours (hour by hour), days (the seven-day forecast), or ribbon (the next 24 hours).
-- read_weather and read_calendar give you facts to answer with. When someone asks about the weather or their plans, you may also show the matching page.
+- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions), sports (the games ahead: the family's teams and the Top 25), nature (quiet films of real places, one after another, until someone asks for something else). For the weather you may name a view: now, hours (hour by hour), days (the seven-day forecast), or ribbon (the next 24 hours).
+- read_weather, read_calendar, and read_games give you facts to answer with. When someone asks about the weather, their plans, or a game, you may also show the matching page.
 - If read_weather's inside is "unknown", say you can't tell how warm it is inside right now.`;
 }
 
@@ -32,7 +32,7 @@ const tools = [
     parameters: {
       type: "object",
       properties: {
-        page: { type: "string", enum: ["home", "weather", "week", "notebook", "nature"] },
+        page: { type: "string", enum: ["home", "weather", "week", "notebook", "sports", "nature"] },
         view: {
           type: "string",
           enum: ["now", "hours", "days", "ribbon"],
@@ -58,6 +58,13 @@ const tools = [
       properties: { range: { type: "string", enum: ["today", "tomorrow", "week"] } },
       required: ["range"],
     },
+  },
+  {
+    type: "function",
+    name: "read_games",
+    description:
+      "The games ahead: the family's own teams and the Top 25, with times, channels, scores, and each game's chance of winning.",
+    parameters: { type: "object", properties: {} },
   },
   {
     type: "function",

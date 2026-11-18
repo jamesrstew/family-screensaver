@@ -2,7 +2,7 @@
 
 import type { WeatherView } from "./carousel";
 
-export const PAGES = ["home", "weather", "week", "notebook", "nature"] as const;
+export const PAGES = ["home", "weather", "week", "notebook", "sports", "nature"] as const;
 export type Page = (typeof PAGES)[number];
 
 export type Weather = {
@@ -132,6 +132,45 @@ export type Indoor = {
   }>;
 };
 
+/** Which games: college football, men's college basketball, the NFL. */
+export type League = "cfb" | "cbb" | "nfl";
+
+/** One side of a game. */
+export type Side = {
+  id: string;
+  /** "Iowa", "Michigan State", "Bears": the name a family says. */
+  name: string;
+  /** A shorter one when the line runs long ("Michigan St"). */
+  short: string;
+  /** ESPN’s abbreviation ("IOWA") and the team’s place ("Chicago"): for finding its market. */
+  abbr?: string;
+  place?: string;
+  /** Its Top 25 rank, as ESPN gives it (college only). */
+  rank?: number;
+  score?: number;
+  /** One of the family's own teams. */
+  mine?: boolean;
+  /** Its chance of winning, in percent (before the game only): a liquid market's, else ESPN's predictor. */
+  chance?: number;
+};
+
+/** One game on the sports page (lib/games.ts). */
+export type Game = {
+  id: string;
+  league: League;
+  start: string; // ISO
+  /** False when the kickoff hasn't been set ("TBA"). */
+  timed: boolean;
+  state: "pre" | "in" | "post";
+  /** Where a game in progress or over stands: "3rd qtr.", "Halftime", "Final". */
+  period?: string;
+  neutral: boolean;
+  /** The national channel: "Fox", "ESPN", "Peacock". */
+  tv?: string;
+  away: Side;
+  home: Side;
+};
+
 export type Snapshot = {
   issuedAt: string; // ISO
   place: string;
@@ -141,6 +180,10 @@ export type Snapshot = {
   /** null: no thermostats connected, or they didn't answer. Optional for older snapshots. */
   indoor?: Indoor | null;
   notebook: NotebookItem[]; // today's selection, in order
+  /** The games ahead (lib/games.ts); null: the scores didn't answer. Optional for older snapshots. */
+  games?: Game[] | null;
+  /** When the games were gathered (ISO): the TV retires them when they're old (freshGames). */
+  gamesAt?: string;
   /** The carousel's passages for the next hour or so (pick.ts), by passage number. */
   passages?: { from: number; items: NotebookItem[] };
   voice: boolean; // can it talk?
