@@ -11,6 +11,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 
@@ -48,7 +49,12 @@ fun createFamilyWebView(context: Context): WebView = WebView(context).apply {
         loadWithOverviewMode = true
         useWideViewPort = true
     }
+    val nature = NatureFiles(context)
     webViewClient = object : WebViewClient() {
+        // The nature clips, from the TV's own storage (NatureFiles.kt).
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+            nature.intercept(request)
+
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame || request.url.scheme == "file") return
             Log.w(TAG, "Main frame failed: ${error.errorCode} ${error.description} (${request.url})")

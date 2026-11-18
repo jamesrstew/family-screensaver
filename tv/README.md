@@ -115,3 +115,7 @@ Notes: the mic test asks for microphone permission on first launch; allow it. If
 mic is hardware-switched off, tests 3a–3c should show that too. Everything on the Mic Test screen
 is also logged under the `FamilyMic` logcat tag, so `adb logcat -s FamilyMic` is an easy way to
 copy results out.
+
+## Nature clips (proposal)
+
+The shell serves nature clips to the page from the TV's own storage: `NatureFiles.kt` answers `GET /nature/manifest.json` and `/nature/<id>.mp4` on the family app's origin, in byte ranges, from the first storage volume (internal or a USB drive) holding `Android/data/com.jamesstewart.family/files/nature/manifest.json`. No storage permission is needed. Copy the folder there with `scripts/nature-push.mjs` from the web app. A missing drive or file is a 404, and the page carries on without it.
