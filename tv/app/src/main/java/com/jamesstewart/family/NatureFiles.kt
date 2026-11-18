@@ -12,10 +12,8 @@ import java.io.RandomAccessFile
 
 private const val TAG = "FamilyNature"
 private const val PREFIX = "/nature/"
-private val NAME = Regex("""^(manifest\.json|[\w-]{1,64}\.mp4)$""")
 private val RANGE = Regex("""^bytes=(\d*)-(\d*)$""")
-// At most this much of a clip per request, read whole and the file closed.
-private const val CHUNK = 2L * 1024 * 1024
+private val NAME = Regex("""^(manifest\.json|[\w-]{1,64}\.mp4)$""")
 private const val ROOT_TTL_MS = 5_000L
 
 /*
@@ -73,46 +71,74 @@ class NatureFiles(private val context: Context) {
     }
 
     /**
-     * Every range is read whole into memory and the file closed before the
-     * answer goes: no handle outlives a request, so a drive pulled out never
-     * finds the app holding a file open (Android kills a process that does). A
-     * clip is answered a chunk at a time (206); the player asks for the next.
+     * A clip, in the range asked for. WebView applies a Range's start itself:
+     * it skips that far into the stream it is handed (but reads on to the
+     * stream's end). So the stream stands for the file from its first byte up
+     * to the range's end, and WebView's skip lands on the range's start. (A
+     * stream that began at the range's start would be skipped past its own
+     * end, and every seek would fail.) It opens the file on the first read and
+     * closes it at the end or when WebView lets go, so a handle lives only
+     * while a range is being read.
      */
     private fun serve(file: File, range: String?): WebResourceResponse {
-        val size = file.length()
         val headers = mutableMapOf("Accept-Ranges" to "bytes", "Cache-Control" to "no-store")
         if (file.name.endsWith(".json")) {
             val bytes = file.readBytes()
-            headers["Content-Length"] = bytes.size.toString()
             return WebResourceResponse("application/json", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
         }
-        // No range asked (or one we can't read): the clip's first chunk, bounded
-        // like any other. The player always asks for ranges anyway.
-        val m = range?.let { RANGE.matchEntire(it.trim()) } ?: RANGE.matchEntire("bytes=0-")!!
+        val size = file.length()
+        val m = range?.let { RANGE.matchEntire(it.trim()) }
+            ?: return WebResourceResponse("video/mp4", null, 200, "OK", headers, SeekingStream(file, size))
         val (a, b) = m.destructured
-        // "bytes=-": no start and no length. Nothing to send.
-        if (a.isEmpty() && b.isEmpty()) {
+        // A suffix range ("bytes=-500") or a start past the end: not ours to answer.
+        if (a.isEmpty() || a.toLong() >= size) {
             headers["Content-Range"] = "bytes */$size"
             return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
         }
-        val start = if (a.isNotEmpty()) a.toLong() else maxOf(size - b.toLong(), 0)
-        val last = if (a.isNotEmpty() && b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
-        if (start > last || start >= size) {
-            headers["Content-Range"] = "bytes */$size"
-            return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
-        }
-        val end = minOf(last, start + CHUNK - 1)
-        val bytes = ByteArray((end - start + 1).toInt())
-        RandomAccessFile(file, "r").use { f ->
-            f.seek(start)
-            f.readFully(bytes)
-        }
+        val start = a.toLong()
+        val end = if (b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
         headers["Content-Range"] = "bytes $start-$end/$size"
-        headers["Content-Length"] = bytes.size.toString()
-        return WebResourceResponse("video/mp4", null, 206, "Partial Content", headers, ByteArrayInputStream(bytes))
+        // The stream stands for the file up to the range's end; WebView skips to its start.
+        return WebResourceResponse("video/mp4", null, 206, "Partial Content", headers, SeekingStream(file, end + 1))
     }
 
     private fun empty() = ByteArrayInputStream(ByteArray(0))
+
+    /** A file read from wherever WebView skips to; opened lazily, closed at the end. */
+    private class SeekingStream(private val file: File, private val size: Long) : java.io.InputStream() {
+        private var f: RandomAccessFile? = null
+        private var pos = 0L
+
+        private fun open(): RandomAccessFile = f ?: RandomAccessFile(file, "r").also { it.seek(pos); f = it }
+
+        override fun skip(n: Long): Long {
+            if (n <= 0) return 0
+            val step = minOf(n, size - pos)
+            pos += step
+            f?.seek(pos)
+            return step
+        }
+
+        override fun available(): Int = minOf(size - pos, Int.MAX_VALUE.toLong()).toInt()
+
+        override fun read(): Int {
+            val b = ByteArray(1)
+            return if (read(b, 0, 1) == 1) b[0].toInt() and 0xff else -1
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (pos >= size) { close(); return -1 }
+            val n = open().read(b, off, minOf(len.toLong(), size - pos).toInt())
+            if (n < 0) { close(); return -1 }
+            pos += n
+            return n
+        }
+
+        override fun close() {
+            f?.close()
+            f = null
+        }
+    }
 
     private fun missing() =
         WebResourceResponse("text/plain", "utf-8", 404, "Not Found", mapOf("Cache-Control" to "no-store"), empty())
