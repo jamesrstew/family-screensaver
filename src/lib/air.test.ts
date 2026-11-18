@@ -54,7 +54,15 @@ describe("withAir", () => {
 
   it("takes the service's own current reading when it sends one", () => {
     const a = { ...air(() => 30), current: { us_aqi: 77, pm2_5: 21.4 } };
-    expect(withAir(bare, shapeAir(a), tz).now).toMatchObject({ aqi: 77, pm: 21 });
+    // The index is the service's; the fine particles are the NowCast of the
+    // recent hours (30 / 4), never one instant's reading.
+    expect(withAir(bare, shapeAir(a, now), tz).now).toMatchObject({ aqi: 77, pm: 8 });
+  });
+
+  it("falls back to the service's particles when there are no recent hours", () => {
+    const a = { ...air(() => 30), current: { us_aqi: 77, pm2_5: 21.4 } };
+    const before = new Date("2026-11-10T10:00:00-08:00");
+    expect(withAir(bare, shapeAir(a, before), tz).now).toMatchObject({ aqi: 77, pm: 21 });
   });
 
   it("adds nothing when the air forecast is empty", () => {
