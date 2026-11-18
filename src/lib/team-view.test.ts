@@ -100,9 +100,21 @@ describe("teamView", () => {
       },
       "cbb",
     );
-    const v = teamView([a, b], "cbb", "904", NOW)!;
+    const v = teamView([a, { ...b, postseason: true }], "cbb", "904", NOW)!;
     expect(v.ahead.map((g) => g.id)).toEqual(["101", "102"]);
     expect(v.record).toBe("9-2");
+  });
+
+  it("never shows the postseason's record as the season's", () => {
+    const post = readSchedule(
+      {
+        ...json([ev(1, 2, true)]),
+        team: { id: "904", displayName: "Gonzaga Bulldogs", recordSummary: "2-0" },
+      },
+      "cbb",
+    );
+    const v = teamView([{ ...post, postseason: true }], "cbb", "904", NOW)!;
+    expect(v.record).toBeUndefined();
   });
 
   it("names an NFL team by nickname", () => {

@@ -38,7 +38,7 @@ export async function runTool(
       if (team && found === false) {
         return {
           ok: true,
-          teamFound: false,
+          team: false,
           shown: "the games (the family's teams and the Top 25)",
           say: "I couldn't find that team; here are the games.",
         };

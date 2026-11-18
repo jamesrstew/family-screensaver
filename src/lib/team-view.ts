@@ -56,14 +56,15 @@ export function readSchedule(
  * if none of them names the team.
  */
 export function teamView(
-  schedules: Array<{ team: TeamInfo | null; games: Game[] }>,
+  schedules: Array<{ team: TeamInfo | null; games: Game[]; postseason?: boolean }>,
   league: League,
   id: string,
   now: Date,
 ): TeamView | null {
-  // The regular season's first: its record is the season's.
   const info = schedules.map((s) => s.team).find((t) => t?.id === id);
   if (!info) return null;
+  // The record is the regular season's (the postseason's is its own short count).
+  const record = schedules.find((s) => !s.postseason && s.team?.id === id)?.team?.record;
   const seen = new Set<string>();
   const games = schedules
     .flatMap((s) => s.games)
@@ -86,7 +87,7 @@ export function teamView(
     name: info.name,
     // As the lines name teams: the NFL by nickname, colleges by place.
     short: (league === "nfl" ? info.nick : info.place) ?? info.name,
-    ...(info.record ? { record: info.record } : {}),
+    ...(record ? { record } : {}),
     ...(rank ? { rank } : {}),
     live,
     results,

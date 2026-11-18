@@ -62,7 +62,12 @@ export const ShowBody = z
   .object({
     page: z.string().max(40),
     view: z.string().max(40).optional(),
-    team: z.string().max(60).optional(),
+    // Longer than any team's name is cut, not refused (a run-on dictation).
+    team: z
+      .string()
+      .max(400)
+      .transform((t) => t.slice(0, 60))
+      .optional(),
   })
   .transform(({ page, view, team }, ctx): Asked => {
     const p = words(page);
@@ -81,6 +86,10 @@ export const ShowBody = z
     const named = WEATHER_VIEWS.find((w) => w === v) ?? ALIASES[v]?.view;
     return named ? { page: "weather", view: named } : asked;
   });
+
+/** The team a request carries to the screen: the games page's only; any other page clears it. */
+export const teamFor = <T>(page: Page, team?: T | null): T | null =>
+  page === "sports" && team ? team : null;
 
 /** Requests older than this are ignored by a TV that just woke up. */
 export const SHOW_TTL_MS = 2 * 60_000;

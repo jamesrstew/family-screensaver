@@ -34,7 +34,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!(await isFamily())) return new Response(null, { status: 401 });
   const body = z
-    .object({ team: z.string().max(60) })
+    .object({
+      team: z
+        .string()
+        .max(400)
+        .transform((t) => t.slice(0, 60)),
+    })
     .safeParse(await request.json().catch(() => null));
   const team = body.success
     ? await findTeam(body.data.team.trim(), household().teams, new Date()).catch(() => null)

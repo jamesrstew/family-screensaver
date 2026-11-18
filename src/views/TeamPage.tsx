@@ -40,7 +40,7 @@ export function TeamPage({
   const tz = snapshot.timeZone;
   const facts = [
     SPORT[team.league],
-    team.record?.replace("-", "–"),
+    team.record?.replace(/-/g, "\u2013"),
     team.rank ? `No. ${team.rank}` : null,
   ].filter(Boolean);
   // Room on the page: a game under way takes a line from the results and one from the games ahead.
@@ -151,7 +151,8 @@ function Line({ g, team, tz, now }: { g: Game; team: TeamView; tz: string; now: 
         {them.rank ? (
           <span className="mr-[0.25em] align-[0.4em] text-[0.66em] text-ink-soft">{them.rank}</span>
         ) : null}
-        {them.short.length > 18 ? them.short : them.name}
+        {/* A long name takes its short form ("Florida International": "FIU"). */}
+        {them.name.length > 18 ? them.short : them.name}
       </p>
       <p className="truncate text-[2.6rem] leading-[1.3] whitespace-nowrap text-ink-soft italic">
         {g.tv ?? ""}

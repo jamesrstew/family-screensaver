@@ -6,7 +6,8 @@ import type { ShowRequest, TeamView } from "@/lib/types";
 /** A team, by ESPN league and id (dev: `fake` asks for a made-up page instead). */
 export type TeamRef = NonNullable<ShowRequest["team"]> & { fake?: string };
 
-const EVERY_MS = 5 * 60_000;
+/** How often the page is fetched again: every minute while a game of theirs is on, else five. */
+export const refreshMs = (view: TeamView | null) => (view?.live ? 60_000 : 5 * 60_000);
 
 /**
  * One team's page, while one is asked for: fetched when asked, and again
@@ -17,6 +18,8 @@ const EVERY_MS = 5 * 60_000;
 export function useTeam(ref: TeamRef | null): { view: TeamView | null; pending: boolean } {
   const key = ref ? `${ref.league}:${ref.id}:${ref.fake ?? ""}` : "";
   const [got, setGot] = useState<{ key: string; view: TeamView | null } | null>(null);
+  // Faster while a game of theirs is on (a fresh fetch when that changes).
+  const every = refreshMs(got?.key === key ? got.view : null);
   useEffect(() => {
     if (!key) return;
     const [league, id, fake] = key.split(":");
@@ -33,12 +36,12 @@ export function useTeam(ref: TeamRef | null): { view: TeamView | null; pending: 
       }
     };
     load();
-    const t = window.setInterval(load, EVERY_MS);
+    const t = window.setInterval(load, every);
     return () => {
       alive = false;
       window.clearInterval(t);
     };
-  }, [key]);
+  }, [key, every]);
   const mine = got?.key === key ? got : null;
   return { view: key ? (mine?.view ?? null) : null, pending: Boolean(key) && !mine };
 }

@@ -18,7 +18,16 @@ import {
   type Team,
 } from "./games";
 import { KEYS, store } from "./store";
-import { TEAM_QUERY, readTeams, resolveTeam, type Found, type TeamEntry } from "./team-query";
+import {
+  TEAM_QUERY,
+  readRanked,
+  readTeams,
+  resolveTeam,
+  teamKey,
+  words,
+  type Found,
+  type TeamEntry,
+} from "./team-query";
 import { readSchedule, teamView } from "./team-view";
 import type { Game, League, TeamView } from "./types";
 import { within } from "./within";
@@ -176,10 +185,43 @@ export async function findTeam(
   now: Date,
 ): Promise<Found | null> {
   if (!TEAM_QUERY.test(q)) return null;
-  const lists = await Promise.all(
-    LEAGUES.map((l) => within(teamList(l), FETCH_MS).catch(() => [] as TeamEntry[])),
-  );
-  return resolveTeam(q, lists.flat(), family, now);
+  const quietly = <T>(p: Promise<T>, none: T) => within(p, FETCH_MS).catch(() => none);
+  const [lists, ranked, books] = await Promise.all([
+    Promise.all(LEAGUES.map((l) => quietly(teamList(l), [] as TeamEntry[]))),
+    Promise.all((["cfb", "cbb"] as const).map((l) => quietly(rankings(l), [] as string[]))),
+    Promise.all(LEAGUES.map((l) => quietly(markets(l), [] as Market[]))),
+  ]);
+  const teams = lists.flat();
+  return resolveTeam(q, teams, family, now, {
+    ranked: new Set(ranked.flat()),
+    volume: tradedBy(teams, books),
+  });
+}
+
+/** Each team's market volume in its own league, summed over its open game markets (by name). */
+function tradedBy(teams: TeamEntry[], books: Market[][]) {
+  const byName = LEAGUES.map((_, i) => {
+    const m = new Map<string, number>();
+    for (const k of books[i] ?? []) m.set(words(k.name), (m.get(words(k.name)) ?? 0) + k.volume);
+    return m;
+  });
+  const volume = new Map<string, number>();
+  for (const t of teams) {
+    const v = byName[LEAGUES.indexOf(t.league)]?.get(words(t.place)) ?? 0;
+    if (v) volume.set(teamKey(t), v);
+  }
+  return volume;
+}
+
+/** The Top 25 now (the first poll ESPN lists: the playoff committee's, in season), as team keys. */
+async function rankings(league: "cfb" | "cbb"): Promise<string[]> {
+  "use cache";
+  cacheLife({ stale: 600, revalidate: 6 * 3600, expire: 86_400 });
+  const res = await fetch(`${SITE}/${PATH[league]}/rankings`, {
+    signal: AbortSignal.timeout(FETCH_MS),
+  });
+  if (!res.ok) throw new Error(`espn rankings ${res.status}`);
+  return readRanked(await res.json(), league);
 }
 
 /** A league's teams (ESPN's full list; it changes a few times a year). */
@@ -190,7 +232,10 @@ async function teamList(league: League): Promise<TeamEntry[]> {
     signal: AbortSignal.timeout(FETCH_MS),
   });
   if (!res.ok) throw new Error(`espn teams ${res.status}`);
-  return readTeams(await res.json(), league);
+  const teams = readTeams(await res.json(), league);
+  // An empty list is a bad answer, not news: never kept for a day.
+  if (!teams.length) throw new Error("espn teams: none");
+  return teams;
 }
 
 /**
@@ -198,10 +243,15 @@ async function teamList(league: League): Promise<TeamEntry[]> {
  * ahead with its chance, within the budget. Null if ESPN doesn't know the
  * team or didn't answer.
  */
-export async function getTeamView(league: League, id: string, now: Date): Promise<TeamView | null> {
+export async function getTeamView(
+  league: League,
+  id: string,
+  now: Date,
+  budget = BUDGET_MS,
+): Promise<TeamView | null> {
   if (!LEAGUES.includes(league) || !/^\d{1,8}$/.test(id)) return null;
   const began = Date.now();
-  const left = () => Math.max(0, BUDGET_MS - (Date.now() - began));
+  const left = () => Math.max(0, budget - (Date.now() - began));
   const book = new Map([[league, markets(league).catch(() => [] as Market[])]]);
   const got = await Promise.allSettled([2, 3].map((type) => schedule(league, id, type)));
   const ok = got.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -217,7 +267,7 @@ async function schedule(league: League, id: string, type: number) {
   const url = `${SITE}/${PATH[league]}/teams/${id}/schedule?seasontype=${type}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS) });
   if (!res.ok) throw new Error(`espn schedule ${res.status}`);
-  return readSchedule(await res.json(), league);
+  return { ...readSchedule(await res.json(), league), postseason: type === 3 };
 }
 
 async function events(league: League, url: string): Promise<Game[]> {

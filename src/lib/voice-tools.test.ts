@@ -120,7 +120,7 @@ describe("show_page with a team", () => {
 
   it("says so when no team answers to it, and what's up instead", async () => {
     expect(await ask(false)).toMatchObject({
-      teamFound: false,
+      team: false,
       say: "I couldn’t find that team; here are the games.".replace("’", "'"),
     });
     expect(await ask(true)).toEqual({ ok: true });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ShowBody, pageKey, targetOf, viewAsked } from "./show";
+import { ShowBody, pageKey, targetOf, teamFor, viewAsked } from "./show";
 
 describe("ShowBody", () => {
   it.each([
@@ -91,9 +91,23 @@ describe("a team's games", () => {
     expect(ShowBody.parse({ page: "weather", team: "Duke" })).toEqual({ page: "weather" });
   });
 
-  it("drops a team that isn't a few plain words, and refuses one too long", () => {
+  it("drops a team that isn't a few plain words, and cuts a run-on one", () => {
     expect(ShowBody.parse({ page: "sports", team: "duke<script>" })).toEqual({ page: "sports" });
     expect(ShowBody.parse({ page: "sports", team: "a/../b" })).toEqual({ page: "sports" });
-    expect(ShowBody.safeParse({ page: "sports", team: "x".repeat(61) }).success).toBe(false);
+    expect(ShowBody.parse({ page: "sports", team: "duke ".repeat(30) })).toMatchObject({
+      team: expect.stringMatching(/^duke/),
+    });
+    expect(
+      (ShowBody.parse({ page: "sports", team: "duke ".repeat(30) }) as { team: string }).team
+        .length,
+    ).toBeLessThanOrEqual(60);
+    expect(ShowBody.safeParse({ page: "sports", team: "x".repeat(401) }).success).toBe(false);
+  });
+
+  it("carries a team to the screen for the games page only", () => {
+    const t = { league: "cbb" as const, id: "1" };
+    expect(teamFor("sports", t)).toBe(t);
+    expect(teamFor("home", t)).toBeNull();
+    expect(teamFor("sports", null)).toBeNull();
   });
 });

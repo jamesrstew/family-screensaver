@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SHOW_TTL_MS, pageKey, targetOf, viewAsked } from "@/lib/show";
+import { SHOW_TTL_MS, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
 import {
+  CYCLE_MS,
   natureNext,
   nextTurnIn,
   startAfter,
@@ -188,12 +189,6 @@ export function Screen({
   // No games to show (the off-season, the scores didn't answer, or the list
   // has gone stale): home.
   const games = freshGames(snapshot, now);
-  // Home's games slide: by day, the agenda; by night, only a family game
-  // under way or about to start, alone (§4).
-  const cue =
-    mood === "night"
-      ? { any: Boolean(nightGame(games, now)), ours: true, anyHour: true }
-      : gamesCue(games, now, snapshot.timeZone);
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
     (askedBase === "sports" && !games?.length && !team.view && !team.pending)
@@ -301,6 +296,17 @@ export function Screen({
   // The weather view someone asked for by name ("hourly"); otherwise ?weather=.
   const [view0, setView0] = useState<WeatherView | null>(null);
   const fromUrl = useAsked();
+  // Home's games slide: by day, the agenda; by night, only a family game
+  // under way or about to start, alone (§4). Decided as each cycle begins,
+  // so a slide never turns mid-slot when a game ends or the night falls.
+  const cycle = Math.floor(Math.max(now.getTime() - homeStart.since, 0) / CYCLE_MS);
+  const cueNow =
+    mood === "night"
+      ? { any: Boolean(nightGame(games, now)), ours: true, anyHour: true }
+      : gamesCue(games, now, tz);
+  const [cueAt, setCueAt] = useState({ cycle, cue: cueNow });
+  if (cueAt.cycle !== cycle) setCueAt({ cycle, cue: cueNow });
+  const cue = cueAt.cycle === cycle ? cueAt.cue : cueNow;
   const target = targetOf({
     base,
     slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, cue)) : null,
@@ -333,7 +339,7 @@ export function Screen({
       setPage(p);
       setView0(viewAsked(p, v));
       // One team's games, or none: any other asking clears it.
-      setTeamRef(p === "sports" && t ? t : null);
+      setTeamRef(teamFor(p, t));
       // Asking for nature starts a fresh session, whatever happened to the last.
       if (p === "nature") setMode((m) => modeStart(m, clockNow()));
     },
