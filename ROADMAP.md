@@ -62,7 +62,7 @@ These come up. The answer is no, and here's why (doctrine §1).
 - **News headlines, sports scores, stock tickers.** The world's news is an engagement machine; the app is about the family.
 - **Notifications, badges, streaks, "you haven't checked…"** Nothing here reaches out to pull anyone in.
 - **Analytics on attention** (time on screen, interactions). We don't measure looking.
-- **Video autoplay, feeds, anything that scrolls.**
+- **Video autoplay, feeds, anything that scrolls.** (The nature clips are the one exception, §3: the family's own, kept on the TV, a minute now and then or asked for.)
 - **Ads, sponsored content, or the newsletter's promos.**
 
 ---
