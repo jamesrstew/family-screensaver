@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TTL_MS, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
 import {
   CYCLE_MS,
+  latchCue,
   natureNext,
   nextTurnIn,
   startAfter,
@@ -11,10 +12,12 @@ import {
   slideKey,
   slideOf,
   turns,
+  type GamesCue,
+  type Slide,
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames, gamesCue, nightGame } from "@/lib/games";
+import { freshGames, gamesCue, nightGame, slideGames } from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   NATURE_AT_NIGHT,
@@ -300,13 +303,20 @@ export function Screen({
   // under way or about to start, alone (§4). Decided as each cycle begins,
   // so a slide never turns mid-slot when a game ends or the night falls.
   const cycle = Math.floor(Math.max(now.getTime() - homeStart.since, 0) / CYCLE_MS);
-  const cueNow =
+  const tonight = mood === "night" ? nightGame(games, now) : null;
+  const cueNow: GamesCue =
     mood === "night"
-      ? { any: Boolean(nightGame(games, now)), ours: true, anyHour: true }
+      ? {
+          any: Boolean(tonight),
+          ours: true,
+          anyHour: true,
+          ...(tonight ? { game: `${tonight.league}:${tonight.id}` } : {}),
+        }
       : gamesCue(games, now, tz);
   const [cueAt, setCueAt] = useState({ cycle, cue: cueNow });
-  if (cueAt.cycle !== cycle) setCueAt({ cycle, cue: cueNow });
-  const cue = cueAt.cycle === cycle ? cueAt.cue : cueNow;
+  const latched = latchCue(cueAt, cycle, cueNow);
+  if (latched !== cueAt) setCueAt(latched);
+  const cue = latched.cue;
   const target = targetOf({
     base,
     slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, natureReady, cue)) : null,
@@ -497,6 +507,14 @@ export function Screen({
   const slide =
     (at === "home" || at === "night" || at === "carousel") && key ? slideFromKey(key) : undefined;
   const props = { snapshot, now, mood, slide, inside: freshIndoor(snapshot, now)?.temp ?? null };
+  // A games slide with nothing left to show gives its place back to the passage it took.
+  const gamesGone =
+    slide?.kind === "games" &&
+    (mood === "night"
+      ? !(games ?? []).some((g) => `${g.league}:${g.id}` === cue.game)
+      : slideGames(games ?? [], now, tz).length === 0);
+  const instead: Slide | undefined =
+    slide?.kind === "games" ? { kind: "passage", n: 2 * slide.n + 1 } : undefined;
   const wilds = slide?.kind === "nature" && picked?.n === slide.n ? picked.clip : null;
   // The clip plays while its turn is up and the app is in view (in nature
   // mode, once it's loaded), and sinks as the page leaves.
@@ -604,8 +622,16 @@ export function Screen({
               {drawn && slide?.kind === "weather" && <drawn.Weather {...props} view={slide.view} />}
               {drawn &&
                 slide?.kind === "games" &&
-                (mood === "night" ? (
-                  <NightGame {...props} games={games ?? []} />
+                (gamesGone ? (
+                  // The games it was cued for are gone (over, or the list went
+                  // stale): the cycle's passage, never bare paper.
+                  mood === "night" ? (
+                    <drawn.Night {...props} slide={instead} />
+                  ) : (
+                    <drawn.Home {...props} slide={instead} />
+                  )
+                ) : mood === "night" ? (
+                  <NightGame {...props} games={games ?? []} cued={cue.game} />
                 ) : (
                   <SportsPage {...props} games={games ?? []} />
                 ))}

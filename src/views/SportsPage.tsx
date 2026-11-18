@@ -253,8 +253,14 @@ export function Ball({ league }: { league: Game["league"] }) {
  * under way, or about to start. Centered, in night's soft ink, no accent:
  * "Packers at Bears" over "5:15 p.m., ESPN", or "4th qtr., Bears lead 24–20".
  */
-export function NightGame({ snapshot, now, games }: ViewProps & { games: Game[] }) {
-  const g = nightGame(games, now);
+export function NightGame({
+  snapshot,
+  now,
+  games,
+  cued,
+}: ViewProps & { games: Game[]; cued?: string }) {
+  // The game the cycle was cued for (its score moves on; the game doesn't change).
+  const g = games.find((x) => `${x.league}:${x.id}` === cued) ?? nightGame(games, now);
   if (!g) return null;
   const tz = snapshot.timeZone;
   const note =

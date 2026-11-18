@@ -21,6 +21,7 @@ import { KEYS, store } from "./store";
 import {
   TEAM_QUERY,
   readRanked,
+  readRefs,
   readTeams,
   resolveTeam,
   teamKey,
@@ -186,29 +187,39 @@ export async function findTeam(
 ): Promise<Found | null> {
   if (!TEAM_QUERY.test(q)) return null;
   const quietly = <T>(p: Promise<T>, none: T) => within(p, FETCH_MS).catch(() => none);
-  const [lists, ranked, books] = await Promise.all([
+  const [lists, ranked, books, fbs, fcs] = await Promise.all([
     Promise.all(LEAGUES.map((l) => quietly(teamList(l), [] as TeamEntry[]))),
     Promise.all((["cfb", "cbb"] as const).map((l) => quietly(rankings(l), [] as string[]))),
     Promise.all(LEAGUES.map((l) => quietly(markets(l), [] as Market[]))),
+    quietly(division(80, now), [] as string[]),
+    quietly(division(81, now), [] as string[]),
   ]);
   const teams = lists.flat();
+  const [top, next] = [new Set(fbs), new Set(fcs)];
   return resolveTeam(q, teams, family, now, {
     ranked: new Set(ranked.flat()),
     volume: tradedBy(teams, books),
+    // Basketball's list is Division I alone, and the NFL is the NFL;
+    // football's holds every division.
+    tier: (t) => (t.league !== "cfb" || top.has(t.id) ? 2 : next.has(t.id) ? 1 : 0),
   });
 }
 
-/** Each team's market volume in its own league, summed over its open game markets (by name). */
-function tradedBy(teams: TeamEntry[], books: Market[][]) {
+/** Each team's market volume, summed over its open game markets (by name), as a share of its league's busiest. */
+function tradedBy(teams: TeamEntry[], books: Market[][]): Map<string, number> {
   const byName = LEAGUES.map((_, i) => {
     const m = new Map<string, number>();
     for (const k of books[i] ?? []) m.set(words(k.name), (m.get(words(k.name)) ?? 0) + k.volume);
     return m;
   });
+  // A share of the busiest team in the same league: the NFL's markets are
+  // deeper than college's, and must not win a college team's ties.
+  const top = byName.map((m) => Math.max(1, ...m.values()));
   const volume = new Map<string, number>();
   for (const t of teams) {
-    const v = byName[LEAGUES.indexOf(t.league)]?.get(words(t.place)) ?? 0;
-    if (v) volume.set(teamKey(t), v);
+    const i = LEAGUES.indexOf(t.league);
+    const v = byName[i]?.get(words(t.place)) ?? 0;
+    if (v) volume.set(teamKey(t), v / top[i]);
   }
   return volume;
 }
@@ -224,8 +235,22 @@ async function rankings(league: "cfb" | "cbb"): Promise<string[]> {
   return readRanked(await res.json(), league);
 }
 
+/** College football's FBS (80) or FCS (81) teams this season, by ESPN id (kept a week). */
+async function division(group: 80 | 81, now: Date): Promise<string[]> {
+  "use cache";
+  cacheLife({ stale: 86_400, revalidate: 7 * 86_400, expire: 30 * 86_400 });
+  // The season is named for the year it starts, in August.
+  const year = now.getUTCFullYear() - (now.getUTCMonth() < 7 ? 1 : 0);
+  const url = `${CORE}/football/leagues/college-football/seasons/${year}/types/2/groups/${group}/teams?limit=300`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS) });
+  if (!res.ok) throw new Error(`espn division ${res.status}`);
+  const ids = readRefs(await res.json());
+  if (!ids.length) throw new Error("espn division: none");
+  return ids;
+}
+
 /** A league's teams (ESPN's full list; it changes a few times a year). */
-async function teamList(league: League): Promise<TeamEntry[]> {
+export async function teamList(league: League): Promise<TeamEntry[]> {
   "use cache";
   cacheLife({ stale: 3600, revalidate: 86_400, expire: 7 * 86_400 });
   const res = await fetch(`${SITE}/${PATH[league]}/teams?limit=1000`, {

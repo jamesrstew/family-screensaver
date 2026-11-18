@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseQuery,
   readRanked,
+  readRefs,
   readTeams,
   resolveTeam,
   seasonOf,
@@ -200,5 +201,60 @@ describe("seasonOf", () => {
     expect(seasonOf("cbb", FEB)).toBe(2);
     expect(seasonOf("cfb", FEB)).toBe(0);
     expect(seasonOf("nfl", new Date("2026-07-01T00:00:00Z"))).toBe(0);
+  });
+});
+
+describe("resolveTeam: the last words", () => {
+  it("lets the longest name said win, even over a better fit for fewer words", () => {
+    // "Saint Mary" is one team's full name; "Saint Mary College" another's place.
+    const lists = [
+      team("cbb", "31", "Saint", "Mary", "SM"),
+      team("cbb", "32", "Saint Mary College", "Gaels", "SMC"),
+    ];
+    expect(resolveTeam("Saint Mary College", lists, [], NOW)).toMatchObject(at("cbb", "32"));
+  });
+
+  it("falls to the top division, then ESPN's lowest id, never the alphabet", () => {
+    const aggies = [
+      team("cfb", "700", "Delaware Valley", "Aggies", "DV"),
+      team("cfb", "300", "Utah State", "Aggies", "USU"),
+      team("cfb", "245", "Texas A&M", "Aggies", "TAMU"),
+    ];
+    const fbs = new Set(["245", "300"]);
+    const tier = (t: TeamEntry) => (fbs.has(t.id) ? 2 : 0);
+    const none = { ranked: new Set<string>(), volume: new Map<string, number>(), tier };
+    expect(resolveTeam("Aggies", aggies, [], NOW, none)).toMatchObject(at("cfb", "245"));
+    expect(
+      resolveTeam("Aggies", aggies.slice(0, 1).concat(aggies.slice(1).reverse()), [], NOW, none),
+    ).toMatchObject(at("cfb", "245"));
+    // Nothing known at all: the lowest id.
+    expect(resolveTeam("Aggies", aggies, [], NOW)).toMatchObject(at("cfb", "245"));
+  });
+
+  it("weighs trading within each league, so pro markets don't win a college tie", () => {
+    const lists = [
+      team("cfb", "40", "Tennessee", "Volunteers", "TENN"),
+      team("nfl", "41", "Tennessee", "Titans", "TEN"),
+    ];
+    // Shares of each league's busiest: the college team is its league's busiest.
+    const volume = new Map([
+      [teamKey(at("cfb", "40")), 1],
+      [teamKey(at("nfl", "41")), 0.4],
+    ]);
+    expect(
+      resolveTeam("Tennessee football", lists, [], DEC, { ranked: new Set(), volume }),
+    ).toMatchObject(at("nfl", "41"));
+    expect(
+      resolveTeam("Tennessee football", lists, [], NOW, { ranked: new Set(), volume }),
+    ).toMatchObject(at("cfb", "40"));
+  });
+});
+
+describe("readRefs", () => {
+  it("reads team ids from core-API links", () => {
+    expect(
+      readRefs({ items: [{ $ref: "http://x/seasons/2026/teams/245?lang=en" }, { $ref: "nope" }] }),
+    ).toEqual(["245"]);
+    expect(readRefs({})).toEqual([]);
   });
 });

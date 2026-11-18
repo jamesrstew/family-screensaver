@@ -713,6 +713,10 @@ describe("the games on home", () => {
     expect(nightGame([later, ranked], NOW)).toBeNull();
     expect(nightGame([later, soon, ranked], NOW)).toBe(soon);
     expect(nightGame([soon, live], NOW)).toBe(live);
+    // A placeholder never lingers: no hour set, or started too long ago.
+    expect(nightGame([{ ...soon, timed: false }], NOW)).toBeNull();
+    const stuck = game("2026-11-18T08:00:00Z", { mine: true }, {}, { state: "in" });
+    expect(nightGame([stuck], NOW)).toBeNull();
     expect(standing(live)).toBe("Bears lead 24\u201320");
     expect(standing({ ...live, home: { ...live.home, score: 31 } })).toBe("Bears trail 24\u201331");
     expect(standing({ ...live, home: { ...live.home, score: 24 } })).toBe("Tied 24\u201324");

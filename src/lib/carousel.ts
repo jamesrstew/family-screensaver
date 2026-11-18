@@ -54,7 +54,19 @@ export const GAMES_EVERY = { usual: 4, ours: 2 } as const;
  * plays today (still to come or under way), and whether the games may come
  * before noon too (a family game tonight, by night).
  */
-export type GamesCue = { any: boolean; ours: boolean; anyHour?: boolean };
+export type GamesCue = { any: boolean; ours: boolean; anyHour?: boolean; game?: string };
+
+/**
+ * The cue a cycle keeps: the one it began with. A game that ends, or a
+ * night that falls, mid-cycle changes the next cycle, never a slide already up.
+ */
+export function latchCue(
+  at: { cycle: number; cue: GamesCue },
+  cycle: number,
+  now: GamesCue,
+): { cycle: number; cue: GamesCue } {
+  return at.cycle === cycle ? at : { cycle, cue: now };
+}
 
 export const isGamesCycle = (n: number, ours: boolean) =>
   n % (ours ? GAMES_EVERY.ours : GAMES_EVERY.usual) === 1;

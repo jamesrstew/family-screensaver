@@ -3,6 +3,7 @@ import {
   CYCLE_MS,
   SLIDE_MS,
   isNatureCycle,
+  latchCue,
   natureNext,
   WEATHER_VIEWS,
   nextTurnIn,
@@ -302,5 +303,14 @@ describe("the games on home", () => {
     expect(targetOf({ base: "night", slide: key, asked: null, fromUrl: "now" })).toBe(
       "carousel:games-7",
     );
+  });
+});
+
+describe("latchCue", () => {
+  it("keeps the cue a cycle began with, and takes the new one at the next", () => {
+    const began = { cycle: 4, cue: { any: true, ours: true } };
+    const later = { any: false, ours: false };
+    expect(latchCue(began, 4, later)).toBe(began);
+    expect(latchCue(began, 5, later)).toEqual({ cycle: 5, cue: later });
   });
 });

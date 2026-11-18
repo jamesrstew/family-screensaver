@@ -517,8 +517,9 @@ export function gamesCue(games: Game[] | null, now: Date, tz: string) {
   };
 }
 
-/** How near a family game must be to come to the night page. */
+/** How near a family game must be to come to the night page, and how long one stays. */
 export const NIGHT_SOON_MS = 2 * 3_600_000;
+const NIGHT_SINCE_MS = 5 * 3_600_000;
 
 /**
  * The night's one game, if any: a family game under way, or one starting
@@ -526,7 +527,11 @@ export const NIGHT_SOON_MS = 2 * 3_600_000;
  */
 export function nightGame(games: Game[] | null, now: Date): Game | null {
   const t = now.getTime();
-  const mine = (games ?? []).filter(ours);
+  // A real hour, started no more than a few hours ago: a placeholder (TBA,
+  // or a game called off without word) never lingers on the night page.
+  const mine = (games ?? []).filter(
+    (g) => ours(g) && g.timed && Date.parse(g.start) > t - NIGHT_SINCE_MS,
+  );
   return (
     mine.find((g) => g.state === "in") ??
     mine.find((g) => g.state === "pre" && Date.parse(g.start) - t <= NIGHT_SOON_MS) ??

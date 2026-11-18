@@ -55,6 +55,14 @@ export function readTeams(json: unknown, league: League): TeamEntry[] {
   });
 }
 
+/** The team ids in a core-API list of team links (`…/teams/2?lang=en`). */
+export function readRefs(json: unknown): string[] {
+  return arr(obj(json).items).flatMap((x) => {
+    const id = str(obj(x).$ref).match(/\/teams\/(\d+)\b/)?.[1];
+    return id ? [id] : [];
+  });
+}
+
 /** The teams in a `/rankings` answer's first poll, as team keys ("cfb:61"). */
 export function readRanked(json: unknown, league: League): string[] {
   const poll = obj(arr(obj(json).rankings)[0]);
@@ -159,7 +167,17 @@ export function seasonOf(league: League, now: Date): number {
 }
 
 /** What's known of how much a team matters now: Top 25 teams, and how much its markets trade. */
-export type Notable = { ranked: ReadonlySet<string>; volume: ReadonlyMap<string, number> };
+/**
+ * What's known of how much a team matters now: Top 25 teams; how much its
+ * games trade, as a share of the busiest team's in its own league (0 to 1);
+ * and its tier: 2 for the top division (FBS, Division I basketball, the
+ * NFL), 1 for FCS, 0 below. Whatever didn't answer is simply empty.
+ */
+export type Notable = {
+  ranked: ReadonlySet<string>;
+  volume: ReadonlyMap<string, number>;
+  tier?: (t: TeamEntry) => number;
+};
 export const teamKey = (t: { league: League; id: string }) => `${t.league}:${t.id}`;
 
 /**
@@ -167,8 +185,9 @@ export const teamKey = (t: { league: League; id: string }) => `${t.league}:${t.i
  * team wins ("Kansas State" over "Kansas"), then the better fit (the full
  * name, the place, the nickname, the abbreviation). Among equals: a Top 25
  * team; the family's own, while its season is on; the league whose season
- * is on; the team whose games trade most (Kalshi); the family's own at all;
- * then by name, so the answer never depends on the order of the lists.
+ * is on; the team whose games trade most (Kalshi, within its league); the
+ * family's own at all; the top division; then the lowest ESPN id, so the
+ * answer never depends on the order of the lists.
  */
 export function resolveTeam(
   q: string,
@@ -194,6 +213,7 @@ export function resolveTeam(
       return best.score ? [{ t, ...best }] : [];
     });
   const season = (t: TeamEntry) => seasonOf(t.league, now);
+  const tier = notable.tier ?? (() => 0);
   const best = scored.sort(
     (a, b) =>
       b.len - a.len ||
@@ -203,7 +223,9 @@ export function resolveTeam(
       season(b.t) - season(a.t) ||
       (notable.volume.get(teamKey(b.t)) ?? 0) - (notable.volume.get(teamKey(a.t)) ?? 0) ||
       Number(mine(b.t)) - Number(mine(a.t)) ||
-      a.t.full.localeCompare(b.t.full),
+      tier(b.t) - tier(a.t) ||
+      // Last, the team ESPN has known longest: the order of its lists never decides.
+      Number(a.t.id) - Number(b.t.id),
   )[0];
   return best ? { league: best.t.league, id: best.t.id, name: curly(best.t.full) } : null;
 }

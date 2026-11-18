@@ -14,7 +14,7 @@ vi.mock("./store", () => ({
   },
 }));
 
-const { findTeam, gather, getGames, getTeamView } = await import("./sports");
+const { findTeam, gather, getGames, getTeamView, teamList } = await import("./sports");
 
 const TZ = "America/Los_Angeles";
 // Wednesday, Nov. 18, 2026, 10 a.m. Pacific.
@@ -294,5 +294,12 @@ describe("getTeamView", () => {
     expect(await getTeamView("cbb", "../x", NOW)).toBeNull();
     expect(await getTeamView("nba" as never, "1", NOW)).toBeNull();
     expect(asked).toEqual([]);
+  });
+});
+
+describe("teamList", () => {
+  it("refuses an empty list, so it's never kept for a day", async () => {
+    serve(() => json({ sports: [{ leagues: [{ teams: [] }] }] }));
+    await expect(teamList("cbb")).rejects.toThrow();
   });
 });
