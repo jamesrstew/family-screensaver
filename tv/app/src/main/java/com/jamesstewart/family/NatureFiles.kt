@@ -86,14 +86,15 @@ class NatureFiles(private val context: Context) {
             headers["Content-Length"] = bytes.size.toString()
             return WebResourceResponse("application/json", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
         }
-        // No range asked (or one we can't read): the whole clip, as a plain 200.
-        // The player always asks for ranges, so this stream is rare.
-        val m = range?.let { RANGE.matchEntire(it.trim()) }
-        if (m == null) {
-            headers["Content-Length"] = size.toString()
-            return WebResourceResponse("video/mp4", null, 200, "OK", headers, file.inputStream())
-        }
+        // No range asked (or one we can't read): the clip's first chunk, bounded
+        // like any other. The player always asks for ranges anyway.
+        val m = range?.let { RANGE.matchEntire(it.trim()) } ?: RANGE.matchEntire("bytes=0-")!!
         val (a, b) = m.destructured
+        // "bytes=-": no start and no length. Nothing to send.
+        if (a.isEmpty() && b.isEmpty()) {
+            headers["Content-Range"] = "bytes */$size"
+            return WebResourceResponse("video/mp4", null, 416, "Range Not Satisfiable", headers, empty())
+        }
         val start = if (a.isNotEmpty()) a.toLong() else maxOf(size - b.toLong(), 0)
         val last = if (a.isNotEmpty() && b.isNotEmpty()) minOf(b.toLong(), size - 1) else size - 1
         if (start > last || start >= size) {
