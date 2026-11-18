@@ -145,7 +145,7 @@ function Days({ w }: { w: Weather }) {
           <p className="text-[2rem] leading-none text-ink italic">{dayShort(d.date, i)}</p>
           <Sky code={d.code} isDay className="mx-auto my-[0.5rem] h-[3.4rem] w-[3.4rem]" />
           <p className="text-[2.6rem] leading-none whitespace-nowrap text-ink">
-            {degrees(d.high)} <span className="text-ink-soft">{degrees(d.low)}</span>
+            {degrees(d.high)} {degrees(d.low)}
           </p>
         </div>
       ))}
