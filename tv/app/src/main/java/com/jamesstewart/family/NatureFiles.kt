@@ -121,7 +121,9 @@ class NatureFiles(private val context: Context) {
      * is known, so a drive being removed closes them all at once (watchDrives).
      */
     private class SeekingStream(private val file: File, private val size: Long) : java.io.InputStream() {
-        private var f: RandomAccessFile? = null
+        @Volatile private var f: RandomAccessFile? = null
+        // Set when a drive is being removed: the stream never reopens after that.
+        @Volatile var gone = false
         private var pos = 0L
         private val buf = ByteArray(BLOCK)
         private var bufStart = 0L
@@ -148,6 +150,7 @@ class NatureFiles(private val context: Context) {
         @Synchronized
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             if (len == 0) return 0
+            if (gone) throw java.io.IOException("drive removed")
             if (pos >= size) { close(); return -1 }
             if (pos < bufStart || pos >= bufStart + bufLen) {
                 val raf = f ?: RandomAccessFile(file, "r").also { f = it }
@@ -170,6 +173,18 @@ class NatureFiles(private val context: Context) {
             try { f?.close() } catch (_: Exception) {}
             f = null
             bufLen = 0
+        }
+
+        /**
+         * A drive is going: mark the stream gone and close its file without
+         * waiting for a read in progress (which then fails, and the page skips
+         * the clip). Never takes the stream's lock, so the main thread can't
+         * stall behind a read blocked on a pulled drive.
+         */
+        fun drop() {
+            gone = true
+            live.remove(this)
+            try { f?.close() } catch (_: Exception) {}
         }
     }
 
@@ -196,7 +211,9 @@ class NatureFiles(private val context: Context) {
             app.registerReceiver(object : BroadcastReceiver() {
                 override fun onReceive(c: Context, i: Intent) {
                     Log.i(TAG, "A drive is going (${i.action}); closing open clips")
-                    synchronized(live) { live.toList() }.forEach { it.close() }
+                    val open = synchronized(live) { live.toList() }
+                    open.forEach { it.gone = true }
+                    Thread { open.forEach { it.drop() } }.start()
                 }
             }, filter)
         }
