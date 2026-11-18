@@ -10,8 +10,7 @@ import { parts } from "./time";
 // 2 to 6 p.m. the question for the table comes round every few minutes).
 // The slides go in threes, a cycle of 90 seconds, each cycle taking its mix
 // from the hour it starts in, so the change at noon and at midnight is smooth:
-// every cycle opens on the weather and closes on a passage (or, now and
-// then, a minute of nature: below).
+// every cycle opens on the weather and closes on a passage.
 //
 // It counts from the moment home appeared; which quote and which view come up
 // follow the clock, so a reload doesn't repeat the same ones.
@@ -27,24 +26,13 @@ export type WeatherView = (typeof WEATHER_VIEWS)[number];
 export type Slide =
   | { kind: "passage"; n: number }
   | { kind: "weather"; view: WeatherView }
-  | { kind: "nature"; n: number }
   | { kind: "games"; n: number };
-
-// Every so often a cycle's last minute is a window onto a real place (a
-// nature clip, nature.ts) in place of its other slides: every tenth cycle by
-// the clock, about one minute in fifteen, never the first cycle after home
-// appears, and only when the screen has a clip ready for it.
-export const NATURE_EVERY = 10;
-export const isNatureCycle = (n: number) => n % NATURE_EVERY === 0;
-
-/** Asks the screen whether nature slot `n` has its clip ready. */
-export type NatureReady = (n: number) => boolean;
 
 // The games (the sports page's first leaf) take a cycle's last slide, the
 // second of its two passages, from noon on (mornings keep their one
 // passage): every fourth cycle by the clock, every other one on a day one
 // of the family's teams plays. Never the first cycle after home appears,
-// never a nature cycle, and only when there are games within the page's few
+// and only when there are games within the page's few
 // days. By night, only for a family game under way or about to start, and
 // then whatever the hour (night.ts's one quiet piece: NightGame).
 export const GAMES_EVERY = { usual: 4, ours: 2 } as const;
@@ -123,7 +111,6 @@ export function slideOf(
   start: Start,
   hasWeather: boolean,
   timeZone: string,
-  nature: NatureReady = () => false,
   games: GamesCue = { any: false, ours: false },
 ): Slide {
   const { since } = start;
@@ -135,14 +122,9 @@ export function slideOf(
   const w = weathersIn(at, timeZone);
   const base = 2 * Math.floor(at / CYCLE_MS);
   const n = Math.floor(at / CYCLE_MS);
-  // A nature cycle: the weather's now (or a passage), then the clip.
-  const wild = c >= 1 && isNatureCycle(n) && nature(n);
   // No weather: the cycle's two passages, 45 seconds each.
-  if (!hasWeather) {
-    const second = elapsed % CYCLE_MS >= CYCLE_MS / 2;
-    return wild && second ? { kind: "nature", n } : { kind: "passage", n: base + (second ? 1 : 0) };
-  }
-  if (wild && pos >= 1) return { kind: "nature", n };
+  if (!hasWeather)
+    return { kind: "passage", n: base + (elapsed % CYCLE_MS < CYCLE_MS / 2 ? 0 : 1) };
   const room = w === 1 || games.anyHour;
   if (pos === 2 && c >= 1 && room && games.any && isGamesCycle(n, games.ours)) {
     return { kind: "games", n };
@@ -157,27 +139,6 @@ export function slideOf(
   return { kind: "passage", n: base + (pos - w) };
 }
 
-/**
- * The next nature slot from `now` (or the one playing): its cycle number,
- * when it starts, and when it ends. Null if no nature cycle comes within
- * the next NATURE_EVERY cycles (it always does).
- */
-export function natureNext(
-  now: number,
-  start: Start,
-  hasWeather: boolean,
-): { n: number; from: number; to: number } | null {
-  const { since } = start;
-  const c0 = Math.max(Math.floor(Math.max(now - since, 0) / CYCLE_MS), 1);
-  const lead = hasWeather ? SLIDE_MS : CYCLE_MS / 2;
-  for (let c = c0; c <= c0 + NATURE_EVERY; c++) {
-    const at = since + c * CYCLE_MS;
-    const n = Math.floor(at / CYCLE_MS);
-    if (isNatureCycle(n)) return { n, from: at + lead, to: at + CYCLE_MS };
-  }
-  return null;
-}
-
 /** The passage number the carousel is reading about now (the snapshot's window starts near it). */
 export const passageNear = (t: number) => 2 * Math.floor(t / CYCLE_MS);
 
@@ -189,8 +150,7 @@ export const turns = (base: string) => base === "home" || base === "night";
  * night are one carousel: at sunset or sunrise it carries on (the next piece
  * simply comes in the other ink). Coming back from another page starts it
  * over, on the weather; from the Weather page, the weather's just been seen,
- * so it opens on a passage (the first cycle never has a nature clip, so its
- * last slide is always one).
+ * so it opens on a passage (a cycle's last slide is always one).
  */
 export function startAfter(from: string, to: string, now: number, start: Start): Start {
   if (!turns(to) || turns(from)) return start;
@@ -208,7 +168,7 @@ export const slideKey = (s: Slide): string =>
 
 export function slideFromKey(key: string): Slide | undefined {
   const [kind, rest] = key.split("-");
-  if ((kind === "passage" || kind === "nature" || kind === "games") && /^\d+$/.test(rest))
+  if ((kind === "passage" || kind === "games") && /^\d+$/.test(rest))
     return { kind, n: Number(rest) };
   const view = WEATHER_VIEWS.find((v) => v === rest);
   return kind === "weather" && view ? { kind, view } : undefined;
