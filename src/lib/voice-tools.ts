@@ -10,7 +10,7 @@ import {
   dayLabel,
   freshGames,
   joinWord,
-  leagueGames,
+  leagueView,
   whenWord,
   type LeaguePick,
 } from "./games";
@@ -111,8 +111,10 @@ export async function runTool(
       if (!all) return { available: false };
       // One league's, if asked: with the NFL's whole slate for the NFL (and football).
       const pick = LEAGUE_PICKS.find((l) => l === args.league);
-      const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now) ?? [];
-      const games = pick ? leagueGames(all, slate, pick) : all;
+      // Unknown (the NFL's scoreboard didn't answer) is said as unknown, never as "no games".
+      const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now);
+      const games = pick ? leagueView(all, slate, pick) : all;
+      if (!games) return { available: false };
       return games.map((g) => {
         const odds = chanceOf(g);
         const name = (s: typeof g.home) => (s.rank ? `No. ${s.rank} ${s.name}` : s.name);

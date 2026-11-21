@@ -13,6 +13,7 @@ import {
   periodOf,
   leafAt,
   leagueGames,
+  leagueView,
   leaguesOf,
   noGamesLine,
   slateOf,
@@ -747,20 +748,19 @@ describe("names", () => {
 });
 
 describe("slateOf", () => {
-  it("keeps the NFL's games under way or to come in the few days, not the family's", () => {
+  it("keeps the NFL's games through the week, and finals for a while, not the family's", () => {
     const nfl = { league: "nfl" as const };
     const sun = game("2026-11-22T21:25:00Z", {}, {}, nfl);
     const thu = game("2026-11-20T01:15:00Z", {}, {}, nfl);
     const live = game("2026-11-18T17:00:00Z", {}, {}, { ...nfl, state: "in" });
     const final = game("2026-11-18T01:15:00Z", {}, {}, { ...nfl, state: "post" });
+    const oldFinal = game("2026-11-17T01:15:00Z", {}, {}, { ...nfl, state: "post" });
     const nextWeek = game("2026-11-29T21:25:00Z", {}, {}, nfl);
     const ours = game("2026-11-22T21:25:00Z", {}, { mine: true }, nfl);
     const college = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
-    expect(slateOf([sun, thu, live, final, nextWeek, ours, college, sun], NOW, TZ)).toEqual([
-      live,
-      thu,
-      sun,
-    ]);
+    expect(
+      slateOf([sun, thu, live, final, oldFinal, nextWeek, ours, college, sun], NOW, TZ),
+    ).toEqual([final, live, thu, sun]);
   });
 
   it("lets a game long “to come” go (a scoreboard gone stale)", () => {
@@ -794,5 +794,24 @@ describe("leagueGames", () => {
     expect(noGamesLine("cbb")).toBe("No college basketball games in the next few days.");
     expect(noGamesLine("nfl")).toBe("No NFL games this week.");
     expect(noGamesLine("football")).toBe("No football games in the next few days.");
+  });
+});
+
+describe("leagueView", () => {
+  const cfb = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+  const nfl = game("2026-11-22T18:00:00Z", {}, {}, { league: "nfl" });
+
+  it("is the league's games, or none when that's known", () => {
+    expect(leagueView([cfb], [nfl], "nfl")).toEqual([nfl]);
+    expect(leagueView([cfb], [], "nfl")).toEqual([]);
+    expect(leagueView([cfb], null, "cbb")).toEqual([]);
+  });
+
+  it("is unknown (null), never empty, when the scores didn't answer", () => {
+    expect(leagueView(null, [nfl], "cfb")).toBeNull();
+    expect(leagueView([cfb], null, "nfl")).toBeNull();
+    // Football with the NFL unknown: college's games still show.
+    expect(leagueView([cfb], null, "football")).toEqual([cfb]);
+    expect(leagueView([], null, "football")).toBeNull();
   });
 });

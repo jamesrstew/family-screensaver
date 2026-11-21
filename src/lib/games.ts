@@ -389,21 +389,22 @@ export function curate(all: Game[], now: Date, tz: string, max = MAX_GAMES): Gam
 }
 
 /**
- * The NFL's slate: its games under way or still to come within the week
- * (its games come Thursday to Monday), other than the family's (curate keeps
- * those). The NFL has no Top 25, so the scoreboard and home leave these out;
- * only the NFL's own page (and football's) shows them.
+ * The NFL's slate: its games through the week ahead (its games come
+ * Thursday to Monday), other than the family's (curate keeps those): those
+ * to come, those under way, and finals for a while after (Sunday evening
+ * still shows the afternoon's scores). The NFL has no Top 25, so the
+ * scoreboard and home leave these out; only the NFL's own page (and
+ * football's) shows them.
  */
 export function slateOf(all: Game[], now: Date, tz: string): Game[] {
   const t = now.getTime();
-  const today = dayKey(now, tz);
-  const last = addDays(today, MINE_DAYS);
+  const last = addDays(dayKey(now, tz), MINE_DAYS);
   const byId = new Map<string, Game>();
   for (const g of all) {
     if (g.league !== "nfl" || ours(g) || byId.has(g.id)) continue;
-    const day = dayKey(new Date(g.start), tz);
-    const live = g.state === "in" || (g.state === "pre" && Date.parse(g.start) > t - STALE_MS);
-    if (live && day >= today && day <= last) byId.set(g.id, g);
+    const since = t - Date.parse(g.start);
+    const keep = g.state === "post" ? since < FINAL_HOLD_MS : since < STALE_MS;
+    if (keep && dayKey(new Date(g.start), tz) <= last) byId.set(g.id, g);
   }
   return [...byId.values()].sort(byStart);
 }
@@ -607,6 +608,22 @@ export function leagueGames(games: Game[], slate: Game[], pick: LeaguePick): Gam
     if (leagues.includes(g.league) && !byId.has(key)) byId.set(key, g);
   }
   return [...byId.values()].sort(byStart);
+}
+
+/**
+ * What a league's page can show: its games (fresh ones, from freshGames), an
+ * empty list when it's known to have none, or null when that isn't known (the
+ * scores didn't answer, or the NFL's didn't and the NFL is asked for), so
+ * nothing says "no games" that might be untrue.
+ */
+export function leagueView(
+  games: Game[] | null,
+  slate: Game[] | null,
+  pick: LeaguePick,
+): Game[] | null {
+  const list = leagueGames(games ?? [], slate ?? [], pick);
+  const known = games !== null && (slate !== null || !leaguesOf(pick).includes("nfl"));
+  return list.length || known ? list : null;
 }
 
 /** "No college basketball games in the next few days.": a league's page with nothing on it, said plainly. */

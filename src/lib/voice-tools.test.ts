@@ -169,4 +169,10 @@ describe("show_page and read_games for one league", () => {
     );
     expect(college).toEqual([]);
   });
+
+  it("says it doesn't know, never “no games,” when the NFL's scoreboard didn't answer", async () => {
+    expect(
+      await runTool("read_games", { league: "nfl" }, ctx({ games: [], nfl: null, gamesAt: at })),
+    ).toEqual({ available: false });
+  });
 });

@@ -65,11 +65,10 @@ describe("gather", () => {
     const want = ["20261117", "20261118", "20261119", "20261120", "20261121", "20261122"];
     expect(days("college-football")).toEqual(want);
     expect(days("mens-college-basketball")).toEqual(want);
-    // No family teams: no schedules. The NFL's week, undated, for its own page.
+    // No family teams: no schedules. The NFL's scoreboard, for its own page,
+    // day by day from yesterday through the week ahead.
     expect(asked.some((u) => u.includes("/schedule"))).toBe(false);
-    expect(asked.filter((u) => u.includes("football/nfl/scoreboard"))).toEqual([
-      expect.not.stringContaining("dates="),
-    ]);
+    expect(days("football/nfl")).toEqual([...want, "20261123", "20261124", "20261125"]);
   });
 
   it("brings the NFL's slate apart: the rest never waits on it, nor fails with it", async () => {

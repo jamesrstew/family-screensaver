@@ -6,6 +6,7 @@ import {
   AHEAD_DAYS,
   GAMES_FRESH_MS,
   MAX_GAMES,
+  MINE_DAYS,
   curate,
   marketChance,
   readChance,
@@ -111,7 +112,7 @@ async function keep(fresh: Gathered, teams: string): Promise<void> {
 /**
  * Everything at once, within the budget: scores first, then each game's
  * chance. The NFL's slate (its own page's) stands or falls on its own: the
- * rest never waits on it, nor fails with it.
+ * rest never fails with it (each scoreboard has its own few seconds).
  */
 export async function gather(
   now: Date,
@@ -146,15 +147,21 @@ export async function gather(
       events(t.league, `${SITE}/${PATH[t.league]}/teams/${t.id}/schedule?seasontype=${type}`),
     ),
   );
-  // The NFL's scoreboard for its own page: the week at hand, Thursday to
-  // Monday, as ESPN gives it with no date (it has no Top 25, so the list
-  // above takes only the family's NFL games).
-  const week = events("nfl", `${SITE}/${PATH.nfl}/scoreboard?limit=300`);
+  // The NFL's scoreboard for its own page, day by day from yesterday through
+  // the week ahead (it has no Top 25, so the list above takes only the
+  // family's NFL games). By date, not ESPN's undated "this week", which still
+  // shows last week's finals early in the week. (ESPN refuses a range of dates.)
+  const week = Array.from({ length: MINE_DAYS + 2 }, (_, i) =>
+    events(
+      "nfl",
+      `${SITE}/${PATH.nfl}/scoreboard?dates=${addDays(first, i - 1).replaceAll("-", "")}&limit=300`,
+    ),
+  );
   const fulfilled = (rs: PromiseSettledResult<Game[]>[]) =>
     rs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   const [got, nflGot] = await Promise.all([
     Promise.allSettled([...boards, ...seasons]),
-    Promise.allSettled([week]),
+    Promise.allSettled(week),
   ]);
   const ok = fulfilled(got);
   if (!ok.length) throw new Error("no scoreboard answered");

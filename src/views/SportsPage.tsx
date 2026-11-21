@@ -81,7 +81,7 @@ export function SportsPage({
     // top, so its lines stay put from leaf to leaf. A league's page hangs from
     // the top always, under its name.
     <div
-      className={`flex h-full flex-col ${league ? "justify-start pt-[2.5rem]" : leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
+      className={`relative flex h-full flex-col ${league ? "justify-start pt-[2.5rem]" : leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
       style={{ fontSize: `${games.length <= FEW ? LARGER : 1}rem` }}
     >
       {league ? (
@@ -92,14 +92,18 @@ export function SportsPage({
           </div>
         </Ink>
       ) : null}
-      {league && !games.length ? (
-        // Nothing in the few days: said plainly, in the middle of the page (§15).
+      {league ? (
+        // Nothing in the few days: said plainly, in the middle of the page
+        // (§15). Always in place, empty when there are games, so the line
+        // sinks when they come rather than vanishing.
         <Ink
-          k={`none:${league}`}
+          k={games.length ? "" : `none:${league}`}
           order={0.35}
-          className="flex flex-1 items-center justify-center pb-[8rem]"
+          className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center"
         >
-          <p className="text-[3.2rem] text-ink-soft italic">{noGamesLine(league)}</p>
+          {games.length ? null : (
+            <p className="text-[3.2rem] text-ink-soft italic">{noGamesLine(league)}</p>
+          )}
         </Ink>
       ) : null}
       <div className="relative isolate">

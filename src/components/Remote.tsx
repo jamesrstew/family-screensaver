@@ -19,14 +19,19 @@ const PAGES: Array<Ask & { title: string; line: string }> = [
   { page: "week", title: "The Week Ahead", line: "The family calendar" },
   { page: "notebook", title: "Ideas", line: "An idea, a quote, or a question" },
   { page: "sports", title: "The Games", line: "Our teams and the Top 25" },
-  { page: "sports", league: "cfb", title: "College Football", line: "Football’s Top 25, and ours" },
+  {
+    page: "sports",
+    league: "cfb",
+    title: "College Football",
+    line: "The best college games, and ours",
+  },
   {
     page: "sports",
     league: "cbb",
     title: "College Basketball",
-    line: "Basketball’s Top 25, and ours",
+    line: "The best college games, and ours",
   },
-  { page: "sports", league: "nfl", title: "The NFL", line: "Every game of the next few days" },
+  { page: "sports", league: "nfl", title: "The NFL", line: "Every game this week" },
   { page: "nature", title: "Nature", line: "Real places, one after another" },
 ];
 const id = (a: Ask) => [a.page, a.view ?? a.league].filter(Boolean).join(":");

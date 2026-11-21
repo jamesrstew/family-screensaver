@@ -19,8 +19,7 @@ import {
 import {
   freshGames,
   gamesCue,
-  leagueGames,
-  leaguesOf,
+  leagueView,
   nightGame,
   slideGames,
   type LeaguePick,
@@ -81,6 +80,7 @@ type View =
   | `home:${string}`
   | `night:${string}`
   | `carousel:${string}`
+  | `sports:${string}`
   | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
@@ -200,13 +200,16 @@ export function Screen({
   // has gone stale): home.
   const games = freshGames(snapshot, now);
   // A league's page: its games, the NFL's whole slate among them. With none,
-  // the page says so, but only when that's known to be true (the scores
-  // answered, the NFL's too if it's asked for); otherwise it's home.
+  // the page says so, but only when that's known to be true (leagueView);
+  // otherwise it's home, and the asking is over (it never comes back on its
+  // own when the scores do).
   const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now);
-  const leagueList = league ? leagueGames(games ?? [], slate ?? [], league) : null;
-  const leagueKnown =
-    league !== null && games !== null && (slate !== null || !leaguesOf(league).includes("nfl"));
-  const noGames = leagueList ? !leagueList.length && !leagueKnown : !games?.length;
+  const leagueList = league ? leagueView(games, slate, league) : null;
+  if (page === "sports" && league && leagueList === null && !teamRef) {
+    setPage("home");
+    setLeague(null);
+  }
+  const noGames = league ? leagueList === null : !games?.length;
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
     (askedBase === "sports" && noGames && !team.view && !team.pending)
@@ -311,12 +314,15 @@ export function Screen({
   const latched = latchCue(cueAt, cycle, cueNow);
   if (latched !== cueAt) setCueAt(latched);
   const cue = latched.cue;
-  const target = targetOf({
+  const drawnTarget = targetOf({
     base,
     slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, cue)) : null,
     asked: view0,
     fromUrl,
-  }) as View;
+  });
+  // One league's games is a page of its own ("sports:nfl"): from the
+  // scoreboard to a league, or league to league, the page turns in ink.
+  const target = (drawnTarget === "sports" && league ? `sports:${league}` : drawnTarget) as View;
   const [view, setView] = useState<View>(target);
   // Passages back to back are one page: the clock and the notes hold still,
   // and only the piece turns, in its own ink (keyed by the passage).
@@ -495,6 +501,9 @@ export function Screen({
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
 
+  // The games page, whole or one league's (as drawn: while it sinks, the one it was).
+  const sports = shown === "sports" || shown.startsWith("sports:");
+  const shownLeague = shown.startsWith("sports:") ? (shown.slice(7) as LeaguePick) : null;
   const asked = shown.startsWith("weather:") ? (shown.slice(8) as WeatherView) : undefined;
   // A carousel slide: a weather view ("carousel:…", the same by day or by
   // night, so sunset doesn't re-ink it), or a passage by day ("home:…") or
@@ -533,7 +542,7 @@ export function Screen({
       asked ||
       shown === "nature" ||
       // The games are set in the Almanac's face, on bare paper.
-      (shown === "sports" && design === "almanac"))
+      (sports && design === "almanac"))
       ? kit
       : null;
   return (
@@ -576,7 +585,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn || natureBusy || shown === "nature" || shown === "sports"}
+            hidden={!drawn || natureBusy || shown === "nature" || sports}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -633,7 +642,7 @@ export function Screen({
               ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
-              {shown === "sports" &&
+              {sports &&
                 // One team's page: its name at once (from the asking), its games
                 // inking in below as they arrive; the games as usual if it can't be had.
                 (team.view ? (
@@ -647,7 +656,13 @@ export function Screen({
                     />
                   ) : null
                 ) : (
-                  <SportsPage {...props} games={leagueList ?? games ?? []} league={league} />
+                  <SportsPage
+                    {...props}
+                    games={
+                      shownLeague ? (leagueView(games, slate, shownLeague) ?? []) : (games ?? [])
+                    }
+                    league={shownLeague}
+                  />
                 ))}
             </div>
           </InkStage.Provider>
