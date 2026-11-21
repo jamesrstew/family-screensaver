@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stewart Family App</title>
+<style>
+  body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: #f8f4ea; color: #221e1a; font-family: Georgia, serif; text-align: center; }
+  h1 { font-size: 64px; margin: 0 0 8px; border-top: 2px solid; border-bottom: 2px solid; padding: 8px 48px; }
+  p { font-size: 24px; max-width: 900px; margin: 16px auto; }
+  code { font-size: 18px; background: rgba(0,0,0,.06); padding: 2px 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Stewart Family App</h1>
+  <p id="reason">The app URL isn't configured.</p>
+  <p>Configured URL: <code id="url">(none)</code></p>
+  <p>Rebuild with <code>./gradlew assembleDebug -PfamilyUrl=https://your-family-app</code> and reinstall.</p>
+</main>
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get("reason")) document.getElementById("reason").textContent = q.get("reason");
+  if (q.get("url")) document.getElementById("url").textContent = q.get("url");
+</script>
+</body>
+</html>
