@@ -10,7 +10,15 @@
 
 import { dayFeels } from "./feel";
 import { CHANCE, periodWord } from "./forecast";
-import { AQI_SENSITIVE, AQI_UNHEALTHY, HAZE_PM, airAdvice, airPhrase, aqiWord } from "./smoke";
+import {
+  AQI_SENSITIVE,
+  AQI_UNHEALTHY,
+  HAZE_PM,
+  airAdvice,
+  airPhrase,
+  aqiWord,
+  veiled,
+} from "./smoke";
 import { addDays, clock, dayKey, parts } from "./time";
 import type { Weather } from "./types";
 
@@ -125,6 +133,8 @@ export type Sample = {
   aqi?: number;
   /** Hours of hazy air (fine particles 15 µg/m³ or more): 1 or 0 for an hour, a count for a day. */
   haze?: number;
+  /** Of those, hours when it's smoke (the whole sky veiled), not the town's own smog. */
+  smoke?: number;
 };
 
 /** How far the feel must stray from the thermometer to be worth a lens (°F)... */
@@ -143,8 +153,6 @@ export const HAZE_HOURS = 3;
 /** Wind worth a lens: sustained this strong, or gusts this strong (mph). */
 export const WINDY = 15;
 export const GUSTY = 25;
-/** UV worth a lens: the EPA's "moderate", where its advice starts. */
-export const UV_MODERATE = 3;
 
 /** Whether the feel strays far enough from the thermometer to say so. */
 export const feelsSays = (temp?: number, feels?: number) =>
@@ -167,7 +175,8 @@ export const feelsSays = (temp?: number, feels?: number) =>
  *  wind:          sustained 15 mph or more, or gusts of 25 or more.
  *  humidity:      muggy (dew point 65° or more), or fire weather (humidity
  *                 15% or less with gusts of 25 mph or more).
- *  UV:            3 or more, the EPA's "moderate", where its advice starts.
+ *  UV:            6 or more, the EPA's "high", worth acting on (a winter's
+ *                 moderate 3 says nothing a family needs to hear).
  */
 export function lensesFor(samples: Sample[]): Lens[] {
   const out: Lens[] = ["sky"];
@@ -189,7 +198,7 @@ export function lensesFor(samples: Sample[]): Lens[] {
     samples.some((s) => s.dew! >= MUGGY || (s.rh! <= PARCHED && (s.gust ?? 0) >= FIRE_GUST))
   )
     out.push("humidity");
-  if (known("uv") && samples.some((s) => Math.round(s.uv!) >= UV_MODERATE)) out.push("uv");
+  if (known("uv") && samples.some((s) => Math.round(s.uv!) >= UV_HIGH)) out.push("uv");
   return out;
 }
 
@@ -231,6 +240,10 @@ export const hourNow = (now: Date, tz: string) => parts(now, tz).hour;
 
 /** Whether an hour's fine particles make haze. */
 export const hazeOf = (pm?: number | null) => (pm != null && pm >= HAZE_PM ? 1 : 0);
+
+/** Whether an hour's haze is smoke: the whole sky veiled, not an inversion's smog (lib/smoke.ts). */
+export const smokeHour = (pm?: number | null, aod?: number | null) =>
+  hazeOf(pm) && veiled(aod) ? 1 : 0;
 
 /* ------------------------------------------------------------ rain and snow */
 
@@ -515,15 +528,10 @@ export function uvFigure(uv: number): Figure {
   return { big: String(n), sub: uvWord(n), act: n >= UV_HIGH, score: n };
 }
 
-/** What to do about it, in the EPA's spirit; nothing when it's low. */
-const uvAdvice = (n: number) =>
-  n >= UV_HIGH
-    ? " Sunscreen, a hat, and shade at midday."
-    : n >= 3
-      ? " Sunscreen for long hours outside."
-      : "";
+/** What to do about it, only when the sun is really strong: no sunscreen talk for a moderate day. */
+const uvAdvice = (n: number) => (n >= UV_HIGH ? " Sunscreen, a hat, and shade at midday." : "");
 
-/** "Moderate UV, peaking at 4 around 1 p.m. Sunscreen for long hours outside." */
+/** "High UV, peaking at 7 around 1 p.m. Sunscreen, a hat, and shade at midday." */
 export function hoursUvLine(hours: Array<{ time: string; uv: number }>, now: Date, tz: string) {
   if (!hours.length) return "";
   const peak = hours.reduce((a, b) => (b.uv > a.uv ? b : a));
@@ -863,17 +871,19 @@ export function hoursAirLine(
 
 /** "Worst air Saturday: AQI 160, unhealthy. Forecast through Sunday." */
 export function daysAirLine(
-  days: Array<{ name: string; aqi?: number; haze?: number; ozone?: boolean }>,
+  days: Array<{ name: string; aqi?: number; haze?: number; smoke?: number; ozone?: boolean }>,
 ): string {
   const known = days.filter(
-    (d): d is { name: string; aqi: number; haze?: number; ozone?: boolean } => d.aqi != null,
+    (d): d is { name: string; aqi: number; haze?: number; smoke?: number; ozone?: boolean } =>
+      d.aqi != null,
   );
   if (!known.length) return "";
   const worst = known.reduce((a, b) => (b.aqi > a.aqi ? b : a));
   const through = known.length < days.length ? ` Forecast through ${known.at(-1)!.name}.` : "";
   if (worst.aqi <= 50) return `Good air.${through}`;
-  if (worst.aqi <= AQI_SENSITIVE && days.some((d) => (d.haze ?? 0) >= HAZE_HOURS)) {
-    const smoky = days.find((d) => (d.haze ?? 0) >= HAZE_HOURS)!;
+  // Smoke named only when it is smoke: a winter's smoggy day is just moderate air.
+  if (worst.aqi <= AQI_SENSITIVE && days.some((d) => (d.smoke ?? 0) >= HAZE_HOURS)) {
+    const smoky = days.find((d) => (d.smoke ?? 0) >= HAZE_HOURS)!;
     return `Smoky, moderate air ${smoky.name}, AQI up to ${worst.aqi}. ${SMOKY_MODERATE}${through}`;
   }
   const what = worst.ozone ? `ozone at AQI ${worst.aqi}` : `AQI ${worst.aqi}`;

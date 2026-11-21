@@ -32,6 +32,7 @@ import {
   humidityDayFigure,
   humidityFigure,
   hazeOf,
+  smokeHour,
   hourNow,
   lensesFor,
   restOfDay,
@@ -45,7 +46,7 @@ import {
   type Lens,
 } from "@/lib/lenses";
 import { dayFeels, hourFeel } from "@/lib/feel";
-import { airNow, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
+import { airNow, drawn, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Condition } from "@/lib/wear";
 import type { Weather as Sky } from "@/lib/types";
@@ -692,6 +693,10 @@ function Days({ w, now, snapshot, slide }: Drawn) {
           dew: hi(left(d, d.hourly.dew)),
           aqi: d.aqi,
           haze: left(d, d.hourly.pm).reduce<number>((a, pm) => a + hazeOf(pm), 0),
+          smoke: ((aod) =>
+            left(d, d.hourly.pm).reduce<number>((a, pm, i) => a + smokeHour(pm, aod[i]), 0))(
+            left(d, d.hourly.aod),
+          ),
         }
       : {},
   );
@@ -734,6 +739,7 @@ function Days({ w, now, snapshot, slide }: Drawn) {
                   name,
                   aqi: d.aqi,
                   haze: s.haze,
+                  smoke: s.smoke,
                   ozone: d.ozone != null && d.ozone >= (d.aqi ?? 0),
                 })),
               )
@@ -794,7 +800,7 @@ function Days({ w, now, snapshot, slide }: Drawn) {
                 const p = partFromDay(labelOf(d.date), d);
                 // A smoky day's sun is veiled, a hazy day's softened, as the living sky
                 // draws them: by fine particles alone (a high-ozone day is clear).
-                const smoke = smokeOver(d.hourly?.pm ?? []);
+                const smoke = drawn(smokeOver(d.hourly?.pm ?? [], d.hourly?.aod));
                 const veil = smoke === "none" ? undefined : smoke === "haze" ? "haze" : "smoke";
                 return (
                   <div key={d.date} className="flex flex-col items-center text-center">
@@ -960,7 +966,7 @@ function Hours({ w, now, snapshot, slide }: Drawn) {
           ? hoursUvLine(span.map(known), now, tz)
           : lens === "air"
             ? hoursAirLine(air, now, tz, {
-                smoky: span.some((h) => hazeOf(h.pm)),
+                smoky: span.some((h) => smokeHour(h.pm, h.aod)),
                 current: Boolean(current && nowAir != null),
               })
             : lens === "feels"
@@ -1038,8 +1044,9 @@ function Hours({ w, now, snapshot, slide }: Drawn) {
                 const chance = falls.length ? Math.max(...slot.map((h) => h.precipChance)) : 0;
                 const kind = falls[0]?.kind;
                 // Smoke or haze veils the sun, as the living sky draws it.
-                const smoke = smokeOf(
-                  i === 0 ? w.now : { pm: Math.max(...slot.map((h) => h.pm ?? 0)) },
+                const dirtiest = slot.reduce((a, b) => ((b.pm ?? 0) > (a.pm ?? 0) ? b : a));
+                const smoke = drawn(
+                  smokeOf(i === 0 ? w.now : { pm: dirtiest.pm ?? 0, aod: dirtiest.aod }),
                 );
                 const veil = smoke === "haze" ? "haze" : smoke === "none" ? undefined : "smoke";
                 return (
