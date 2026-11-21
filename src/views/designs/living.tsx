@@ -3,7 +3,7 @@ import { LAND_H, LAND_TOP, landOf } from "@/lib/land";
 import { rng } from "@/lib/organic";
 import { precipKind } from "@/lib/forecast";
 import { TURN, type Mood, type Twilight } from "@/lib/time";
-import { smokeOf as smokeOfNow, type Smoke } from "@/lib/smoke";
+import { drawn, smokeOf as smokeOfNow, type Drawn } from "@/lib/smoke";
 import type { Weather } from "@/lib/types";
 import { CLOUD, CLOUD_BOX, Cloud, Moon, Star, moonAge } from "../Engraving";
 import { ARC, arcAt, bodyAt, placeOf, type Place } from "./arc";
@@ -110,9 +110,9 @@ export function skyOf(code: number | null): SkyState {
   };
 }
 
-/** Smoke and haze over the family's sky now (`lib/smoke.ts` says how much). */
-export type { Smoke };
-export const smokeOf = (w: Weather | null): Smoke => smokeOfNow(w?.now ?? null);
+/** Smoke and haze over the family's sky now (`lib/smoke.ts` says how much; smog is drawn as haze). */
+export type Smoke = Drawn;
+export const smokeOf = (w: Weather | null): Smoke => drawn(smokeOfNow(w?.now ?? null));
 
 /**
  * How the sun or moon shows through the cover: whole, softened, veiled by

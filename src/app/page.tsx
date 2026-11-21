@@ -32,7 +32,7 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   const page: Page = PAGES.includes(asked as Page) ? (asked as Page) : "home";
   // Almanac, tentatively chosen; ?design=a|b|c|d still shows the other directions.
   const design = designOf(String(params.design ?? "")) ?? "almanac";
-  // Design review only: ?sky=fair|snow|storm|rain draws a made-up sky,
+  // Design review only: ?sky=fair|snow|storm|rain|smoke|smog draws a made-up sky,
   // ?indoor=one|close|apart|dry|none made-up thermostats, ?games=busy|quiet|none
   // a made-up slate of games, and &at= sets the
   // clock (the first paint here, the passages it reads, and the TV's own
