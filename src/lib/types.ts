@@ -206,6 +206,11 @@ export type Snapshot = {
   games?: Game[] | null;
   /** When the games were gathered (ISO): the TV retires them when they're old (freshGames). */
   gamesAt?: string;
+  /**
+   * The NFL's other games in the few days (it has no Top 25), for its own
+   * page only; null: its scoreboard didn't answer. Gathered with the games.
+   */
+  nfl?: Game[] | null;
   /** The carousel's passages for the next hour or so (pick.ts), by passage number. */
   passages?: { from: number; items: NotebookItem[] };
   voice: boolean; // can it talk?
@@ -219,4 +224,6 @@ export type ShowRequest = {
   view?: WeatherView;
   /** The games page, for one team: resolved on the server from what was said (team-query.ts). */
   team?: { league: League; id: string; name?: string };
+  /** The games page, for one league (or football, college and the NFL together). */
+  league?: League | "football";
 };

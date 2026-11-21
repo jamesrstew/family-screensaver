@@ -4,7 +4,8 @@ import { Screen } from "@/components/Screen";
 import { isFamily } from "@/lib/auth";
 import { getSnapshot } from "@/lib/snapshot";
 import { PAGES, type Page } from "@/lib/types";
-import { FAKE_SLATES, FAKE_TEAMS, fakeGames, type FakeSlate } from "@/lib/games-fixtures";
+import { LEAGUE_PICKS, type LeaguePick } from "@/lib/games";
+import { FAKE_SLATES, FAKE_TEAMS, fakeGames, fakeNfl, type FakeSlate } from "@/lib/games-fixtures";
 import { FAKE_INDOORS, isFakeIndoor } from "@/lib/indoor-fixtures";
 import { SKIES, fakeWeather, type FakeSky } from "@/lib/weather-fixtures";
 import { designOf } from "@/views/designs/registry";
@@ -54,6 +55,7 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
     const slate = String(params.games ?? "") as FakeSlate;
     if (FAKE_SLATES.includes(slate)) {
       snapshot.games = fakeGames(slate, when);
+      snapshot.nfl = fakeNfl(slate, when);
       snapshot.gamesAt = snapshot.issuedAt;
     }
   }
@@ -62,5 +64,19 @@ async function Snapshot({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   const initialTeam = (FAKE_TEAMS as readonly string[]).includes(fake)
     ? { league: "cbb" as const, id: "0", fake }
     : null;
-  return <Screen initial={snapshot} initialPage={page} design={design} initialTeam={initialTeam} />;
+  // ?page=sports&league=cfb|cbb|nfl|football: one league's games.
+  const league = String(params.league ?? "");
+  const initialLeague =
+    page === "sports" && (LEAGUE_PICKS as readonly string[]).includes(league)
+      ? (league as LeaguePick)
+      : null;
+  return (
+    <Screen
+      initial={snapshot}
+      initialPage={page}
+      design={design}
+      initialTeam={initialTeam}
+      initialLeague={initialLeague}
+    />
+  );
 }

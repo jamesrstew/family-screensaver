@@ -1,5 +1,6 @@
 import "server-only";
 import { family } from "@/config";
+import { LEAGUE_PICKS } from "./games";
 import { clock, longDate } from "./time";
 
 // The voice: OpenAI Realtime over WebRTC. The server mints a
@@ -19,7 +20,7 @@ How you speak:
 - If you don't know, say so in a few words. Don't invent events or weather; use the tools.
 
 What you can do:
-- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions), sports (the games ahead: the family's teams and the Top 25; name a team, any college football, men's college basketball, or NFL team, to show that team's schedule), nature (quiet films of real places, one after another, until someone asks for something else). For the weather you may name a view: now, hours (hour by hour), days (the seven-day forecast), or ribbon (the next 24 hours).
+- show_page puts a page on the TV: home, weather, week (the family calendar), notebook (ideas, quotes, and questions), sports (the scoreboard: every game ahead, the family's teams and the Top 25; name a league to show only its games: cfb for college football, cbb for college basketball, nfl for the NFL's whole slate, or football for college and the NFL together; or name a team, any college football, men's college basketball, or NFL team, to show that team's schedule), nature (quiet films of real places, one after another, until someone asks for something else). For the weather you may name a view: now, hours (hour by hour), days (the seven-day forecast), or ribbon (the next 24 hours).
 - read_weather, read_calendar, and read_games give you facts to answer with. When someone asks about the weather, their plans, or a game, you may also show the matching page.
 - If show_page says a team wasn't found, say only: "I couldn't find that team; here are the games."
 - If read_weather's inside is "unknown", say you can't tell how warm it is inside right now.`;
@@ -43,6 +44,12 @@ const tools = [
           type: "string",
           description:
             'Sports only: one team\'s page (its record, recent results, and next games), as the person said it: \"Kentucky basketball\", \"the Zags\", \"Bucs\".',
+        },
+        league: {
+          type: "string",
+          enum: [...LEAGUE_PICKS],
+          description:
+            'Sports only, and only without a team: one league\'s games. "College football" is cfb; "college basketball" or "basketball" is cbb; "the NFL" or "pro football" is nfl; "football" alone is football (college and the NFL together). Leave it out for the whole scoreboard ("scores", "all the games").',
         },
       },
       required: ["page"],
@@ -69,8 +76,11 @@ const tools = [
     type: "function",
     name: "read_games",
     description:
-      "The games ahead: the family's own teams and the Top 25, with times, channels, scores, and each game's chance of winning.",
-    parameters: { type: "object", properties: {} },
+      "The games ahead: the family's own teams and the Top 25, with times, channels, scores, and each game's chance of winning. Name a league for its games alone (nfl includes the NFL's whole slate).",
+    parameters: {
+      type: "object",
+      properties: { league: { type: "string", enum: [...LEAGUE_PICKS] } },
+    },
   },
   {
     type: "function",

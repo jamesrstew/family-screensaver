@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SHOW_TTL_MS, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
+import { SHOW_TTL_MS, leagueFor, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
 import {
   CYCLE_MS,
   latchCue,
@@ -16,7 +16,15 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames, gamesCue, nightGame, slideGames } from "@/lib/games";
+import {
+  freshGames,
+  gamesCue,
+  leagueGames,
+  leaguesOf,
+  nightGame,
+  slideGames,
+  type LeaguePick,
+} from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   levelAt,
@@ -135,12 +143,15 @@ export function Screen({
   initial,
   initialPage,
   initialTeam = null,
+  initialLeague = null,
   design = null,
 }: {
   initial: Snapshot;
   initialPage: Page;
   /** Dev only: a made-up team page to open on (?team=season|live|off). */
   initialTeam?: TeamRef | null;
+  /** One league's games to open on (?page=sports&league=nfl). */
+  initialLeague?: LeaguePick | null;
   design?: Design | null;
 }) {
   const kit = design ? DESIGNS[design] : null;
@@ -160,6 +171,8 @@ export function Screen({
   // One team's games, asked for by name (voice or Siri).
   const [teamRef, setTeamRef] = useState<TeamRef | null>(initialTeam);
   const team = useTeam(teamRef);
+  // One league's games, asked for by name ("show college football").
+  const [league, setLeague] = useState<LeaguePick | null>(initialLeague);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
   // night honest even if the forecast is gone for a while.
@@ -186,9 +199,17 @@ export function Screen({
   // No games to show (the off-season, the scores didn't answer, or the list
   // has gone stale): home.
   const games = freshGames(snapshot, now);
+  // A league's page: its games, the NFL's whole slate among them. With none,
+  // the page says so, but only when that's known to be true (the scores
+  // answered, the NFL's too if it's asked for); otherwise it's home.
+  const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now);
+  const leagueList = league ? leagueGames(games ?? [], slate ?? [], league) : null;
+  const leagueKnown =
+    league !== null && games !== null && (slate !== null || !leaguesOf(league).includes("nfl"));
+  const noGames = leagueList ? !leagueList.length && !leagueKnown : !games?.length;
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
-    (askedBase === "sports" && !games?.length && !team.view && !team.pending)
+    (askedBase === "sports" && noGames && !team.view && !team.pending)
       ? viewOf("home", mood)
       : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
@@ -317,16 +338,17 @@ export function Screen({
   }, [leaving, target, turning, view]);
 
   const show = useCallback(
-    (p: Page, v?: WeatherView, t?: TeamRef | null) => {
+    (p: Page, v?: WeatherView, t?: TeamRef | null, l?: LeaguePick | null) => {
       pageSince.current = Date.now();
       setPage(p);
       setView0(viewAsked(p, v));
-      // One team's games, or none: any other asking clears it.
+      // One team's games, or one league's, or neither: any other asking clears them.
       setTeamRef(teamFor(p, t));
+      setLeague(leagueFor(p, l, t));
       // Asking for nature starts a fresh session, whatever happened to the last.
       if (p === "nature") setMode((m) => modeStart(m, clockNow()));
     },
-    [setMode, setView0, setTeamRef],
+    [setMode, setView0, setTeamRef, setLeague],
   );
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
@@ -375,7 +397,7 @@ export function Screen({
           // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
           indoor: next.indoor ?? prev.indoor,
           // So do missed scores; freshGames retires them at 30 minutes.
-          ...(next.games ? {} : { games: prev.games, gamesAt: prev.gamesAt }),
+          ...(next.games ? {} : { games: prev.games, gamesAt: prev.gamesAt, nfl: prev.nfl }),
         }));
       } catch {
         // Offline: keep printing what we have.
@@ -403,7 +425,8 @@ export function Screen({
         if (!("page" in ask) || ask.seq === known) return;
         // Only a recent request counts (a TV waking up shouldn't obey
         // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view, ask.team);
+        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS)
+          show(ask.page, ask.view, ask.team, ask.league);
       } catch {
         // Try again next time.
       }
@@ -427,10 +450,10 @@ export function Screen({
         runTool(name, args, {
           snapshot: snapshotRef.current,
           now: new Date(),
-          show: async (p, v, team) => {
+          show: async (p, v, team, league) => {
             // A team, as said: the server finds it (or doesn't, and it's the games as usual).
             const t = team ? await findTeamFor(team) : null;
-            show(p, v, t);
+            show(p, v, t, team ? null : league);
             return team ? t !== null : undefined;
           },
           hangUp: () => {},
@@ -624,7 +647,7 @@ export function Screen({
                     />
                   ) : null
                 ) : (
-                  <SportsPage {...props} games={games ?? []} />
+                  <SportsPage {...props} games={leagueList ?? games ?? []} league={league} />
                 ))}
             </div>
           </InkStage.Provider>

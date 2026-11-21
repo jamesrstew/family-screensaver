@@ -4,13 +4,16 @@ import {
   ahead,
   chanceOf,
   joinWord,
+  LEAGUE_TITLE,
   leafAt,
   leavesOf,
   nightGame,
+  noGamesLine,
   ours,
   slideGames,
   standing,
   whenWord,
+  type LeaguePick,
 } from "@/lib/games";
 import type { Game, Side } from "@/lib/types";
 import type { ViewProps } from "./parts";
@@ -41,7 +44,9 @@ const LARGER = 1.2;
 /**
  * `games`: the snapshot's, as fresh as they are now (freshGames, in Screen).
  * As one of home's slides, it's the first leaf alone, of the page's few days,
- * a family team's game today leading.
+ * a family team's game today leading. For one league (`league`, asked for by
+ * name), its games alone, under a quiet heading naming it; with none, the
+ * heading and a plain line saying so.
  */
 export function SportsPage({
   snapshot,
@@ -49,13 +54,15 @@ export function SportsPage({
   mood,
   slide,
   games: all,
-}: ViewProps & { games: Game[] }) {
+  league = null,
+}: ViewProps & { games: Game[]; league?: LeaguePick | null }) {
   const tz = snapshot.timeZone;
   const one = slide?.kind === "games";
   const games = one ? slideGames(all, now, tz) : all;
   // The leaves turn from the moment the page appears (it remounts each time).
   const [since] = useState(() => now.getTime());
-  const leaves = leavesOf(games, now, tz, ROWS).slice(0, one ? 1 : undefined);
+  // The heading takes a line's room.
+  const leaves = leavesOf(games, now, tz, league ? ROWS - 1 : ROWS).slice(0, one ? 1 : undefined);
   const n = leafAt(now.getTime(), since, leaves.length);
   const leaf = leaves[n] ?? [];
   // The family's next game still to finish carries the accent (on whichever
@@ -67,15 +74,34 @@ export function SportsPage({
       : (games.find((g) => ours(g) && g.state !== "post") ?? games.find(ours));
   // Every leaf has as many places as the longest, so a turn re-inks line by
   // line (a line the same as before holds still) and nothing simply vanishes.
-  const places = Math.max(...leaves.map((l) => l.length));
+  const places = Math.max(0, ...leaves.map((l) => l.length));
 
   return (
     // One leaf sits in the middle of the page; a turning agenda hangs from the
-    // top, so its lines stay put from leaf to leaf.
+    // top, so its lines stay put from leaf to leaf. A league's page hangs from
+    // the top always, under its name.
     <div
-      className={`flex h-full flex-col ${leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
+      className={`flex h-full flex-col ${league ? "justify-start pt-[2.5rem]" : leaves.length > 1 ? "justify-start pt-[4rem]" : "justify-center pb-[1rem]"}`}
       style={{ fontSize: `${games.length <= FEW ? LARGER : 1}rem` }}
     >
+      {league ? (
+        <Ink k={`league:${league}`} order={0} className="mb-[2.4rem]">
+          <div className="flex items-center gap-[1.6rem] text-[1rem]">
+            <Ball league={league === "cbb" ? "cbb" : "cfb"} />
+            <h1 className="text-[4.4rem] leading-none text-ink">{LEAGUE_TITLE[league]}</h1>
+          </div>
+        </Ink>
+      ) : null}
+      {league && !games.length ? (
+        // Nothing in the few days: said plainly, in the middle of the page (§15).
+        <Ink
+          k={`none:${league}`}
+          order={0.35}
+          className="flex flex-1 items-center justify-center pb-[8rem]"
+        >
+          <p className="text-[3.2rem] text-ink-soft italic">{noGamesLine(league)}</p>
+        </Ink>
+      ) : null}
       <div className="relative isolate">
         {/* On home, a layer of paper under the list: the sky passes behind, never through a line. */}
         {one ? <div className="sky-word-clearing games-clearing" aria-hidden /> : null}

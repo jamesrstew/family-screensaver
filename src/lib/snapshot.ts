@@ -78,6 +78,7 @@ export async function getSnapshot(at?: Date): Promise<Snapshot> {
     indoor,
     games: sports?.games ?? null,
     ...(sports ? { gamesAt: sports.at } : {}),
+    ...(sports && sports.nfl !== undefined ? { nfl: sports.nfl } : {}),
     notebook: forDay(notebook ?? [], dayKey(now, h.timeZone)),
     // From a couple of passages back, so a page that appeared a moment ago still finds its own.
     passages: passagesFrom(deckOf(notebook ?? []), passageNear(now.getTime()) - 4),
