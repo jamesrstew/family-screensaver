@@ -65,6 +65,17 @@ describe("withAir", () => {
     expect(withAir(bare, shapeAir(a, before), tz).now).toMatchObject({ aqi: 77, pm: 21 });
   });
 
+  it("carries how veiled the sky is to now, the hours, and each day: smoke depends on it", () => {
+    const a = air((day, h) => 60 + day + h);
+    a.hourly.aerosol_optical_depth = a.hourly.time.map((_, i) => 0.1 + i / 1000);
+    a.current = { time: "2026-11-18T10:00", aerosol_optical_depth: 0.987 };
+    const w2 = withAir(bare, shapeAir(a, now), tz);
+    expect(w2.now.aod).toBe(0.99);
+    expect(w2.hours[0].aod).toBe(0.11);
+    expect(w2.days[0].hourly?.aod?.[10]).toBe(0.11);
+    expect(w2.days[1].hourly?.aod?.[0]).toBe(0.12);
+  });
+
   it("adds nothing when the air forecast is empty", () => {
     const quiet = withAir(bare, shapeAir(air(() => null)), tz);
     expect(quiet.now.aqi).toBeUndefined();

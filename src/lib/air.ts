@@ -19,17 +19,24 @@ export type OpenMeteoAir = {
     pm2_5?: Num;
     us_aqi_ozone?: Num;
     us_aqi_pm10?: Num;
+    aerosol_optical_depth?: Num;
   };
-  hourly: { time: string[]; us_aqi?: Num[]; pm2_5?: Num[]; us_aqi_ozone?: Num[] };
+  hourly: {
+    time: string[];
+    us_aqi?: Num[];
+    pm2_5?: Num[];
+    us_aqi_ozone?: Num[];
+    aerosol_optical_depth?: Num[];
+  };
   utc_offset_seconds: number;
 };
 
-/** One hour's air: the blended AQI, fine particles (µg/m³), and the ozone AQI. */
-type Hour = { aqi: number; pm?: number; ozone?: number };
+/** One hour's air: the blended AQI, fine particles (µg/m³), the ozone AQI, and the aerosol optical depth. */
+type Hour = { aqi: number; pm?: number; ozone?: number; aod?: number };
 
 /** The air, hour by hour, keyed by the hour's real instant (ms). */
 export type Air = {
-  now: { aqi?: number; pm?: number; ozone?: number; pm10?: number };
+  now: { aqi?: number; pm?: number; ozone?: number; pm10?: number; aod?: number };
   hours: Map<number, Hour>;
 };
 
@@ -41,9 +48,10 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
     longitude: String(lon),
     timezone: timeZone,
     // The blended index, and its parts: fine particles (for the NowCast and
-    // smoke), ozone (invisible, but the words should say so), and PM10.
-    current: "us_aqi,pm2_5,us_aqi_ozone,us_aqi_pm10",
-    hourly: "us_aqi,pm2_5,us_aqi_ozone",
+    // smoke), ozone (invisible, but the words should say so), and PM10; and
+    // the aerosol optical depth, which tells smoke from smog (lib/smoke.ts).
+    current: "us_aqi,pm2_5,us_aqi_ozone,us_aqi_pm10,aerosol_optical_depth",
+    hourly: "us_aqi,pm2_5,us_aqi_ozone,aerosol_optical_depth",
     // Yesterday too: the NowCast needs the last 12 hours.
     past_days: "1",
     forecast_days: "7",
@@ -54,6 +62,7 @@ export async function getAir(lat: number, lon: number, timeZone: string): Promis
 }
 
 const r0 = (x: Num | undefined) => (x == null ? undefined : Math.round(x));
+const r2 = (x: Num | undefined) => (x == null ? undefined : Math.round(x * 100) / 100);
 
 export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
   // Open-Meteo labels the whole response with one offset; each label's real
@@ -66,6 +75,7 @@ export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
         aqi,
         pm: r0(d.hourly.pm2_5?.[i]),
         ozone: r0(d.hourly.us_aqi_ozone?.[i]),
+        aod: r2(d.hourly.aerosol_optical_depth?.[i]),
       });
   });
   // Now's fine particles: the NowCast over the 12 hours up to this one.
@@ -79,6 +89,7 @@ export function shapeAir(d: OpenMeteoAir, at = new Date()): Air {
       pm: cast != null ? Math.round(cast) : r0(d.current?.pm2_5),
       ozone: r0(d.current?.us_aqi_ozone),
       pm10: r0(d.current?.us_aqi_pm10),
+      aod: r2(d.current?.aerosol_optical_depth),
     },
     hours,
   };
@@ -117,15 +128,17 @@ export function withAir(w: Weather, air: Air, tz = "UTC"): Weather {
       pm: air.now.pm ?? first?.pm,
       ozone: air.now.ozone ?? first?.ozone,
       pm10: air.now.pm10,
+      aod: air.now.aod ?? first?.aod,
     },
     hours: w.hours.map((h) => {
       const a = at(h.time);
-      return a ? { ...h, aqi: a.aqi, pm: a.pm, ozone: a.ozone } : h;
+      return a ? { ...h, aqi: a.aqi, pm: a.pm, ozone: a.ozone, aod: a.aod } : h;
     }),
     days: w.days.map((d) => {
       const hours = byDay.get(d.date) ?? [];
       const aqi = hours.map((a) => a?.aqi ?? null);
       const pm = hours.map((a) => a?.pm ?? null);
+      const aod = hours.map((a) => a?.aod ?? null);
       const known = aqi.filter((x): x is number => x != null);
       if (!known.length) return d;
       const ozone = hours.flatMap((a) => (a?.ozone == null ? [] : [a.ozone]));
@@ -133,7 +146,7 @@ export function withAir(w: Weather, air: Air, tz = "UTC"): Weather {
         ...d,
         aqi: Math.max(...known),
         ozone: ozone.length ? Math.max(...ozone) : undefined,
-        hourly: d.hourly ? { ...d.hourly, aqi, pm } : d.hourly,
+        hourly: d.hourly ? { ...d.hourly, aqi, pm, aod } : d.hourly,
       };
     }),
   };
