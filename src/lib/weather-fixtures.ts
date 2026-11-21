@@ -6,7 +6,7 @@ import { describe } from "./forecast";
 import { addDays, dayKey, parts } from "./time";
 import type { DayHours, Weather } from "./types";
 
-export const SKIES = ["fair", "snow", "storm", "rain", "smoke"] as const;
+export const SKIES = ["fair", "snow", "storm", "rain", "smoke", "smog"] as const;
 export type FakeSky = (typeof SKIES)[number];
 
 const HOUR = 3_600_000;
@@ -24,6 +24,8 @@ type Spec = {
   aqi: number[];
   /** How far one can see, meters. */
   visibility: number;
+  /** How veiled the whole sky is (aerosol optical depth); a clear 0.1 unless said. */
+  aod?: number;
   /** Sunrise and sunset, minutes after midnight (November's unless said). */
   sun?: [rise: number, set: number];
   /** The sky for a local hour of a day (0: today, 1: tomorrow). */
@@ -147,6 +149,7 @@ const SPECS: Record<FakeSky, Spec> = {
     rh: [9, 38],
     aqi: [168, 182, 143, 96, 72],
     visibility: 3_000,
+    aod: 1.3,
     sun: [5 * 60 + 45, 20 * 60 + 15],
     hour: (_, h) => ({ code: h >= 7 && h < 19 ? 1 : 0, chance: 0 }),
     days: [
@@ -158,6 +161,29 @@ const SPECS: Record<FakeSky, Spec> = {
       [0, 90, 56, 0],
       [0, 91, 57, 0],
       [1, 90, 56, 0],
+    ],
+  },
+  // A still November week under an inversion: cold, clear above, the town's
+  // own air trapped near the ground. Dirty air, but smog, not smoke.
+  smog: {
+    low: 24,
+    high: 41,
+    wind: [1, 5, 160],
+    uv: 2.4,
+    rh: [55, 88],
+    aqi: [118, 106, 92, 74, 58],
+    visibility: 9_000,
+    aod: 0.15,
+    hour: fair,
+    days: [
+      [0, 41, 24, 0],
+      [1, 40, 23, 0],
+      [0, 42, 25, 0],
+      [2, 44, 27, 5],
+      [3, 46, 31, 10],
+      [1, 43, 28, 0],
+      [0, 41, 26, 0],
+      [0, 42, 25, 0],
     ],
   },
 };
@@ -247,6 +273,7 @@ function lensHour(spec: Spec, day: number, h: number) {
     dew: dewOf(temp, rh),
     aqi,
     pm: aqi == null ? undefined : Math.round(aqi > 100 ? aqi * 0.45 : aqi * 0.25),
+    aod: aqi == null ? undefined : (spec.aod ?? 0.1),
   };
 }
 
@@ -264,6 +291,7 @@ function lensDay(spec: Spec, day: number): DayHours {
     dew: hours.map((h) => h.dew),
     aqi: hours.map((h) => h.aqi),
     pm: hours.map((h) => h.pm ?? null),
+    aod: hours.map((h) => h.aod ?? null),
   };
 }
 
@@ -330,6 +358,7 @@ export function fakeWeather(sky: FakeSky, now: Date, timeZone: string): Weather 
       visibility: spec.visibility,
       aqi: nowHour.aqi,
       pm: nowHour.pm,
+      aod: nowHour.aod,
     },
     today: {
       high: days[0].high,

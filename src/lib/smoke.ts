@@ -13,6 +13,15 @@
 //    indices. One smoky hour can't set off an alarm, arriving smoke still
 //    shows within an hour or two, and clearing smoke stops alarming as soon.
 //  - When ozone is what makes the air bad, the words say ozone, not smoke.
+//  - Fine particles alone can't tell smoke from smog. A winter inversion
+//    traps the town's own exhaust and wood smoke near the ground: the
+//    particles climb, but the air above stays clear. Wildfire smoke fills the
+//    whole column. So smoke is named only when the aerosol optical depth (how
+//    much the whole sky is veiled) says so; otherwise it's smog. With no word
+//    of the column (a change upstream), particles alone decide, as before:
+//    better to call smog smoke than to miss a wildfire's.
+//    Smog is drawn as haze, however dirty: the sky above it is clear, and the
+//    air line beside it says how bad it is.
 // Later hours keep Open-Meteo's AQI.
 
 /** The EPA's words for the US AQI. */
@@ -33,10 +42,17 @@ export const AQI_UNHEALTHY = 151;
 /** From here up, stay inside (the EPA's "very unhealthy"). */
 export const AQI_VERY = 201;
 
-/** Fine particles (µg/m³) at which the air turns hazy, smoky, and thick: the EPA's 2024 lines. */
+/** Fine particles (µg/m³) at which the air turns hazy, smoky (or smoggy), and thick: the EPA's 2024 lines. */
 export const HAZE_PM = 15;
 export const SMOKE_PM = 35.5;
 export const THICK_PM = 55.5;
+/**
+ * Aerosol optical depth (at 550 nm) from which dirty air is smoke: a clear
+ * sky is about 0.1, a winter inversion stays near it, wildfire smoke runs
+ * from about 0.5 to well past 1. (A damp, foggy inversion can swell toward
+ * 0.4; not seen here, but the edge to watch.)
+ */
+export const SMOKE_AOD = 0.4;
 
 // The EPA's 2024 PM2.5 breakpoints: concentration to index.
 const BREAKS: Array<[lo: number, hi: number, a: number, b: number]> = [
@@ -137,36 +153,57 @@ export function airAhead(label: string, aqi?: number, ozone = false): string | n
 }
 
 /**
- * Smoke and haze, from fine particles alone (µg/m³: the NowCast now, the
- * hour's reading ahead), or, with no word from the air, a short view on a
- * dry day. Ozone is invisible: a high-ozone day is drawn clear.
+ * Smoke and haze, from fine particles (µg/m³: the NowCast now, the hour's
+ * reading ahead) and the aerosol optical depth, or, with no word from the
+ * air, a short view on a dry day. Ozone is invisible: a high-ozone day is
+ * drawn clear.
  *  haze:  fine particles from 15, or visibility under 8 km with no fog or rain.
- *  smoke: from 35.5, unhealthy for sensitive groups.
- *  thick: from 55.5, unhealthy for everyone.
+ *  smog:  from 35.5, under a clear column: an inversion's air.
+ *  smoke: from 35.5, unhealthy for sensitive groups, the whole sky veiled.
+ *  thick: smoke from 55.5, unhealthy for everyone.
  */
-export type Smoke = "none" | "haze" | "smoke" | "thick";
+export type Smoke = "none" | "haze" | "smog" | "smoke" | "thick";
+
+/** Whether the whole sky is veiled enough for dirty air to be smoke. */
+export const veiled = (aod?: number | null) => aod != null && aod >= SMOKE_AOD;
+
+/** One hour's air, by its fine particles and how veiled the sky is. */
+function levelOf(pm: number, aod?: number | null): Smoke {
+  if (pm >= SMOKE_PM) {
+    if (aod != null && !veiled(aod)) return "smog";
+    return pm >= THICK_PM ? "thick" : "smoke";
+  }
+  return pm >= HAZE_PM ? "haze" : "none";
+}
+
+/** Smoke as the sky draws it: smog dims the sun like haze, but no smoke lies over the land. */
+export type Drawn = Exclude<Smoke, "smog">;
+export const drawn = (s: Smoke): Drawn => (s === "smog" ? "haze" : s);
+
+const RANK: Record<Smoke, number> = { none: 0, haze: 1, smog: 2, smoke: 3, thick: 4 };
 
 /**
  * Smoke over a stretch of hours (a part of the day, a whole day): the worst
  * level that lasts three hours (or all of them, in a shorter stretch).
  */
-export function smokeOver(pms: Array<number | null | undefined>): Smoke {
-  const known = pms.filter((x): x is number => x != null);
+export function smokeOver(
+  pms: Array<number | null | undefined>,
+  aods: Array<number | null | undefined> = [],
+): Smoke {
+  const known = pms.flatMap((pm, i) => (pm == null ? [] : [RANK[levelOf(pm, aods[i])]]));
   const need = Math.min(3, known.length);
   if (!need) return "none";
-  const lasting = (line: number) => known.filter((pm) => pm >= line).length >= need;
-  if (lasting(THICK_PM)) return "thick";
-  if (lasting(SMOKE_PM)) return "smoke";
-  if (lasting(HAZE_PM)) return "haze";
-  return "none";
+  const lasting = (s: Smoke) => known.filter((r) => r >= RANK[s]).length >= need;
+  return (["thick", "smoke", "smog", "haze"] as const).find(lasting) ?? "none";
 }
-export function smokeOf(now: { pm?: number; visibility?: number; code?: number } | null): Smoke {
+export function smokeOf(
+  now: { pm?: number; aod?: number; visibility?: number; code?: number } | null,
+): Smoke {
   if (!now) return "none";
-  const { pm, visibility, code } = now;
-  if ((pm ?? 0) >= THICK_PM) return "thick";
-  if ((pm ?? 0) >= SMOKE_PM) return "smoke";
+  const { pm, aod, visibility, code } = now;
+  const level = levelOf(pm ?? 0, aod);
+  if (level !== "none") return level;
   // Fog and rain cut the view too; that isn't haze.
   const murky = code != null && (code === 45 || code === 48 || code >= 51);
-  if ((pm ?? 0) >= HAZE_PM || (visibility != null && visibility < 8000 && !murky)) return "haze";
-  return "none";
+  return visibility != null && visibility < 8000 && !murky ? "haze" : "none";
 }

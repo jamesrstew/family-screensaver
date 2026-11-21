@@ -305,11 +305,13 @@ function hoursIn(w: Weather, now: Date, tz: string, day: string, from: number, t
 
 /**
  * The sky in words, smoke and haze included: "Smoky" under smoke when the sky
- * is otherwise fair to overcast, "Hazy" under haze on a sunny or clear one.
+ * is otherwise fair to overcast ("Smoggy" when it's the town's own dirty
+ * air, not smoke), "Hazy" under haze on a sunny or clear one.
  * No "mostly sunny" under a veiled sun.
  */
 function skyWithSmoke(code: number, isDay: boolean, smoke: Smoke): string {
   if ((smoke === "smoke" || smoke === "thick") && code <= 3) return "Smoky";
+  if (smoke === "smog" && code <= 3) return "Smoggy";
   if (smoke === "haze" && code <= 1) return "Hazy";
   return skyWords(code, isDay);
 }
@@ -324,7 +326,16 @@ function partFromHours(label: string, hours: Hour[], night: boolean): Part | nul
     high: !night,
     code,
     isDay: !night,
-    words: fall ? fallWords(fall) : skyWithSmoke(code, !night, smokeOver(hours.map((h) => h.pm))),
+    words: fall
+      ? fallWords(fall)
+      : skyWithSmoke(
+          code,
+          !night,
+          smokeOver(
+            hours.map((h) => h.pm),
+            hours.map((h) => h.aod),
+          ),
+        ),
     wet: Boolean(fall),
   };
 }
@@ -336,7 +347,7 @@ export function partFromDay(label: string, d: Day): Part {
   // A day whose worst hour is a slight chance of snow is drawn as a gray one.
   const code = counts ? d.code : precipKind(d.code) ? 3 : d.code;
   // A smoky or hazy day, by its fine particles (ozone is invisible).
-  const smoke = smokeOver(d.hourly?.pm ?? []);
+  const smoke = smokeOver(d.hourly?.pm ?? [], d.hourly?.aod);
   return {
     label,
     temp: d.high,

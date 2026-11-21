@@ -27,6 +27,11 @@ export const STRIP_OUT_MS = 2800;
 /** From a clip's turn ending until it has gone: the strip sinks, then the picture. */
 export const NATURE_GONE_MS = STRIP_OUT_MS + NATURE_OUT_MS;
 const STALL_MS = 6000;
+// Once playing, a clip is given time to catch up (the TV's storage is slow
+// now and then): a pause mid-clip rarely means it's gone, and skipping it
+// cuts a clip short. Its pauses together may last this long, no longer, so
+// a clip that stutters on and on still gives way.
+const STALL_MID_MS = 30_000;
 // The manifest is asked for again now and then: a drive can be plugged in or pulled out.
 const MANIFEST_EVERY_MS = 10 * 60_000;
 
@@ -127,7 +132,12 @@ export function NatureWindow({
       seeked = true;
       ready();
     };
-    const fail = () => onFail(held.n);
+    const fail = () => {
+      console.info(
+        `[nature] a clip failed at ${Math.round(v.currentTime)}s: error ${v.error?.code}`,
+      );
+      onFail(held.n);
+    };
     v.addEventListener("loadedmetadata", meta);
     v.addEventListener("seeked", onSeeked);
     v.addEventListener("canplaythrough", ready);
@@ -157,21 +167,31 @@ export function NatureWindow({
     const v = ref.current;
     if (!v || n === null || !on) return;
     let alive = true;
-    const give = () => {
+    const give = (why: string) => {
       if (!alive) return;
+      // Read from the TV's log: why a clip was cut short.
+      console.info(`[nature] gave up on a clip at ${Math.round(v.currentTime)}s: ${why}`);
       v.pause();
       onFail(n);
     };
     // Until the first frame is on the glass, one deadline; after it, a stall
     // ("waiting" without "playing" again) gets its own.
     let framedYet = false;
-    let stall = window.setTimeout(give, STALL_MS);
+    let stall = window.setTimeout(() => give("no first frame"), STALL_MS);
+    let spent = 0;
+    let since: number | null = null;
     const waiting = () => {
+      if (!framedYet || since !== null) return;
+      since = performance.now();
+      window.clearTimeout(stall);
+      stall = window.setTimeout(() => give("stalled"), Math.max(STALL_MID_MS - spent, 0));
+    };
+    const going = () => {
       if (!framedYet) return;
       window.clearTimeout(stall);
-      stall = window.setTimeout(give, STALL_MS);
+      if (since !== null) spent += performance.now() - since;
+      since = null;
     };
-    const going = () => framedYet && window.clearTimeout(stall);
     // The TV leaving the app pauses the clip at once; it never counts as a
     // failure (the screen takes the turn away while the app is hidden).
     const away = () => {
@@ -218,7 +238,7 @@ export function NatureWindow({
       if (graph) v.volume = 1;
       v.play().then(first, () => {
         v.muted = true;
-        v.play().then(first, give);
+        v.play().then(first, () => give("wouldn't play"));
       });
     });
     return () => {

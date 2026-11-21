@@ -246,6 +246,16 @@ describe("smoke in the sky's words", () => {
     expect(o.parts.map((p) => p.words)).not.toContain("Mostly sunny");
     expect(o.parts[0].words).toBe("Smoky");
   });
+  it("calls a winter inversion smoggy, never smoky", () => {
+    const winter = new Date("2026-11-21T13:00:00-08:00");
+    const w = fakeWeather("smog", winter, tz);
+    const o = outlook(w, winter, tz);
+    expect(o.line).toMatch(/^Smoggy and \d+° now/);
+    expect(o.line).not.toMatch(/Smoky/);
+    expect(o.parts.map((p) => p.words)).not.toContain("Smoky");
+    // The air is still named for what it is.
+    expect(o.air).toMatch(/^Air unhealthy for sensitive groups, AQI \d+/);
+  });
   it("says nothing of the air on a clear day", () => {
     const w = fakeWeather("fair", now, tz);
     expect(outlook(w, now, tz).air).toBeNull();
