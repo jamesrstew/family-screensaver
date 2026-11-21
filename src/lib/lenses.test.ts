@@ -94,9 +94,10 @@ describe("lensesFor: only what has something to say", () => {
     expect(lensesFor([{ ...calm, gust: 25 }])).toContain("wind");
     expect(lensesFor([{ ...calm, wind: 14, gust: 24 }])).not.toContain("wind");
   });
-  it("shows UV from the EPA's moderate", () => {
-    expect(lensesFor([{ ...calm, uv: 2.4 }])).not.toContain("uv");
-    expect(lensesFor([{ ...calm, uv: 2.6 }])).toContain("uv");
+  it("shows UV only from the EPA's high: a winter's moderate sun isn't news", () => {
+    expect(lensesFor([{ ...calm, uv: 2.6 }])).not.toContain("uv");
+    expect(lensesFor([{ ...calm, uv: 5.4 }])).not.toContain("uv");
+    expect(lensesFor([{ ...calm, uv: 5.6 }])).toContain("uv");
   });
   it("shows how it feels when the feel strays 8°, or 5° when bitter or scorching", () => {
     expect(lensesFor([{ ...calm, temp: 40, feels: 33 }])).not.toContain("feels");
@@ -140,7 +141,7 @@ describe("lensesFor: only what has something to say", () => {
           wind: 20,
           rh: 60,
           dew: 66,
-          uv: 3,
+          uv: 6,
         },
       ]),
     ).toEqual(["sky", "precip", "air", "feels", "wind", "humidity", "uv"]);
@@ -386,7 +387,7 @@ describe("UV", () => {
   it("says when it peaks, and what to do about it", () => {
     const hour = (t: string, uv: number) => ({ time: at(t).toISOString(), uv });
     expect(hoursUvLine([hour("11:00", 3.1), hour("13:00", 4.4)], at("10:00"), tz)).toBe(
-      "Moderate UV, peaking at 4 around 1 p.m. Sunscreen for long hours outside.",
+      "Moderate UV, peaking at 4 around 1 p.m.",
     );
     expect(hoursUvLine([{ time: "2026-11-19T20:00:00Z", uv: 8 }], at("21:00"), tz)).toBe(
       "Very high UV, peaking at 8 around noon tomorrow. Sunscreen, a hat, and shade at midday.",
@@ -536,8 +537,12 @@ describe("the air, in words", () => {
         { name: "Monday" },
       ]),
     ).toBe("Worst air tomorrow: AQI 182, unhealthy. Forecast through Sunday.");
-    expect(daysAirLine([{ name: "Saturday", aqi: 88, haze: 6 }])).toBe(
+    expect(daysAirLine([{ name: "Saturday", aqi: 88, haze: 6, smoke: 6 }])).toBe(
       "Smoky, moderate air Saturday, AQI up to 88. Fine for most; sensitive people may want to take it easy.",
+    );
+    // A winter inversion's haze is smog, not smoke: just moderate air.
+    expect(daysAirLine([{ name: "Saturday", aqi: 88, haze: 6, smoke: 0 }])).toBe(
+      "Worst air Saturday: AQI 88, moderate.",
     );
   });
   it("shows the lens for a few hours of haze, as the sky draws it", () => {

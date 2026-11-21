@@ -23,6 +23,8 @@ export type Weather = {
     pm?: number;
     ozone?: number;
     pm10?: number;
+    /** Aerosol optical depth: how veiled the whole sky is (smoke, not smog; lib/smoke.ts). */
+    aod?: number;
   };
   today: {
     high: number;
@@ -77,10 +79,11 @@ export type Weather = {
     /** Relative humidity (%) and dew point (°F). (How it feels is figured from these: feel.ts.) */
     rh?: number;
     dew?: number;
-    /** US AQI, fine particles (µg/m³), and the ozone AQI. */
+    /** US AQI, fine particles (µg/m³), the ozone AQI, and the aerosol optical depth. */
     aqi?: number;
     pm?: number;
     ozone?: number;
+    aod?: number;
   }>; // next 24
   /** Yesterday's hours, for last evening (fresh snow, a hard freeze): only what's read. */
   yesterday?: { date: string; hourly: Pick<DayHours, "temp" | "snow" | "precip"> };
@@ -100,6 +103,8 @@ export type DayHours = {
   aqi?: Array<number | null>;
   /** Fine particles (µg/m³); null past the end of the air-quality forecast. */
   pm?: Array<number | null>;
+  /** Aerosol optical depth; null past the end of the air-quality forecast. */
+  aod?: Array<number | null>;
 };
 
 export type Happening = {

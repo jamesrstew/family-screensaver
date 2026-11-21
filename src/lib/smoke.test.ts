@@ -77,8 +77,13 @@ describe("smokeOf", () => {
   it("reads smoke from the air, and haze from a short view on a dry day", () => {
     expect(smokeOf(null)).toBe("none");
     expect(smokeOf({ pm: 18 })).toBe("haze");
+    expect(smokeOf({ pm: 40, aod: 0.9 })).toBe("smoke");
+    expect(smokeOf({ pm: 60, aod: 0.9 })).toBe("thick");
+    // Dirty air under a clear column is an inversion's smog, however dirty.
+    expect(smokeOf({ pm: 40, aod: 0.18 })).toBe("smog");
+    expect(smokeOf({ pm: 60, aod: 0.18 })).toBe("smog");
+    // No word of the column: particles alone decide, as before.
     expect(smokeOf({ pm: 40 })).toBe("smoke");
-    expect(smokeOf({ pm: 60 })).toBe("thick");
     expect(smokeOf({ visibility: 5000, code: 0 })).toBe("haze");
     expect(smokeOf({ visibility: 5000, code: 45 })).toBe("none");
   });
@@ -86,10 +91,18 @@ describe("smokeOf", () => {
 
 describe("smokeOver", () => {
   it("takes the worst level that lasts three hours", () => {
-    expect(smokeOver([60, 60, 60, 5, 5])).toBe("thick");
-    expect(smokeOver([60, 5, 5, 5, 5])).toBe("none");
-    expect(smokeOver([40, 40, 20, 20, 5])).toBe("haze");
+    const veiled = [1, 1, 1, 1, 1];
+    expect(smokeOver([60, 60, 60, 5, 5], veiled)).toBe("thick");
+    expect(smokeOver([60, 5, 5, 5, 5], veiled)).toBe("none");
+    expect(smokeOver([40, 40, 20, 20, 5], veiled)).toBe("haze");
     expect(smokeOver([null, null])).toBe("none");
-    expect(smokeOver([40, 40])).toBe("smoke");
+    expect(smokeOver([40, 40], veiled)).toBe("smoke");
+  });
+  it("calls dirty air under a clear sky smog", () => {
+    expect(smokeOver([60, 60, 60, 5, 5], [0.1, 0.1, 0.1, 0.1, 0.1])).toBe("smog");
+    expect(smokeOver([40, 40, 40], [0.2, 0.2, 0.2])).toBe("smog");
+    expect(smokeOver([40, 40, 40])).toBe("smoke");
+    // Three hours of smoke and smog together are smog at least.
+    expect(smokeOver([40, 40, 40], [1, 0.1, 1])).toBe("smog");
   });
 });
