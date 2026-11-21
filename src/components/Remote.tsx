@@ -3,13 +3,14 @@
 import { useCallback, useRef, useState } from "react";
 import { family } from "@/config";
 import type { WeatherView } from "@/lib/carousel";
+import type { LeaguePick } from "@/lib/games";
 import type { Page, ShowRequest, Snapshot } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { useVoice } from "./useVoice";
 
 // The phone remote: put a page on the TV, or talk to it.
 
-type Ask = { page: Page; view?: WeatherView };
+type Ask = { page: Page; view?: WeatherView; league?: LeaguePick };
 const PAGES: Array<Ask & { title: string; line: string }> = [
   { page: "home", title: "Home", line: "The quiet screen" },
   { page: "weather", title: "The Weather", line: "The sky right now" },
@@ -18,16 +19,34 @@ const PAGES: Array<Ask & { title: string; line: string }> = [
   { page: "week", title: "The Week Ahead", line: "The family calendar" },
   { page: "notebook", title: "Ideas", line: "An idea, a quote, or a question" },
   { page: "sports", title: "The Games", line: "Our teams and the Top 25" },
+  {
+    page: "sports",
+    league: "cfb",
+    title: "College Football",
+    line: "The best college games, and ours",
+  },
+  {
+    page: "sports",
+    league: "cbb",
+    title: "College Basketball",
+    line: "The best college games, and ours",
+  },
+  { page: "sports", league: "nfl", title: "The NFL", line: "Every game this week" },
   { page: "nature", title: "Nature", line: "Real places, one after another" },
 ];
-const id = (a: Ask) => (a.view ? `${a.page}:${a.view}` : a.page);
+const id = (a: Ask) => [a.page, a.view ?? a.league].filter(Boolean).join(":");
 
 // One team's games has no button: it's asked for by voice (or Siri) only.
-async function show(page: Page, view?: WeatherView, team?: string) {
+async function show(page: Page, view?: WeatherView, team?: string, league?: LeaguePick) {
   const res = await fetch("/api/show", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ page, ...(view ? { view } : {}), ...(team ? { team } : {}) }),
+    body: JSON.stringify({
+      page,
+      ...(view ? { view } : {}),
+      ...(team ? { team } : {}),
+      ...(league ? { league } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`show ${res.status}`);
   return (await res.json()) as ShowRequest;
@@ -37,15 +56,18 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
   const [sent, setSent] = useState<{ id: string; ok: boolean } | null>(null);
   const clear = useRef<number | undefined>(undefined);
 
-  const send = useCallback(async (page: Page, view?: WeatherView, team?: string) => {
-    window.clearTimeout(clear.current);
-    const asked = await show(page, view, team).catch(() => null);
-    const ok = asked !== null;
-    setSent({ id: id({ page, view }), ok });
-    clear.current = window.setTimeout(() => setSent(null), 3000);
-    // For the voice: whether the team asked for was found.
-    return team ? Boolean(asked?.team) : undefined;
-  }, []);
+  const send = useCallback(
+    async (page: Page, view?: WeatherView, team?: string, league?: LeaguePick) => {
+      window.clearTimeout(clear.current);
+      const asked = await show(page, view, team, league).catch(() => null);
+      const ok = asked !== null;
+      setSent({ id: id({ page, view, league }), ok });
+      clear.current = window.setTimeout(() => setSent(null), 3000);
+      // For the voice: whether the team asked for was found.
+      return team ? Boolean(asked?.team) : undefined;
+    },
+    [],
+  );
 
   const voice = useVoice(
     useCallback(
@@ -67,7 +89,7 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
         {PAGES.map((p) => (
           <li key={id(p)} className="border-b border-rule/40">
             <button
-              onClick={() => send(p.page, p.view)}
+              onClick={() => send(p.page, p.view, undefined, p.league)}
               className="w-full py-5 text-left active:opacity-60"
             >
               <span className="block text-[1.9rem] leading-tight">{p.title}</span>

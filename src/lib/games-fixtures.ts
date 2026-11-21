@@ -142,10 +142,65 @@ const SLATES: Record<FakeSlate, Spec[]> = {
   none: [],
 };
 
+/** The rest of the NFL's slate, for its own page (busy only): tomorrow's games, and Monday's. */
+const NFL_SLATE: Spec[] = [
+  [
+    "nfl",
+    25,
+    ["15", "Dolphins", undefined, undefined, 31],
+    ["2", "Bills", undefined, undefined, 69],
+    "CBS",
+  ],
+  [
+    "nfl",
+    25,
+    ["18", "Saints", undefined, undefined, 22],
+    ["8", "Lions", undefined, undefined, 78],
+    "Fox",
+  ],
+  [
+    "nfl",
+    25,
+    ["23", "Steelers", undefined, undefined, 41],
+    ["21", "Eagles", undefined, undefined, 59],
+    "CBS",
+  ],
+  [
+    "nfl",
+    28,
+    ["20", "Jets", undefined, undefined, 35],
+    ["24", "Chargers", undefined, undefined, 65],
+    "CBS",
+  ],
+  [
+    "nfl",
+    28.5,
+    ["13", "Raiders", undefined, undefined, 27],
+    ["7", "Broncos", undefined, undefined, 73],
+    "Fox",
+  ],
+  [
+    "nfl",
+    52.5,
+    ["4", "Bengals", undefined, undefined, 48],
+    ["28", "Commanders", undefined, undefined, 52],
+    "ESPN",
+  ],
+];
+
 /** The slate, built around `now`: kickoffs on the half hour. */
 export function fakeGames(slate: FakeSlate, now: Date): Game[] {
+  return fakeFrom(SLATES[slate], now, "fake");
+}
+
+/** The NFL's slate to go with it (?games=busy only). */
+export function fakeNfl(slate: FakeSlate, now: Date): Game[] {
+  return fakeFrom(slate === "busy" ? NFL_SLATE : [], now, "fake-nfl");
+}
+
+function fakeFrom(specs: Spec[], now: Date, prefix: string): Game[] {
   const t0 = Math.round(now.getTime() / (HOUR / 2)) * (HOUR / 2);
-  const games = SLATES[slate].map(([league, hours, away, home, tv, state = "pre", period], i) => {
+  const games = specs.map(([league, hours, away, home, tv, state = "pre", period], i) => {
     const side = ([id, name, rank, score, chance]: Spec[2]): Side => ({
       id,
       name,
@@ -155,7 +210,7 @@ export function fakeGames(slate: FakeSlate, now: Date): Game[] {
       ...(chance !== undefined && state === "pre" ? { chance } : {}),
     });
     return {
-      id: `fake-${i}`,
+      id: `${prefix}-${i}`,
       league,
       start: new Date(t0 + hours * HOUR).toISOString(),
       timed: true,

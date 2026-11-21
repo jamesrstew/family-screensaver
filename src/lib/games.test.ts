@@ -12,6 +12,11 @@ import {
   standing,
   periodOf,
   leafAt,
+  leagueGames,
+  leagueView,
+  leaguesOf,
+  noGamesLine,
+  slateOf,
   leavesOf,
   marketChance,
   readMarkets,
@@ -739,5 +744,74 @@ describe("names", () => {
       "cbb",
     );
     expect(g.away.name).toBe("Saint Mary’s");
+  });
+});
+
+describe("slateOf", () => {
+  it("keeps the NFL's games through the week, and finals for a while, not the family's", () => {
+    const nfl = { league: "nfl" as const };
+    const sun = game("2026-11-22T21:25:00Z", {}, {}, nfl);
+    const thu = game("2026-11-20T01:15:00Z", {}, {}, nfl);
+    const live = game("2026-11-18T17:00:00Z", {}, {}, { ...nfl, state: "in" });
+    const final = game("2026-11-18T01:15:00Z", {}, {}, { ...nfl, state: "post" });
+    const oldFinal = game("2026-11-17T01:15:00Z", {}, {}, { ...nfl, state: "post" });
+    const nextWeek = game("2026-11-29T21:25:00Z", {}, {}, nfl);
+    const ours = game("2026-11-22T21:25:00Z", {}, { mine: true }, nfl);
+    const college = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+    expect(
+      slateOf([sun, thu, live, final, oldFinal, nextWeek, ours, college, sun], NOW, TZ),
+    ).toEqual([final, live, thu, sun]);
+  });
+
+  it("lets a game long “to come” go (a scoreboard gone stale)", () => {
+    const stuck = game("2026-11-18T08:00:00Z", {}, {}, { league: "nfl" });
+    expect(slateOf([stuck], NOW, TZ)).toEqual([]);
+  });
+});
+
+describe("leagueGames", () => {
+  const cfb = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+  const cbb = game("2026-11-19T03:00:00Z", { rank: 9 }, {}, { league: "cbb" });
+  const ours = game("2026-11-23T01:20:00Z", {}, { mine: true }, { league: "nfl" });
+  const slate = [game("2026-11-22T18:00:00Z", {}, {}, { league: "nfl" }), ours];
+
+  it("keeps one league's games, in time order", () => {
+    expect(leagueGames([cfb, cbb, ours], slate, "cfb")).toEqual([cfb]);
+    expect(leagueGames([cfb, cbb, ours], slate, "cbb")).toEqual([cbb]);
+  });
+
+  it("takes in the NFL's whole slate for the NFL, each game once", () => {
+    expect(leagueGames([cfb, cbb, ours], slate, "nfl")).toEqual([slate[0], ours]);
+  });
+
+  it("is college football and the NFL together for football", () => {
+    expect(leagueGames([cfb, cbb, ours], slate, "football")).toEqual([cfb, slate[0], ours]);
+    expect(leaguesOf("football")).toEqual(["cfb", "nfl"]);
+  });
+
+  it("is empty, plainly, when the league has nothing", () => {
+    expect(leagueGames([cfb], [], "cbb")).toEqual([]);
+    expect(noGamesLine("cbb")).toBe("No college basketball games in the next few days.");
+    expect(noGamesLine("nfl")).toBe("No NFL games this week.");
+    expect(noGamesLine("football")).toBe("No football games in the next few days.");
+  });
+});
+
+describe("leagueView", () => {
+  const cfb = game("2026-11-21T20:30:00Z", { rank: 4 }, {});
+  const nfl = game("2026-11-22T18:00:00Z", {}, {}, { league: "nfl" });
+
+  it("is the league's games, or none when that's known", () => {
+    expect(leagueView([cfb], [nfl], "nfl")).toEqual([nfl]);
+    expect(leagueView([cfb], [], "nfl")).toEqual([]);
+    expect(leagueView([cfb], null, "cbb")).toEqual([]);
+  });
+
+  it("is unknown (null), never empty, when the scores didn't answer", () => {
+    expect(leagueView(null, [nfl], "cfb")).toBeNull();
+    expect(leagueView([cfb], null, "nfl")).toBeNull();
+    // Football with the NFL unknown: college's games still show.
+    expect(leagueView([cfb], null, "football")).toEqual([cfb]);
+    expect(leagueView([], null, "football")).toBeNull();
   });
 });

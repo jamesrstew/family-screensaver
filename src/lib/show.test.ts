@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ShowBody, pageKey, targetOf, teamFor, viewAsked } from "./show";
+import { ShowBody, leagueFor, pageKey, targetOf, teamFor, viewAsked } from "./show";
 
 describe("ShowBody", () => {
   it.each([
@@ -34,9 +34,63 @@ describe("ShowBody", () => {
     expect(ShowBody.parse({ page: "weather", view: "tornado" })).toEqual({ page: "weather" });
     expect(ShowBody.parse({ page: "week", view: "days" })).toEqual({ page: "week" });
   });
+  it.each([
+    "sports",
+    "scores",
+    "Show scores",
+    "scoreboard",
+    "Show the scoreboard",
+    "all games",
+    "Show all the games",
+    "the games",
+  ])("%s is the whole scoreboard", (page) => {
+    expect(ShowBody.parse({ page })).toEqual({ page: "sports" });
+  });
+  it.each([
+    ["college football", "cfb"],
+    ["Show college football", "cfb"],
+    ["NFL", "nfl"],
+    ["show the NFL", "nfl"],
+    ["pro football", "nfl"],
+    ["college basketball", "cbb"],
+    ["show basketball", "cbb"],
+    ["Men’s college basketball", "cbb"],
+    ["football", "football"],
+    ["Show football", "football"],
+  ])("%s is one league's games (%s)", (page, league) => {
+    expect(ShowBody.parse({ page })).toEqual({ page: "sports", league });
+  });
+  it("takes a league beside the games page, from a fixed list only", () => {
+    expect(ShowBody.parse({ page: "sports", league: "nfl" })).toEqual({
+      page: "sports",
+      league: "nfl",
+    });
+    expect(ShowBody.parse({ page: "sports", league: "College Football" }).league).toBe("cfb");
+    expect(ShowBody.parse({ page: "sports", league: "mbb" }).league).toBe("cbb");
+    // Anything else is left out: the whole scoreboard, never an error.
+    expect(ShowBody.parse({ page: "sports", league: "nba" })).toEqual({ page: "sports" });
+    expect(ShowBody.parse({ page: "sports", league: "constructor" })).toEqual({ page: "sports" });
+    expect(ShowBody.safeParse({ page: "constructor" }).success).toBe(false);
+    expect(ShowBody.safeParse({ page: "sports", league: "x".repeat(41) }).success).toBe(false);
+    // Never beside another page; a team, if named, wins.
+    expect(ShowBody.parse({ page: "weather", league: "nfl" })).toEqual({ page: "weather" });
+    expect(ShowBody.parse({ page: "sports", league: "nfl", team: "Bears" })).toEqual({
+      page: "sports",
+      team: "Bears",
+    });
+  });
   it("refuses pages that don't exist", () => {
     expect(ShowBody.safeParse({ page: "news" }).success).toBe(false);
     expect(ShowBody.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("the league a request carries", () => {
+  it("is the games page's only, and never beside a team", () => {
+    expect(leagueFor("sports", "nfl")).toBe("nfl");
+    expect(leagueFor("sports", "nfl", { league: "nfl", id: "3" })).toBeNull();
+    expect(leagueFor("week", "nfl")).toBeNull();
+    expect(leagueFor("sports")).toBeNull();
   });
 });
 

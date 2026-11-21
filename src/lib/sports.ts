@@ -6,11 +6,13 @@ import {
   AHEAD_DAYS,
   GAMES_FRESH_MS,
   MAX_GAMES,
+  MINE_DAYS,
   curate,
   marketChance,
   readChance,
   readEvents,
   readMarkets,
+  slateOf,
   trim,
   withChance,
   withTeams,
@@ -62,8 +64,11 @@ export const BUDGET_MS = 4500;
 /** A list kept in the store this new is served as it is. */
 const FRESH_MS = 4 * 60_000;
 
-/** The games, and when they were gathered. */
-export type Gathered = { at: string; games: Game[] };
+/**
+ * The games, and when they were gathered; and the NFL's slate, for its own
+ * page (null: its scoreboard didn't answer; absent from a list kept before it).
+ */
+export type Gathered = { at: string; games: Game[]; nfl?: Game[] | null };
 type Kept = Gathered & { teams: string };
 
 /**
@@ -82,14 +87,19 @@ export async function getGames(now: Date, tz: string, teams: readonly Team[]): P
   const age = kept ? now.getTime() - Date.parse(kept.at) : NaN;
   // The same teams, and not from the future (a dev clock set back).
   const usable = kept && kept.teams === sig && age >= 0 && age < GAMES_FRESH_MS ? kept : null;
-  if (usable && age < FRESH_MS) return { at: usable.at, games: usable.games };
-  const work = gather(now, tz, teams).then((games): Gathered => ({ at: now.toISOString(), games }));
+  const served = (k: Kept): Gathered => ({
+    at: k.at,
+    games: k.games,
+    ...(k.nfl !== undefined ? { nfl: k.nfl } : {}),
+  });
+  if (usable && age < FRESH_MS) return served(usable);
+  const work = gather(now, tz, teams).then((g): Gathered => ({ at: now.toISOString(), ...g }));
   // Kept for the next asking, after the answer: a slow store never holds up the page.
   after(() =>
     work.then((fresh) => keep(fresh, sig)).catch((err) => console.error("[sports] not kept", err)),
   );
   if (!usable) return work;
-  return { at: usable.at, games: usable.games };
+  return served(usable);
 }
 
 /** Keep a list, unless a newer one is already kept (two refreshes overlapping). */
@@ -99,22 +109,21 @@ async function keep(fresh: Gathered, teams: string): Promise<void> {
   await store.set(KEYS.games, { ...fresh, teams });
 }
 
-/** Everything at once, within the budget: scores first, then each game's chance. */
+/**
+ * Everything at once, within the budget: scores first, then each game's
+ * chance. The NFL's slate (its own page's) stands or falls on its own: the
+ * rest never fails with it (each scoreboard has its own few seconds).
+ */
 export async function gather(
   now: Date,
   tz: string,
   teams: readonly Team[],
   budget = BUDGET_MS,
-): Promise<Game[]> {
+): Promise<{ games: Game[]; nfl: Game[] | null }> {
   const began = Date.now();
   const left = () => Math.max(0, budget - (Date.now() - began));
-  // The markets, alongside the scores: football and basketball always; the
-  // NFL only for a family team (it has no Top 25).
-  const leagues: League[] = [
-    "cfb",
-    "cbb",
-    ...(teams.some((t) => t.league === "nfl") ? ["nfl" as const] : []),
-  ];
+  // The markets, alongside the scores, for all three leagues.
+  const leagues: League[] = ["cfb", "cbb", "nfl"];
   const books = leagues.map((l) => markets(l).catch(() => [] as Market[]));
   // The scoreboards, from yesterday (last night's finals) to a day past the
   // Top 25's reach (a late Pacific game falls on the next Eastern day):
@@ -138,13 +147,34 @@ export async function gather(
       events(t.league, `${SITE}/${PATH[t.league]}/teams/${t.id}/schedule?seasontype=${type}`),
     ),
   );
-  const got = await Promise.allSettled([...boards, ...seasons]);
-  const ok = got.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  // The NFL's scoreboard for its own page, day by day from yesterday through
+  // the week ahead (it has no Top 25, so the list above takes only the
+  // family's NFL games). By date, not ESPN's undated "this week", which still
+  // shows last week's finals early in the week. (ESPN refuses a range of dates.)
+  const week = Array.from({ length: MINE_DAYS + 2 }, (_, i) =>
+    events(
+      "nfl",
+      `${SITE}/${PATH.nfl}/scoreboard?dates=${addDays(first, i - 1).replaceAll("-", "")}&limit=300`,
+    ),
+  );
+  const fulfilled = (rs: PromiseSettledResult<Game[]>[]) =>
+    rs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const [got, nflGot] = await Promise.all([
+    Promise.allSettled([...boards, ...seasons]),
+    Promise.allSettled(week),
+  ]);
+  const ok = fulfilled(got);
   if (!ok.length) throw new Error("no scoreboard answered");
+  const nflOk = fulfilled(nflGot);
   // Twice as many as will show: the chances rule out the foregone ones.
   const games = curate(withTeams(ok.flat(), teams), now, tz, MAX_GAMES * 2);
+  const slate = nflOk.length ? slateOf(withTeams(nflOk.flat(), teams), now, tz) : null;
   const book = new Map(leagues.map((l, i) => [l, books[i]]));
-  return trim(await chancesFor(games, book, left));
+  const [chanced, nfl] = await Promise.all([
+    chancesFor(games, book, left),
+    slate ? chancesFor(slate, book, left) : null,
+  ]);
+  return { games: trim(chanced), nfl };
 }
 
 /**

@@ -388,6 +388,27 @@ export function curate(all: Game[], now: Date, tz: string, max = MAX_GAMES): Gam
   return trim([...keep, ...ranked], max);
 }
 
+/**
+ * The NFL's slate: its games through the week ahead (its games come
+ * Thursday to Monday), other than the family's (curate keeps those): those
+ * to come, those under way, and finals for a while after (Sunday evening
+ * still shows the afternoon's scores). The NFL has no Top 25, so the
+ * scoreboard and home leave these out; only the NFL's own page (and
+ * football's) shows them.
+ */
+export function slateOf(all: Game[], now: Date, tz: string): Game[] {
+  const t = now.getTime();
+  const last = addDays(dayKey(now, tz), MINE_DAYS);
+  const byId = new Map<string, Game>();
+  for (const g of all) {
+    if (g.league !== "nfl" || ours(g) || byId.has(g.id)) continue;
+    const since = t - Date.parse(g.start);
+    const keep = g.state === "post" ? since < FINAL_HOLD_MS : since < STALE_MS;
+    if (keep && dayKey(new Date(g.start), tz) <= last) byId.set(g.id, g);
+  }
+  return [...byId.values()].sort(byStart);
+}
+
 /** A Top 25 game this one-sided (by its market, or ESPN's predictor) isn't worth a line. */
 export const LOPSIDED = 95;
 
@@ -556,6 +577,60 @@ export function standing(g: Game): string | null {
 export function slideGames(games: Game[], now: Date, tz: string): Game[] {
   return horizon(games, now, tz).sort(byStart);
 }
+
+// ---- One league's page, asked for by name ("show college football").
+
+/** What a league's page can be asked for: one league, or football (college and the NFL together). */
+export const LEAGUE_PICKS = ["cfb", "cbb", "nfl", "football"] as const;
+export type LeaguePick = (typeof LEAGUE_PICKS)[number];
+
+/** The page's quiet heading. */
+export const LEAGUE_TITLE: Record<LeaguePick, string> = {
+  cfb: "College football",
+  cbb: "College basketball",
+  nfl: "NFL",
+  football: "Football",
+};
+
+/** The leagues a pick takes in. */
+export const leaguesOf = (pick: LeaguePick): League[] =>
+  pick === "football" ? ["cfb", "nfl"] : [pick];
+
+/**
+ * A league's page: the scoreboard's games in it (the family's and the Top
+ * 25's), and for the NFL its whole slate too; in time order, each game once.
+ */
+export function leagueGames(games: Game[], slate: Game[], pick: LeaguePick): Game[] {
+  const leagues = leaguesOf(pick);
+  const byId = new Map<string, Game>();
+  for (const g of [...games, ...slate]) {
+    const key = `${g.league}:${g.id}`;
+    if (leagues.includes(g.league) && !byId.has(key)) byId.set(key, g);
+  }
+  return [...byId.values()].sort(byStart);
+}
+
+/**
+ * What a league's page can show: its games (fresh ones, from freshGames), an
+ * empty list when it's known to have none, or null when that isn't known (the
+ * scores didn't answer, or the NFL's didn't and the NFL is asked for), so
+ * nothing says "no games" that might be untrue.
+ */
+export function leagueView(
+  games: Game[] | null,
+  slate: Game[] | null,
+  pick: LeaguePick,
+): Game[] | null {
+  const list = leagueGames(games ?? [], slate ?? [], pick);
+  const known = games !== null && (slate !== null || !leaguesOf(pick).includes("nfl"));
+  return list.length || known ? list : null;
+}
+
+/** "No college basketball games in the next few days.": a league's page with nothing on it, said plainly. */
+export const noGamesLine = (pick: LeaguePick) =>
+  pick === "nfl"
+    ? "No NFL games this week."
+    : `No ${LEAGUE_TITLE[pick].toLowerCase()} games in the next few days.`;
 
 /** The leader (or the winner), for setting in full ink. */
 export function ahead(g: Game): Side | null {

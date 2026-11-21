@@ -19,6 +19,7 @@ export async function GET() {
 // The weather's views have names of their own: {"page":"hourly"}, {"page":"seven-day"}.
 // One team's games: {"page":"sports","team":"kentucky basketball"}; a team
 // that can't be found shows the games page as usual, never an error.
+// One league's: {"page":"sports","league":"nfl"}, or {"page":"college football"}.
 export async function POST(request: Request) {
   if (!(await isFamily())) return new Response(null, { status: 401 });
   const body = ShowBody.safeParse(await request.json().catch(() => null));
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
     page: body.data.page,
     ...(body.data.view ? { view: body.data.view } : {}),
     ...(team ? { team } : {}),
+    // A league only when no team was named (one that wasn't found shows every game).
+    ...(body.data.league && !body.data.team ? { league: body.data.league } : {}),
     at: now.toISOString(),
   };
   await store.set(KEYS.show, ask);

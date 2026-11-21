@@ -126,3 +126,53 @@ describe("show_page with a team", () => {
     expect(await ask(true)).toEqual({ ok: true });
   });
 });
+
+describe("show_page and read_games for one league", () => {
+  const shown: unknown[][] = [];
+  const ctx = (s: Partial<Snapshot> = {}) => ({
+    snapshot: { ...snapshot(null), ...s },
+    now: new Date(at),
+    show: (...a: unknown[]) => void shown.push(a),
+    hangUp: () => {},
+  });
+  const nfl = (id: string, mine = false) => ({
+    id,
+    league: "nfl" as const,
+    start: "2026-11-22T21:25:00Z",
+    timed: true,
+    state: "pre" as const,
+    neutral: false,
+    away: { id: `a${id}`, name: `Away ${id}`, short: `Away ${id}` },
+    home: { id: `h${id}`, name: `Home ${id}`, short: `Home ${id}`, ...(mine ? { mine } : {}) },
+  });
+
+  it("passes a league from the fixed list, never beside a team or another page", async () => {
+    shown.length = 0;
+    await runTool("show_page", { page: "sports", league: "nfl" }, ctx());
+    await runTool("show_page", { page: "sports", league: "nba" }, ctx());
+    await runTool("show_page", { page: "week", league: "nfl" }, ctx());
+    await runTool("show_page", { page: "sports", league: "cfb", team: "Iowa" }, ctx());
+    expect(shown.map((a) => a[3])).toEqual(["nfl", undefined, undefined, undefined]);
+  });
+
+  it("reads one league's games, the NFL's whole slate with it", async () => {
+    const got = (await runTool(
+      "read_games",
+      { league: "nfl" },
+      ctx({ games: [nfl("1", true)], nfl: [nfl("2")], gamesAt: at }),
+    )) as Array<Record<string, unknown>>;
+    expect(got.map((g) => g.game)).toEqual(["Away 1 at Home 1", "Away 2 at Home 2"]);
+    const college = await runTool(
+      "read_games",
+      { league: "cbb" },
+      ctx({ games: [nfl("1", true)], nfl: [nfl("2")], gamesAt: at }),
+    );
+    expect(college).toEqual([]);
+  });
+
+  it("says it doesn't know, never “no games,” when the NFL's scoreboard didn't answer", async () => {
+    expect(
+      await runTool("read_games", { league: "nfl" }, ctx({ games: [], nfl: null, gamesAt: at })),
+    ).toEqual({ available: false });
+  });
+});

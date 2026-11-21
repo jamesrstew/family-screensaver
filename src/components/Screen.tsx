@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SHOW_TTL_MS, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
+import { SHOW_TTL_MS, leagueFor, pageKey, targetOf, teamFor, viewAsked } from "@/lib/show";
 import {
   CYCLE_MS,
   latchCue,
@@ -16,7 +16,14 @@ import {
   type Start,
   type WeatherView,
 } from "@/lib/carousel";
-import { freshGames, gamesCue, nightGame, slideGames } from "@/lib/games";
+import {
+  freshGames,
+  gamesCue,
+  leagueView,
+  nightGame,
+  slideGames,
+  type LeaguePick,
+} from "@/lib/games";
 import { freshIndoor } from "@/lib/indoor";
 import {
   levelAt,
@@ -73,6 +80,7 @@ type View =
   | `home:${string}`
   | `night:${string}`
   | `carousel:${string}`
+  | `sports:${string}`
   | `weather:${WeatherView}`;
 
 /** How long a page stays up before the screen returns home. */
@@ -135,12 +143,15 @@ export function Screen({
   initial,
   initialPage,
   initialTeam = null,
+  initialLeague = null,
   design = null,
 }: {
   initial: Snapshot;
   initialPage: Page;
   /** Dev only: a made-up team page to open on (?team=season|live|off). */
   initialTeam?: TeamRef | null;
+  /** One league's games to open on (?page=sports&league=nfl). */
+  initialLeague?: LeaguePick | null;
   design?: Design | null;
 }) {
   const kit = design ? DESIGNS[design] : null;
@@ -160,6 +171,8 @@ export function Screen({
   // One team's games, asked for by name (voice or Siri).
   const [teamRef, setTeamRef] = useState<TeamRef | null>(initialTeam);
   const team = useTeam(teamRef);
+  // One league's games, asked for by name ("show college football").
+  const [league, setLeague] = useState<LeaguePick | null>(initialLeague);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
   // night honest even if the forecast is gone for a while.
@@ -186,9 +199,20 @@ export function Screen({
   // No games to show (the off-season, the scores didn't answer, or the list
   // has gone stale): home.
   const games = freshGames(snapshot, now);
+  // A league's page: its games, the NFL's whole slate among them. With none,
+  // the page says so, but only when that's known to be true (leagueView);
+  // otherwise it's home, and the asking is over (it never comes back on its
+  // own when the scores do).
+  const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now);
+  const leagueList = league ? leagueView(games, slate, league) : null;
+  if (page === "sports" && league && leagueList === null && !teamRef) {
+    setPage("home");
+    setLeague(null);
+  }
+  const noGames = league ? leagueList === null : !games?.length;
   const base =
     (askedBase === "nature" && (design !== "almanac" || clips?.length === 0)) ||
-    (askedBase === "sports" && !games?.length && !team.view && !team.pending)
+    (askedBase === "sports" && noGames && !team.view && !team.pending)
       ? viewOf("home", mood)
       : askedBase;
   const [homeStart, setHomeStart] = useState<Start>(() => ({
@@ -290,12 +314,15 @@ export function Screen({
   const latched = latchCue(cueAt, cycle, cueNow);
   if (latched !== cueAt) setCueAt(latched);
   const cue = latched.cue;
-  const target = targetOf({
+  const drawnTarget = targetOf({
     base,
     slide: carousel ? slideKey(slideOf(now, homeStart, hasWeather, tz, cue)) : null,
     asked: view0,
     fromUrl,
-  }) as View;
+  });
+  // One league's games is a page of its own ("sports:nfl"): from the
+  // scoreboard to a league, or league to league, the page turns in ink.
+  const target = (drawnTarget === "sports" && league ? `sports:${league}` : drawnTarget) as View;
   const [view, setView] = useState<View>(target);
   // Passages back to back are one page: the clock and the notes hold still,
   // and only the piece turns, in its own ink (keyed by the passage).
@@ -317,16 +344,17 @@ export function Screen({
   }, [leaving, target, turning, view]);
 
   const show = useCallback(
-    (p: Page, v?: WeatherView, t?: TeamRef | null) => {
+    (p: Page, v?: WeatherView, t?: TeamRef | null, l?: LeaguePick | null) => {
       pageSince.current = Date.now();
       setPage(p);
       setView0(viewAsked(p, v));
-      // One team's games, or none: any other asking clears it.
+      // One team's games, or one league's, or neither: any other asking clears them.
       setTeamRef(teamFor(p, t));
+      setLeague(leagueFor(p, l, t));
       // Asking for nature starts a fresh session, whatever happened to the last.
       if (p === "nature") setMode((m) => modeStart(m, clockNow()));
     },
-    [setMode, setView0, setTeamRef],
+    [setMode, setView0, setTeamRef, setLeague],
   );
 
   // ---- Time. A tick every few seconds; the clock shows minutes.
@@ -375,7 +403,7 @@ export function Screen({
           // A missed thermostat reading keeps the last; freshIndoor retires it at 30 minutes.
           indoor: next.indoor ?? prev.indoor,
           // So do missed scores; freshGames retires them at 30 minutes.
-          ...(next.games ? {} : { games: prev.games, gamesAt: prev.gamesAt }),
+          ...(next.games ? {} : { games: prev.games, gamesAt: prev.gamesAt, nfl: prev.nfl }),
         }));
       } catch {
         // Offline: keep printing what we have.
@@ -403,7 +431,8 @@ export function Screen({
         if (!("page" in ask) || ask.seq === known) return;
         // Only a recent request counts (a TV waking up shouldn't obey
         // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS) show(ask.page, ask.view, ask.team);
+        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS)
+          show(ask.page, ask.view, ask.team, ask.league);
       } catch {
         // Try again next time.
       }
@@ -427,10 +456,10 @@ export function Screen({
         runTool(name, args, {
           snapshot: snapshotRef.current,
           now: new Date(),
-          show: async (p, v, team) => {
+          show: async (p, v, team, league) => {
             // A team, as said: the server finds it (or doesn't, and it's the games as usual).
             const t = team ? await findTeamFor(team) : null;
-            show(p, v, t);
+            show(p, v, t, team ? null : league);
             return team ? t !== null : undefined;
           },
           hangUp: () => {},
@@ -472,6 +501,9 @@ export function Screen({
     () => hashOf(dayKey(new Date(initial.issuedAt), initial.timeZone)) % 100_000,
   );
 
+  // The games page, whole or one league's (as drawn: while it sinks, the one it was).
+  const sports = shown === "sports" || shown.startsWith("sports:");
+  const shownLeague = shown.startsWith("sports:") ? (shown.slice(7) as LeaguePick) : null;
   const asked = shown.startsWith("weather:") ? (shown.slice(8) as WeatherView) : undefined;
   // A carousel slide: a weather view ("carousel:…", the same by day or by
   // night, so sunset doesn't re-ink it), or a passage by day ("home:…") or
@@ -510,7 +542,7 @@ export function Screen({
       asked ||
       shown === "nature" ||
       // The games are set in the Almanac's face, on bare paper.
-      (shown === "sports" && design === "almanac"))
+      (sports && design === "almanac"))
       ? kit
       : null;
   return (
@@ -553,7 +585,7 @@ export function Screen({
             fades back in (and carries on) instead of cutting. */}
         {kit?.Sky ? (
           <kit.Sky
-            hidden={!drawn || natureBusy || shown === "nature" || shown === "sports"}
+            hidden={!drawn || natureBusy || shown === "nature" || sports}
             w={snapshot.weather}
             now={now}
             mood={paper}
@@ -610,7 +642,7 @@ export function Screen({
               ) : null}
               {shown === "week" && <WeekPage {...props} />}
               {shown === "notebook" && <NotebookPage {...props} />}
-              {shown === "sports" &&
+              {sports &&
                 // One team's page: its name at once (from the asking), its games
                 // inking in below as they arrive; the games as usual if it can't be had.
                 (team.view ? (
@@ -624,7 +656,13 @@ export function Screen({
                     />
                   ) : null
                 ) : (
-                  <SportsPage {...props} games={games ?? []} />
+                  <SportsPage
+                    {...props}
+                    games={
+                      shownLeague ? (leagueView(games, slate, shownLeague) ?? []) : (games ?? [])
+                    }
+                    league={shownLeague}
+                  />
                 ))}
             </div>
           </InkStage.Provider>

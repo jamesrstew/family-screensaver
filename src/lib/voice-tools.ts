@@ -4,7 +4,16 @@
 import { WEATHER_VIEWS, type WeatherView } from "./carousel";
 import { forecastLine } from "./forecast";
 import { freshIndoor } from "./indoor";
-import { chanceOf, dayLabel, freshGames, joinWord, whenWord } from "./games";
+import {
+  LEAGUE_PICKS,
+  chanceOf,
+  dayLabel,
+  freshGames,
+  joinWord,
+  leagueView,
+  whenWord,
+  type LeaguePick,
+} from "./games";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
 import { PAGES, type Snapshot, type Page } from "./types";
 
@@ -14,8 +23,9 @@ export type ToolContext = {
   /**
    * `team`: for the games page, one team as said ("Kentucky basketball").
    * Says whether that team was found (undefined when none was asked for).
+   * `league`: for the games page, one league's games (never beside a team).
    */
-  show: (page: Page, view?: WeatherView, team?: string) => unknown;
+  show: (page: Page, view?: WeatherView, team?: string, league?: LeaguePick) => unknown;
   hangUp: () => void;
 };
 
@@ -33,7 +43,15 @@ export async function runTool(
       if (!PAGES.includes(page)) return { ok: false, error: "No such page" };
       const view = WEATHER_VIEWS.find((v) => v === args.view);
       const team = page === "sports" && typeof args.team === "string" ? args.team.slice(0, 60) : "";
-      const found = await ctx.show(page, page === "weather" ? view : undefined, team || undefined);
+      // One of the few leagues, or none (the whole scoreboard); a team, if named, wins.
+      const league =
+        page === "sports" && !team ? LEAGUE_PICKS.find((l) => l === args.league) : undefined;
+      const found = await ctx.show(
+        page,
+        page === "weather" ? view : undefined,
+        team || undefined,
+        league,
+      );
       // The truth when no team answers to it: the games page is up instead.
       if (team && found === false) {
         return {
@@ -89,7 +107,13 @@ export async function runTool(
       }));
     }
     case "read_games": {
-      const games = freshGames(snapshot, now);
+      const all = freshGames(snapshot, now);
+      if (!all) return { available: false };
+      // One league's, if asked: with the NFL's whole slate for the NFL (and football).
+      const pick = LEAGUE_PICKS.find((l) => l === args.league);
+      // Unknown (the NFL's scoreboard didn't answer) is said as unknown, never as "no games".
+      const slate = freshGames({ games: snapshot.nfl, gamesAt: snapshot.gamesAt }, now);
+      const games = pick ? leagueView(all, slate, pick) : all;
       if (!games) return { available: false };
       return games.map((g) => {
         const odds = chanceOf(g);

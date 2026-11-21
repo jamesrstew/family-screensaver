@@ -65,9 +65,49 @@ describe("gather", () => {
     const want = ["20261117", "20261118", "20261119", "20261120", "20261121", "20261122"];
     expect(days("college-football")).toEqual(want);
     expect(days("mens-college-basketball")).toEqual(want);
-    // No family teams: no schedules, and no NFL at all.
+    // No family teams: no schedules. The NFL's scoreboard, for its own page,
+    // day by day from yesterday through the week ahead.
     expect(asked.some((u) => u.includes("/schedule"))).toBe(false);
-    expect(asked.some((u) => u.includes("nfl") || u.includes("KXNFLGAME"))).toBe(false);
+    expect(days("football/nfl")).toEqual([...want, "20261123", "20261124", "20261125"]);
+  });
+
+  it("brings the NFL's slate apart: the rest never waits on it, nor fails with it", async () => {
+    const sunday = {
+      events: [
+        {
+          id: "501",
+          date: "2026-11-22T21:25Z",
+          status: { type: { state: "pre", name: "STATUS_SCHEDULED" } },
+          competitions: [
+            {
+              competitors: [
+                { homeAway: "home", team: { id: "7", name: "Broncos" } },
+                { homeAway: "away", team: { id: "13", name: "Raiders" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    serve((u) =>
+      u.includes("football/nfl/scoreboard")
+        ? json(sunday)
+        : u.includes("dates=20261121") && u.includes("college-football")
+          ? json(saturday)
+          : json({ events: [], markets: [] }),
+    );
+    const got = await gather(NOW, TZ, []);
+    expect(got.games.map((g) => g.id)).toEqual(["401"]);
+    expect(got.nfl?.map((g) => g.id)).toEqual(["501"]);
+    // The NFL's scoreboard down: the slate is unknown (null), the rest as ever.
+    serve((u) =>
+      u.includes("football/nfl/scoreboard")
+        ? new Response("down", { status: 503 })
+        : u.includes("dates=20261121") && u.includes("college-football")
+          ? json(saturday)
+          : json({ events: [], markets: [] }),
+    );
+    expect(await gather(NOW, TZ, [])).toMatchObject({ games: [{ id: "401" }], nfl: null });
   });
 
   it("asks for a family team's regular season and postseason", async () => {
@@ -85,7 +125,7 @@ describe("gather", () => {
         ? json(saturday)
         : new Response("down", { status: 503 }),
     );
-    const games = await gather(NOW, TZ, []);
+    const { games } = await gather(NOW, TZ, []);
     expect(games.map((g) => g.id)).toEqual(["401"]);
   });
 
@@ -103,7 +143,9 @@ describe("gather", () => {
           : json({ events: [], markets: [] }),
     );
     const began = Date.now();
-    const [g] = await gather(NOW, TZ, [], 50);
+    const {
+      games: [g],
+    } = await gather(NOW, TZ, [], 50);
     expect(Date.now() - began).toBeLessThan(1000);
     expect(g.id).toBe("401");
     expect(g.home.chance).toBeUndefined();
