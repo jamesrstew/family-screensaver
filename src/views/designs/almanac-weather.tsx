@@ -46,11 +46,13 @@ import {
   type Lens,
 } from "@/lib/lenses";
 import { dayFeels, hourFeel } from "@/lib/feel";
+import { holidayOn, type Mark } from "@/lib/holidays";
 import { airNow, drawn, ozoneLeads, smokeOf, smokeOver } from "@/lib/smoke";
 import { addDays, dayKey, parts, weekdayOf } from "@/lib/time";
 import type { Condition } from "@/lib/wear";
 import type { Weather as Sky } from "@/lib/types";
 import { Engraving, Moon, moonAge } from "../Engraving";
+import { HolidayMark } from "../HolidayMark";
 import type { ViewProps } from "../parts";
 import { Figures, Plate, captionOf, useLens, type PlateHour } from "./almanac-lenses";
 import { fitStyle, hourWord } from "./common";
@@ -527,7 +529,7 @@ const SENTENCE_LAG_MS = 1200;
 /** The plate's paper stays bare this long, so the new sentence comes first. */
 const PLATE_REST_MS = 1600;
 
-type Column = { key: string; label: string; rule: boolean; strong: boolean };
+type Column = { key: string; label: string; rule: boolean; strong: boolean; mark?: Mark };
 
 /** As many columns as there are days or slots: a short forecast still fills the row. */
 const gridOf = (n: number) => ({ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` });
@@ -539,7 +541,17 @@ function Labels({ cols }: { cols: Column[] }) {
       {cols.map((c) => (
         <div key={c.key} className="relative text-center">
           {/* The weekend, or the night: one fine rule over its columns. */}
-          {c.rule ? <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" /> : null}
+          {c.rule && !c.mark ? (
+            <div className="absolute inset-x-0 -top-[2.6rem] h-px bg-rule" />
+          ) : null}
+          {/* A holiday's mark, set in the rule like a printer's ornament. */}
+          {c.mark ? (
+            <div className="absolute inset-x-0 -top-[5.1rem] flex items-center gap-[0.8rem]">
+              <div className={`h-px flex-1 ${c.rule ? "bg-rule" : ""}`} />
+              <HolidayMark mark={c.mark} className="fine-ink size-[5rem] text-ink" />
+              <div className={`h-px flex-1 ${c.rule ? "bg-rule" : ""}`} />
+            </div>
+          ) : null}
           <p
             className={`text-[2.7rem] whitespace-nowrap italic ${c.strong ? "text-ink" : "text-ink-soft"}`}
           >
@@ -551,14 +563,32 @@ function Labels({ cols }: { cols: Column[] }) {
   );
 }
 
+/** How far a holiday's mark reaches above the rule, which the sentence keeps clear of. */
+const MARK_ROOM = 3;
+
 /**
  * The sentence over the row, with the lens's name above it (the sky goes
  * unnamed). The name has its own ink, so it holds when it doesn't change.
- * Its box leaves the row's fine rule room to breathe.
+ * Its box leaves the row's fine rule (and any holiday's mark) room to breathe.
  */
-function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: string | null }) {
+function Sentence({
+  lens,
+  line,
+  caption,
+  marked = false,
+}: {
+  lens: Lens;
+  line: string;
+  caption: string | null;
+  /** A holiday's mark stands above the row: the sentence gives it room. */
+  marked?: boolean;
+}) {
+  const room = marked ? MARK_ROOM : 0;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center">
+    <div
+      className="flex flex-1 flex-col items-center justify-center px-[3rem] text-center"
+      style={{ paddingBottom: `${room}rem` }}
+    >
       <Ink k={caption ?? ""} lag={SENTENCE_LAG_MS} plain order={0}>
         {caption ? (
           <p className="mb-[1.2rem] text-[2.6rem] text-ink-faint italic in-data-[mood=night]:text-ink-soft">
@@ -570,7 +600,7 @@ function Sentence({ lens, line, caption }: { lens: Lens; line: string; caption: 
         <Clearing />
         <p
           className="max-w-[102rem] text-balance"
-          style={headline(line, 102, caption ? 16.5 : 20.5)}
+          style={headline(line, 102, (caption ? 16.5 : 20.5) - room)}
         >
           {nb(line)}
         </p>
@@ -706,7 +736,8 @@ function Days({ w, now, snapshot, slide }: Drawn) {
     key: d.date,
     label: labelOf(d.date),
     rule: weekend(d.date),
-    strong: weekend(d.date),
+    strong: weekend(d.date) || Boolean(holidayOn(d.date)),
+    mark: holidayOn(d.date)?.mark,
   }));
 
   const named = ahead.map((d, i) => ({ d, s: samples[i], name: nameOf(d.date) }));
@@ -783,7 +814,12 @@ function Days({ w, now, snapshot, slide }: Drawn) {
 
   return (
     <div className="flex h-full flex-col">
-      <Sentence lens={lens} line={line} caption={captionOf(lens, kindsIn(ahead))} />
+      <Sentence
+        lens={lens}
+        line={line}
+        caption={captionOf(lens, kindsIn(ahead))}
+        marked={cols.some((c) => c.mark)}
+      />
       <div className="pb-[3rem]">
         <Labels cols={cols} />
         <Ink

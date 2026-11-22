@@ -15,7 +15,7 @@ const CLOUD =
   "M24 64 C14 64 10 55 16 50 C12 42 20 34 29 37 C31 27 44 22 52 30 C57 21 73 22 75 34 C84 33 91 41 87 49 C93 53 90 63 81 63 C78 68 70 69 66 65 C61 70 52 70 48 65 C43 70 33 70 30 65 C28 66 26 65 24 64 Z";
 
 /** Parallel hatching, clipped to a shape: the engraver's shadow. */
-function Hatch({
+export function Hatch({
   clip,
   from,
   to,
