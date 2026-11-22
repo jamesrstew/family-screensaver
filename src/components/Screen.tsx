@@ -41,10 +41,13 @@ import {
   type Mode,
   type Picked,
   type Ready,
+  SOUND_KEY,
+  soundNamed,
+  type Sound,
 } from "@/lib/nature";
 import { hashOf } from "@/lib/organic";
 import { dayKey, moodOf, parts, twilightOf, type Mood } from "@/lib/time";
-import { PAGES, type ShowRequest, type Snapshot, type Page } from "@/lib/types";
+import { PAGES, type Asks, type Snapshot, type Page } from "@/lib/types";
 import { runTool } from "@/lib/voice-tools";
 import { HomePage } from "@/views/HomePage";
 import { NightPage } from "@/views/NightPage";
@@ -173,6 +176,22 @@ export function Screen({
   const team = useTeam(teamRef);
   // One league's games, asked for by name ("show college football").
   const [league, setLeague] = useState<LeaguePick | null>(initialLeague);
+  // How nature sounds: gentle until the family asks otherwise; the TV keeps
+  // the last asking (storage that's missing or blocked just means gentle).
+  // (Read once, on the TV; it draws nothing, so the server's guess can't mismatch.)
+  const [sound, setSound] = useState<Sound>(() => {
+    try {
+      return soundNamed(localStorage.getItem(SOUND_KEY)) ?? "soft";
+    } catch {
+      return "soft";
+    }
+  });
+  const hear = useCallback((s: Sound) => {
+    setSound(s);
+    try {
+      localStorage.setItem(SOUND_KEY, s);
+    } catch {}
+  }, []);
   const pageSince = useRef(0);
   // Sunrise and sunset barely move day to day, so the last ones known keep the
   // night honest even if the forecast is gone for a while.
@@ -414,7 +433,11 @@ export function Screen({
 
   // ---- Requests from the phone remote, Siri, Alexa.
   const lastSeq = useRef<number | null>(null);
+  const lastSound = useRef<number | null>(null);
+  // Late at night the TV asks less often, but not during nature (a "mute" is
+  // heard within seconds).
   const asleep = (() => {
+    if (page === "nature") return false;
     const h = parts(now, snapshot.timeZone).hour;
     return h >= 22 || h < 5;
   })();
@@ -425,14 +448,18 @@ export function Screen({
       try {
         const res = await fetch("/api/show", { cache: "no-store" });
         if (!res.ok || !alive) return;
-        const ask = (await res.json()) as ShowRequest | { seq: 0 };
+        const { heard, ...ask } = (await res.json()) as Asks;
+        // Only a recent request counts (a TV waking up shouldn't obey
+        // yesterday's). Pages and sound are asked for apart, and kept apart.
+        const fresh = (at: string) => Date.now() - Date.parse(at) < SHOW_TTL_MS;
+        if (heard && heard.seq !== lastSound.current) {
+          lastSound.current = heard.seq;
+          if (fresh(heard.at)) hear(heard.sound);
+        }
         const known = lastSeq.current;
         lastSeq.current = ask.seq;
         if (!("page" in ask) || ask.seq === known) return;
-        // Only a recent request counts (a TV waking up shouldn't obey
-        // yesterday's).
-        if (Date.now() - Date.parse(ask.at) < SHOW_TTL_MS)
-          show(ask.page, ask.view, ask.team, ask.league);
+        if (fresh(ask.at)) show(ask.page, ask.view, ask.team, ask.league);
       } catch {
         // Try again next time.
       }
@@ -443,7 +470,7 @@ export function Screen({
       alive = false;
       window.clearInterval(t);
     };
-  }, [asleep, show]);
+  }, [asleep, show, hear]);
 
   // ---- The voice.
   const snapshotRef = useRef(snapshot);
@@ -462,9 +489,10 @@ export function Screen({
             show(p, v, t, team ? null : league);
             return team ? t !== null : undefined;
           },
+          sound: hear,
           hangUp: () => {},
         }),
-      [show],
+      [show, hear],
     ),
   );
 
@@ -565,6 +593,7 @@ export function Screen({
               job={jobIn(w)}
               on={on && curIn === w}
               volume={volume}
+              sound={sound}
               onReady={onReady}
               onFail={onFail}
               onBusy={w === "A" ? setBusyA : setBusyB}

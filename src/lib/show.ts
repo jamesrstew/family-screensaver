@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { WEATHER_VIEWS, type WeatherView } from "./carousel";
 import type { LeaguePick } from "./games";
+import { soundNamed, type Sound } from "./nature";
 import { TEAM_QUERY } from "./team-query";
 import { PAGES, type Page } from "./types";
 
@@ -8,7 +9,13 @@ import { PAGES, type Page } from "./types";
 // voice. A request is just "show this page" (and, for the weather, which view
 // of it). The TV decides the rest.
 
-type Asked = { page: Page; view?: WeatherView; team?: string; league?: LeaguePick };
+type Asked = {
+  page: Page;
+  view?: WeatherView;
+  team?: string;
+  league?: LeaguePick;
+  sound?: Sound;
+};
 
 /**
  * The leagues, by the names people say. "Football" alone is both college and
@@ -111,10 +118,14 @@ const own = <T>(map: Record<string, T>, k: string): T | undefined =>
  * resolved to a team on the server, never passed on as said), or one
  * league's: `{"page": "sports", "league": "nfl"}` (or simply `{"page": "nfl"}`).
  * A league that isn't one of the few is left out: the whole scoreboard.
+ *
+ * How nature sounds, alone or beside a page: `{"sound": "off"}` (or "full",
+ * or "soft"; SOUND_WORDS). The TV keeps it until asked again.
  */
 export const ShowBody = z
   .object({
-    page: z.string().max(40),
+    page: z.string().max(40).optional(),
+    sound: z.string().max(40).optional(),
     view: z.string().max(40).optional(),
     league: z.string().max(40).optional(),
     // Longer than any team's name is cut, not refused (a run-on dictation).
@@ -124,26 +135,47 @@ export const ShowBody = z
       .transform((t) => t.slice(0, 60))
       .optional(),
   })
-  .transform(({ page, view, team, league }, ctx): Asked => {
-    const p = words(page);
-    const asked: Asked | undefined =
-      own(ALIASES, p) ?? (PAGES.includes(p as Page) ? { page: p as Page } : undefined);
-    if (!asked) {
-      ctx.addIssue({ code: "custom", message: "Unknown page" });
-      return z.NEVER;
-    }
-    if (asked.page === "sports") {
-      // A team, if one is named; else a league, if one of the few; else every game.
-      const q = team?.trim();
-      if (q && TEAM_QUERY.test(q)) return { page: "sports", team: q };
-      const l = league === undefined ? undefined : own(LEAGUE_WORDS, words(league));
-      return l ? { page: "sports", league: l } : asked;
-    }
-    if (view === undefined || asked.page !== "weather") return asked;
-    const v = words(view);
-    const named = WEATHER_VIEWS.find((w) => w === v) ?? own(ALIASES, v)?.view;
-    return named ? { page: "weather", view: named } : asked;
-  });
+  .transform(
+    (
+      { page, sound, ...rest },
+      ctx,
+    ): Asked | (Partial<Asked> & { page?: undefined; sound: Sound }) => {
+      const heard = sound === undefined ? null : soundNamed(words(sound));
+      // An empty page (a Shortcut's empty variable) beside a sound is no page.
+      if (page === undefined || (heard && !page.trim())) {
+        if (heard) return { sound: heard };
+        ctx.addIssue({ code: "custom", message: "Unknown page or sound" });
+        return z.NEVER;
+      }
+      const asked = pageAsked(page, rest, ctx);
+      return heard && asked !== z.NEVER ? { ...asked, sound: heard } : asked;
+    },
+  );
+
+function pageAsked(
+  page: string,
+  { view, team, league }: { view?: string; team?: string; league?: string },
+  ctx: z.RefinementCtx,
+): Asked {
+  const p = words(page);
+  const asked: Asked | undefined =
+    own(ALIASES, p) ?? (PAGES.includes(p as Page) ? { page: p as Page } : undefined);
+  if (!asked) {
+    ctx.addIssue({ code: "custom", message: "Unknown page" });
+    return z.NEVER;
+  }
+  if (asked.page === "sports") {
+    // A team, if one is named; else a league, if one of the few; else every game.
+    const q = team?.trim();
+    if (q && TEAM_QUERY.test(q)) return { page: "sports", team: q };
+    const l = league === undefined ? undefined : own(LEAGUE_WORDS, words(league));
+    return l ? { page: "sports", league: l } : asked;
+  }
+  if (view === undefined || asked.page !== "weather") return asked;
+  const v = words(view);
+  const named = WEATHER_VIEWS.find((w) => w === v) ?? own(ALIASES, v)?.view;
+  return named ? { page: "weather", view: named } : asked;
+}
 
 /** The team a request carries to the screen: the games page's only; any other page clears it. */
 export const teamFor = <T>(page: Page, team?: T | null): T | null =>

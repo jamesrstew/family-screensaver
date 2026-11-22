@@ -327,10 +327,25 @@ function pick(ms: Market[], s: Side): Market | undefined {
 
 export const ours = (g: Game) => Boolean(g.home.mine || g.away.mine);
 
-/** Lower is better: two ranked teams beat one; higher ranks beat lower. */
-function interest(g: Game): number {
+/** Points a game loses for each point its favorite's chance runs past even. */
+export const EVEN_WEIGHT = 0.4;
+/** A game whose odds aren't known counts as a typical favorite's, neither best nor worst. */
+export const UNKNOWN_FAVORITE = 65;
+
+/**
+ * Lower is better: two ranked teams beat one; higher ranks beat lower; and
+ * the closer the odds, the better (a coin flip between No. 10 and No. 15
+ * beats No. 1 at 80% against No. 20). A game without odds counts as a
+ * typical one (a lookup that ran out of time neither helps nor hurts much).
+ */
+export function interest(g: Game): number {
   const r = [g.home.rank ?? 40, g.away.rank ?? 40].sort((a, b) => a - b);
-  return (g.home.rank && g.away.rank ? 0 : 100) + r[0] + r[1] / 4;
+  const known = g.home.chance ?? g.away.chance;
+  const fav =
+    known === undefined
+      ? UNKNOWN_FAVORITE
+      : Math.max(g.home.chance ?? 100 - known, g.away.chance ?? 100 - known);
+  return (g.home.rank && g.away.rank ? 0 : 100) + r[0] + r[1] / 4 + (fav - 50) * EVEN_WEIGHT;
 }
 
 /**

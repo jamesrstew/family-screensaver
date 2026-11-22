@@ -5,6 +5,9 @@
  *
  *   clip → gain (the clip's own) → high shelf → compressor → gain (the level)
  *
+ * Asked for full sound, the shelf and compressor go flat and both gains go
+ * to 1: the clip just as it was recorded, at the TV's own volume.
+ *
  * Tuned by measurement (ffmpeg's equivalent chain over bird-heavy and water
  * clips): true peaks of birdsong fall 4–11 dB and every clip's peaks land
  * near the same height, while waterfalls and rivers lose only about 2 dB of
@@ -18,6 +21,8 @@
  * so each <video> keeps its graph across clips. The context sleeps whenever
  * nothing is audible, and while the app is hidden.
  */
+
+import type { Sound } from "./nature";
 
 export const SHELF_HZ = 4000;
 export const SHELF_DB = -4;
@@ -34,6 +39,8 @@ type Param = Pick<
 export type AmbientGraph = {
   /** The clip's own gain, before the shelf and compressor. */
   pre: { value: number };
+  /** Flatten the shelf and compressor (full sound), or give them back. */
+  plain: (on: boolean) => void;
   /** Move the hour's level (the last gain) to `to` over `ms`, smoothly, on the audio clock. */
   fade: (to: number, ms: number) => void;
 };
@@ -108,6 +115,11 @@ export function buildGraph(ctx: Ctx, el: HTMLMediaElement): AmbientGraph | null 
   const level: Param = out.gain;
   return {
     pre: pre.gain,
+    plain: (on) => {
+      shelf.gain.value = on ? 0 : SHELF_DB;
+      // A ratio of 1 compresses nothing, whatever the threshold.
+      comp.ratio.value = on ? 1 : COMPRESSOR.ratio;
+    },
     fade: (to, ms) => {
       const t = ctx.currentTime;
       level.cancelScheduledValues(t);
@@ -164,13 +176,21 @@ export function resetAmbient() {
 }
 
 /**
- * How a clip with gain `gain` sounds at the hour's `level`: through the
- * graph, its own gain (capped) before the compressor and the level after;
- * without it, the element's volume alone, never past full.
+ * How a clip with gain `gain` sounds at the hour's `level`, gently: through
+ * the graph, its own gain (capped) before the compressor and the level
+ * after; without it, the element's volume alone, never past full. Full: the
+ * clip as recorded (no gain, a flat graph). Off: silent.
  */
-export function soundOf(gain: number | undefined, level: number, graph: boolean) {
+export function soundOf(
+  gain: number | undefined,
+  level: number,
+  graph: boolean,
+  sound: Sound = "soft",
+) {
+  if (sound === "full") return { pre: 1, out: 1, volume: 1, plain: true };
+  if (sound === "off") return { pre: 1, out: 0, volume: 0, plain: false };
   const g = typeof gain === "number" && gain > 0 ? gain : 1;
   return graph
-    ? { pre: Math.min(g, PRE_GAIN_MAX), out: level, volume: 1 }
-    : { pre: 1, out: 1, volume: Math.min(1, level * g) };
+    ? { pre: Math.min(g, PRE_GAIN_MAX), out: level, volume: 1, plain: false }
+    : { pre: 1, out: 1, volume: Math.min(1, level * g), plain: false };
 }

@@ -17,6 +17,44 @@ export const LEVEL_NIGHT = 0.07;
 export const VOLUME = { day: LEVEL_DAY, twilight: LEVEL_TWILIGHT, night: LEVEL_NIGHT } as const;
 
 /**
+ * How nature sounds, as the family last asked: gentle (the hour's level,
+ * evened and softened), full (just as it was recorded), or off. Gentle
+ * until asked otherwise; the TV keeps the last asking (SOUND_KEY).
+ */
+export const SOUNDS = ["soft", "full", "off"] as const;
+export type Sound = (typeof SOUNDS)[number];
+export const SOUND_KEY = "family:nature-sound";
+
+/** The sounds, by the names people say. */
+export const SOUND_WORDS: Record<string, Sound> = {
+  soft: "soft",
+  gentle: "soft",
+  mellow: "soft",
+  quiet: "soft",
+  quieter: "soft",
+  low: "soft",
+  usual: "soft",
+  // Sound back after a mute is the usual sound, never full by surprise.
+  on: "soft",
+  unmute: "soft",
+  full: "full",
+  "full sound": "full",
+  "as recorded": "full",
+  off: "off",
+  mute: "off",
+  muted: "off",
+  silent: "off",
+  none: "off",
+  "no sound": "off",
+};
+
+/** A sound as kept or said, or null for anything else. */
+export const soundNamed = (s: unknown): Sound | null =>
+  typeof s === "string" && Object.prototype.hasOwnProperty.call(SOUND_WORDS, s.trim().toLowerCase())
+    ? SOUND_WORDS[s.trim().toLowerCase()]
+    : null;
+
+/**
  * The clips' level for the paper's mood: night's once the paper has turned
  * dark, twilight's while the sky is changing before that, else the day's.
  */

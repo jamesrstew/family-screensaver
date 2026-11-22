@@ -1,6 +1,7 @@
 // The shapes that travel from the server to the TV. Plain JSON only.
 
 import type { WeatherView } from "./carousel";
+import type { Sound } from "./nature";
 
 export const PAGES = ["home", "weather", "week", "notebook", "sports", "nature"] as const;
 export type Page = (typeof PAGES)[number];
@@ -222,6 +223,12 @@ export type Snapshot = {
 };
 
 /** A page to show; for the weather, which view of it. */
+/** How nature sounds from now on (lib/nature.ts), as last asked; kept apart from the pages. */
+export type SoundRequest = { seq: number; sound: Sound; at: string };
+
+/** What the TV hears when it asks: the latest page asked for, and the latest sound. */
+export type Asks = (ShowRequest | { seq: 0 }) & { heard: SoundRequest | null };
+
 export type ShowRequest = {
   seq: number;
   page: Page;

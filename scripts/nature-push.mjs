@@ -13,17 +13,23 @@
 // `excluded` list is the owner's: kept as edited on every run (the first run
 // suggests one from the titles). --to takes the drive's root (e.g.
 // /Volumes/NATURE); the TV finds the clips at Android/data/<app>/files/nature/
-// on any of its volumes. --adb takes the volume on the TV (default /sdcard; a
-// USB drive is /storage/<its id>). Both copy only what's new or changed, and
-// the manifest last. Add --dry-run to see what would be copied.
+// on any of its volumes, or in a drive's own FamilyNature/. --adb takes the
+// volume on the TV: /sdcard (the default) fills the app's folder; a USB drive
+// (/storage/<its id>) fills its FamilyNature/, since Android 11 keeps adb out
+// of the app's folder there (the TV app reads it with all-files access: see
+// tv/README.md). Both copy only what's new or changed. The manifest is taken
+// away first and goes back last, whole (written beside, then renamed), so the
+// TV never plays from a folder being filled: it uses the next one meanwhile.
+// Add --dry-run to see what would be copied.
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // Every clip is brought to this loudness; the page's volume does the rest.
 const TARGET_LUFS = -30;
 const APP_DIR = "Android/data/com.jamesstewart.family/files/nature";
+const DRIVE_DIR = "FamilyNature";
 // Titles to leave out until the owner says otherwise: not calm enough for the living room.
 const NOT_CALM =
   /\b(spider|tarantula|snake|rattlesnake|shark|alligator|crocodile|scorpion|wasp|hornet|leeche|vulture)s?\b/i;
@@ -130,24 +136,37 @@ for (const id of excluded)
   console.log(`  ${id}  ${clips.find((c) => c.id === id)?.title ?? "(gone)"}`);
 
 // ---- The copy: every clip that's new or a different size, then the manifest.
-const files = [...clips.map((c) => `${c.id}.mp4`), "manifest.json"];
+const files = clips.map((c) => `${c.id}.mp4`);
 const drive = valueOf("to");
 const adb = flag("adb") >= 0;
 if (drive) {
   const dest = path.join(drive, APP_DIR);
-  if (!dry) await mkdir(dest, { recursive: true });
+  if (!dry) {
+    await mkdir(dest, { recursive: true });
+    await rm(path.join(dest, "manifest.json"), { force: true });
+  }
   for (const f of files) {
     const a = await stat(path.join(src, f));
     const b = await stat(path.join(dest, f)).catch(() => null);
-    if (f !== "manifest.json" && b?.size === a.size) continue;
+    if (b?.size === a.size) continue;
     console.log(`${dry ? "would copy" : "copying"} ${f}`);
     if (!dry) await copyFile(path.join(src, f), path.join(dest, f));
   }
+  if (!dry) {
+    await copyFile(path.join(src, "manifest.json"), path.join(dest, "manifest.json.tmp"));
+    await rename(path.join(dest, "manifest.json.tmp"), path.join(dest, "manifest.json"));
+  }
 } else if (adb) {
   const volume = valueOf("adb") ?? "/sdcard";
-  const dest = `${volume}/${APP_DIR}`;
+  const own = volume === "/sdcard" || volume.startsWith("/storage/emulated");
+  const dest = `${volume}/${own ? APP_DIR : DRIVE_DIR}`;
   const shell = (cmd) => execFileSync("adb", ["shell", cmd], { encoding: "utf8" });
-  if (!dry) shell(`mkdir -p '${dest}'`);
+  if (!dry) {
+    // A drive's folder is kept out of the TV's media apps.
+    shell(
+      `mkdir -p '${dest}' && rm -f '${dest}/manifest.json'${own ? "" : ` && touch '${dest}/.nomedia'`}`,
+    );
+  }
   // What's on the TV already, by size.
   const there = new Map(
     shell(`ls -l '${dest}' 2>/dev/null || true`)
@@ -158,9 +177,15 @@ if (drive) {
   );
   for (const f of files) {
     const { size } = await stat(path.join(src, f));
-    if (f !== "manifest.json" && there.get(f) === size) continue;
+    if (there.get(f) === size) continue;
     console.log(`${dry ? "would push" : "pushing"} ${f}`);
     if (!dry)
       execFileSync("adb", ["push", path.join(src, f), `${dest}/${f}`], { stdio: "inherit" });
+  }
+  if (!dry) {
+    execFileSync("adb", ["push", path.join(src, "manifest.json"), `${dest}/manifest.json.tmp`], {
+      stdio: "inherit",
+    });
+    shell(`mv '${dest}/manifest.json.tmp' '${dest}/manifest.json'`);
   }
 }

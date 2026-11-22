@@ -27,6 +27,8 @@ Make a Shortcut named, say, "Family weather": **Get Contents of URL** → `https
 
 One league's games: `{"page": "sports", "league": "cfb"}` (college football), `"cbb"` (men's college basketball), `"nfl"` (every NFL game of the week, since the NFL has no Top 25), or `"football"` (college football and the NFL together). The names people say work as the page too: `{"page": "college football"}`, `{"page": "nfl"}`, `{"page": "basketball"}` (men's college basketball), and `{"page": "football"}` (both footballs; before league pages, it showed every game). A league with nothing in the next few days says so on the page. A league the server doesn't know shows the whole scoreboard.
 
+Nature's sound: `{"sound": "full"}` (just as it was recorded), `{"sound": "soft"}` (gentle and even, softer at night: the usual), or `{"sound": "off"}`. It needs no page (the picture carries on), or goes beside one: `{"page": "nature", "sound": "off"}`. The TV keeps the last one asked for. The voice does the same ("mute the nature sounds", "full sound").
+
 One team's games, by name: a Shortcut named, say, "Family team" that starts with **Ask for Input** (Text, prompt "Which team?"), then **Get Contents of URL** as above with the JSON body `{"page": "sports", "team": <Provided Input>}`. Say "Kentucky basketball", "the Zags", "Bucs", or "Alabama football": any college football, men's college basketball, or NFL team. The TV shows that team's page (its record and rank, its last few results, a game under way, its next games with their channels and chances) and goes home on its own. The voice does the same when asked ("show the Bucs' schedule"). A team the server can't find shows the games as usual. There's no button for it on the phone.
 
 ### Nest thermostats

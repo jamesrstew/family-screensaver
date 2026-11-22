@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LEVEL_DAY, LEVEL_NIGHT, LEVEL_TWILIGHT, levelAt } from "./nature";
 import {
+  COMPRESSOR,
   PRE_GAIN_MAX,
+  SHELF_DB,
   ambientOf,
   prepareAmbient,
   resetAmbient,
@@ -22,7 +24,12 @@ describe("the clips' level", () => {
   });
 
   it("through the graph: the clip's gain first (capped), the hour's level last", () => {
-    expect(soundOf(0.5, LEVEL_DAY, true)).toEqual({ pre: 0.5, out: LEVEL_DAY, volume: 1 });
+    expect(soundOf(0.5, LEVEL_DAY, true)).toEqual({
+      pre: 0.5,
+      out: LEVEL_DAY,
+      volume: 1,
+      plain: false,
+    });
     expect(soundOf(14, LEVEL_NIGHT, true).pre).toBe(PRE_GAIN_MAX);
     expect(soundOf(undefined, LEVEL_TWILIGHT, true).pre).toBe(1);
   });
@@ -39,6 +46,7 @@ type Fake = { connect: (to: Fake) => Fake; name: string; [k: string]: unknown };
 function fakeContext(opts: { state?: AudioContextState; failAt?: string; wakes?: boolean } = {}) {
   const made: string[] = [];
   const wired: string[] = [];
+  const nodes: Record<string, Fake> = {};
   const param = () => ({
     value: 0,
     cancelScheduledValues: () => {},
@@ -48,7 +56,7 @@ function fakeContext(opts: { state?: AudioContextState; failAt?: string; wakes?:
   const node = (name: string, extra: Record<string, unknown> = {}): Fake => {
     if (opts.failAt === name) throw new Error(`no ${name}`);
     made.push(name);
-    const n: Fake = {
+    const n: Fake = (nodes[name] = {
       ...extra,
       name,
       connect: (to: Fake) => {
@@ -56,7 +64,7 @@ function fakeContext(opts: { state?: AudioContextState; failAt?: string; wakes?:
         wired.push(`${name}→${to.name}`);
         return to;
       },
-    };
+    });
     return n;
   };
   let gains = 0;
@@ -84,15 +92,30 @@ function fakeContext(opts: { state?: AudioContextState; failAt?: string; wakes?:
         release: param(),
       }),
   };
-  return { ctx: ctx as unknown as Ctx & { state: string }, made, wired };
+  return { ctx: ctx as unknown as Ctx & { state: string }, made, wired, nodes };
 }
+
+describe("the three sounds", () => {
+  it("full is the clip as recorded; off is silent; soft is the default", () => {
+    expect(soundOf(0.5, LEVEL_DAY, true, "full")).toEqual({
+      pre: 1,
+      out: 1,
+      volume: 1,
+      plain: true,
+    });
+    expect(soundOf(0.5, LEVEL_DAY, false, "full").volume).toBe(1);
+    expect(soundOf(0.5, LEVEL_DAY, true, "off").out).toBe(0);
+    expect(soundOf(0.5, LEVEL_DAY, false, "off").volume).toBe(0);
+    expect(soundOf(0.5, LEVEL_DAY, true)).toEqual(soundOf(0.5, LEVEL_DAY, true, "soft"));
+  });
+});
 
 describe("the ambient graph", () => {
   beforeEach(() => resetAmbient());
   const video = () => ({}) as HTMLMediaElement;
 
   it("builds everything first and takes the clip last, then wires it through", async () => {
-    const { ctx, made, wired } = fakeContext();
+    const { ctx, made, wired, nodes } = fakeContext();
     const el = video();
     const g = await prepareAmbient(el, () => ctx);
     expect(g).not.toBeNull();
@@ -108,6 +131,15 @@ describe("the ambient graph", () => {
     expect(await prepareAmbient(el, () => ctx)).toBe(g);
     expect(made.filter((m) => m === "source")).toHaveLength(1);
     expect(ambientOf(el)).toBe(g);
+    // Full sound flattens the shelf and compressor; gentle gives them back.
+    const value = (node: string, k: string) => (nodes[node][k] as { value: number }).value;
+    g!.plain(true);
+    expect([value("shelf", "gain"), value("compressor", "ratio")]).toEqual([0, 1]);
+    g!.plain(false);
+    expect([value("shelf", "gain"), value("compressor", "ratio")]).toEqual([
+      SHELF_DB,
+      COMPRESSOR.ratio,
+    ]);
   });
 
   it("never takes the clip if the graph fails to build: the element plays as before", async () => {

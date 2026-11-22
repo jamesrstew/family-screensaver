@@ -4,6 +4,7 @@ import {
   chanceOf,
   channel,
   curate,
+  interest,
   dayLabel,
   freshGames,
   gamesCue,
@@ -351,6 +352,23 @@ describe("trim", () => {
     const close = game("2026-11-21T19:00:00Z", { chance: 45 }, { rank: 9, chance: 55 });
     // At the same hour, the family's game is listed first.
     expect(trim([unknown, r, ours, close])).toEqual([ours, unknown, close]);
+  });
+});
+
+describe("interest", () => {
+  it("puts two ranked teams first, then the closer odds", () => {
+    const rout = game("2026-11-21T19:00:00Z", { rank: 1, chance: 80 }, { rank: 20, chance: 20 });
+    const even = game("2026-11-21T19:00:00Z", { rank: 10, chance: 52 }, { rank: 15, chance: 48 });
+    const one = game("2026-11-21T19:00:00Z", { rank: 1, chance: 50 }, { chance: 50 });
+    expect(interest(even)).toBeLessThan(interest(rout));
+    expect(interest(rout)).toBeLessThan(interest(one));
+    // No odds: a typical game, behind the same matchup at even odds.
+    const unknown = game("2026-11-21T19:00:00Z", { rank: 10 }, { rank: 15 });
+    expect(interest(even)).toBeLessThan(interest(unknown));
+    // The game of the year at 70% still beats two lesser teams at even odds.
+    const marquee = game("2026-11-21T19:00:00Z", { rank: 1, chance: 70 }, { rank: 2, chance: 30 });
+    const lesser = game("2026-11-21T19:00:00Z", { rank: 8, chance: 50 }, { rank: 12, chance: 50 });
+    expect(interest(marquee)).toBeLessThan(interest(lesser));
   });
 });
 
