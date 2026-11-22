@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.storage.StorageManager
 import android.os.SystemClock
 import android.util.Log
 import android.webkit.WebResourceRequest
@@ -20,14 +23,21 @@ private const val PREFIX = "/nature/"
 private val RANGE = Regex("""^bytes=(\d*)-(\d*)$""")
 private val NAME = Regex("""^(manifest\.json|[\w-]{1,64}\.mp4)$""")
 private const val ROOT_TTL_MS = 5_000L
+// A plain folder at a drive's root: adb can write there over Wi-Fi, which it
+// can't do in the app's own folder on a USB drive (Android 11).
+private const val DRIVE_FOLDER = "FamilyNature"
 
 /*
  * The nature clips, served to the page from the TV itself. They live on any of
- * the app's storage volumes (usually a USB drive) at
- * Android/data/com.jamesstewart.family/files/nature/: manifest.json and <id>.mp4.
+ * the app's storage volumes (usually a USB drive), at FamilyNature/ on the
+ * drive's root or at Android/data/com.jamesstewart.family/files/nature/:
+ * manifest.json and <id>.mp4. A drive's own folder comes first; reading it
+ * takes all-files access, granted once over adb
+ * (`appops set --uid com.jamesstewart.family MANAGE_EXTERNAL_STORAGE allow`);
+ * without it, that folder simply isn't seen.
  * The page asks for them on its own origin (/nature/...); this answers before
  * the request reaches the network, in byte ranges so the clip can seek.
- * Nothing is ever uploaded, and the app needs no storage permission.
+ * Nothing is ever uploaded.
  *
  * Anything missing (no drive, a drive pulled out, a file not there) is a 404,
  * and the page simply goes on without that clip.
@@ -42,20 +52,42 @@ class NatureFiles(private val context: Context) {
     private var rootAt = 0L
 
     /**
-     * The first volume holding files/nature/manifest.json. Looked up again
-     * every few seconds, not on every range request: drives come and go.
+     * The first folder holding a manifest.json: a drive's FamilyNature/, else
+     * a volume's files/nature/. Looked up again every few seconds, not on
+     * every range request: drives come and go. (The manifest goes on last,
+     * so a drive still being filled isn't chosen.)
      */
     @Synchronized
     private fun root(): File? {
         val now = SystemClock.elapsedRealtime()
         if (now - rootAt > ROOT_TTL_MS || root?.let { File(it, "manifest.json").isFile } != true) {
-            root = context.getExternalFilesDirs(null).asSequence()
-                .filterNotNull()
-                .map { File(it, "nature") }
-                .firstOrNull { File(it, "manifest.json").isFile }
+            val dirs = context.getExternalFilesDirs(null).filterNotNull()
+            val drives = volumes(dirs).map { File(it, DRIVE_FOLDER) }
+            val found = (drives + dirs.map { File(it, "nature") })
+                .firstOrNull { runCatching { File(it, "manifest.json").isFile }.getOrDefault(false) }
+            if (found?.path != root?.path) Log.i(TAG, "Clips from ${found ?: "nowhere"}")
+            root = found
             rootAt = now
         }
         return root
+    }
+
+    /**
+     * Every mounted volume's root: from the storage manager (API 30+, which
+     * lists a drive even when its app folder couldn't be made), else above
+     * each app folder's Android/.
+     */
+    private fun volumes(dirs: List<File>): List<File> {
+        val above = dirs.mapNotNull { d ->
+            d.path.indexOf("/Android/").takeIf { it > 0 }?.let { File(d.path.substring(0, it)) }
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return above
+        val listed = runCatching {
+            context.getSystemService(StorageManager::class.java).storageVolumes
+                .filter { it.state == Environment.MEDIA_MOUNTED }
+                .mapNotNull { it.directory }
+        }.getOrDefault(emptyList())
+        return (listed + above).distinctBy { it.path }
     }
 
     /** A response for /nature/... on the family app's own origin, or null to let the request through. */
