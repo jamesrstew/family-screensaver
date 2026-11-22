@@ -60,6 +60,8 @@ export const store: Store = url && token ? redis(new Redis({ url, token })) : me
 
 export const KEYS = {
   show: "family:show",
+  // Nature's sound, apart from the pages: asking for both at once loses neither.
+  sound: "family:sound",
   notebook: "family:notebook",
   /**
    * The games as last gathered (sports.ts), so a cold server has them at

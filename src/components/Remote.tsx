@@ -72,7 +72,22 @@ export function Remote({ snapshot }: { snapshot: Snapshot }) {
   const voice = useVoice(
     useCallback(
       (name, args) =>
-        runTool(name, args, { snapshot, now: new Date(), show: send, hangUp: () => {} }),
+        runTool(name, args, {
+          snapshot,
+          now: new Date(),
+          show: send,
+          // Nature's sound, for the TV to keep: whether it was asked.
+          sound: (sound) =>
+            fetch("/api/show", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sound }),
+            }).then(
+              (res) => res.ok,
+              () => false,
+            ),
+          hangUp: () => {},
+        }),
       [snapshot, send],
     ),
   );

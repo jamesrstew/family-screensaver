@@ -23,6 +23,7 @@ const ask = (s: Snapshot, ms: number) =>
       snapshot: s,
       now: new Date(Date.parse(at) + ms),
       show: () => {},
+      sound: () => {},
       hangUp: () => {},
     },
   ) as Promise<{ inside: unknown }>;
@@ -86,6 +87,7 @@ describe("read_games", () => {
         snapshot: { ...snapshot(null), ...s },
         now: new Date(Date.parse(at) + ms),
         show: () => {},
+        sound: () => {},
         hangUp: () => {},
       },
     ) as Promise<Array<Record<string, unknown>> | { available: false }>;
@@ -115,7 +117,13 @@ describe("show_page with a team", () => {
     runTool(
       "show_page",
       { page: "sports", team: "Narnia" },
-      { snapshot: snapshot(null), now: new Date(at), show: () => found, hangUp: () => {} },
+      {
+        snapshot: snapshot(null),
+        now: new Date(at),
+        show: () => found,
+        sound: () => {},
+        hangUp: () => {},
+      },
     );
 
   it("says so when no team answers to it, and what's up instead", async () => {
@@ -133,6 +141,7 @@ describe("show_page and read_games for one league", () => {
     snapshot: { ...snapshot(null), ...s },
     now: new Date(at),
     show: (...a: unknown[]) => void shown.push(a),
+    sound: () => {},
     hangUp: () => {},
   });
   const nfl = (id: string, mine = false) => ({
@@ -174,5 +183,24 @@ describe("show_page and read_games for one league", () => {
     expect(
       await runTool("read_games", { league: "nfl" }, ctx({ games: [], nfl: null, gamesAt: at })),
     ).toEqual({ available: false });
+  });
+});
+
+describe("nature_sound", () => {
+  it("sets one of the three sounds, and nothing else", async () => {
+    const heard: string[] = [];
+    const ctx = {
+      snapshot: snapshot(null),
+      now: new Date(at),
+      show: () => {},
+      sound: (s: string) => heard.push(s),
+      hangUp: () => {},
+    };
+    expect(await runTool("nature_sound", { sound: "off" }, ctx)).toEqual({ ok: true });
+    expect(await runTool("nature_sound", { sound: "blaring" }, ctx)).toMatchObject({ ok: false });
+    expect(heard).toEqual(["off"]);
+    // A phone that couldn't reach the TV says so.
+    const down = { ...ctx, sound: async () => false };
+    expect(await runTool("nature_sound", { sound: "full" }, down)).toMatchObject({ ok: false });
   });
 });

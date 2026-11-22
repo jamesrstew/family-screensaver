@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ambientOf, prepareAmbient, setAudible, sleepAmbient, soundOf } from "@/lib/ambient";
-import { MANIFEST_URL, MODE_PRELOAD_S, clipsOf, srcOf, type Clip, type Picked } from "@/lib/nature";
+import {
+  MANIFEST_URL,
+  MODE_PRELOAD_S,
+  clipsOf,
+  srcOf,
+  type Clip,
+  type Picked,
+  type Sound,
+} from "@/lib/nature";
 
 /*
  * A real place, full screen: a nature clip at its own size (1080p on a 1080p
@@ -22,6 +30,11 @@ const IN_MS = 4000;
 /** The clip sinks no faster than the ink leaves; the screen waits for it. */
 export const NATURE_OUT_MS = 4000;
 const SOUND_IN_MS = 9000;
+// Asked for another sound mid-clip: it changes within a breath, not a slow rise.
+const SOUND_SWITCH_MS = 1500;
+// Before a switch changes the clip's gain or tone, its sound dips away this
+// fast: the compressor's own lift and the clip's gain never rise while it's loud.
+const DIP_MS = 300;
 /** The strip's ink sinking (Ink's seep, staggered), before the clip begins to. */
 export const STRIP_OUT_MS = 2800;
 /** From a clip's turn ending until it has gone: the strip sinks, then the picture. */
@@ -73,7 +86,8 @@ const same = (a: Clip[], b: Clip[]) =>
 
 /**
  * The window itself. `job` is the next clip (or null); `on` says its turn
- * has come; `volume` is the hour's level (the clip's gain evens it out). It
+ * has come; `volume` is the hour's level (the clip's gain evens it out), and
+ * `sound` how the family asked to hear it (gentle, full, or off). It
  * tells the screen when the clip is ready, when it fails, when it has played
  * to its end and sunk (`onEnd`, for a clip with an `until`), while it holds
  * the page (`onBusy`: from its first frame until it has sunk, so the sky
@@ -86,6 +100,7 @@ export function NatureWindow({
   job,
   on,
   volume,
+  sound,
   onReady,
   onFail,
   onBusy,
@@ -96,6 +111,7 @@ export function NatureWindow({
   job: Picked | null;
   on: boolean;
   volume: number;
+  sound: Sound;
   onReady: (n: number, id: string) => void;
   onFail: (n: number) => void;
   onBusy: (busy: boolean) => void;
@@ -285,13 +301,16 @@ export function NatureWindow({
   // The sound rises slower than the picture and falls from the moment the
   // strip begins to sink, over as long as the picture takes; then the clip stops.
   const audible = phase === "surfacing" || phase === "full";
+  const heard = useRef(sound);
   useEffect(() => {
     const v = ref.current;
+    const switched = heard.current !== sound;
+    heard.current = sound;
     if (!v) return;
     const graph = ambientOf(v);
-    const sound = soundOf(held?.clip.gain, volume, Boolean(graph));
-    const to = audible && held ? (graph ? sound.out : sound.volume) : 0;
-    const ms = audible ? SOUND_IN_MS : NATURE_GONE_MS;
+    const mix = soundOf(held?.clip.gain, volume, Boolean(graph), sound);
+    const to = audible && held ? (graph ? mix.out : mix.volume) : 0;
+    const ms = !audible ? NATURE_GONE_MS : switched ? SOUND_SWITCH_MS : SOUND_IN_MS;
     const done = () => {
       if (!audible) setAudible(v, false);
       if (!on || ended === n) v.pause();
@@ -300,10 +319,19 @@ export function NatureWindow({
     // Through the graph: the fade runs on the audio clock, on its last gain.
     if (graph) {
       v.volume = 1;
-      graph.pre.value = sound.pre;
-      graph.fade(to, ms);
-      const t = window.setTimeout(done, ms);
-      return () => window.clearTimeout(t);
+      const set = () => {
+        graph.pre.value = mix.pre;
+        graph.plain(mix.plain);
+        graph.fade(to, ms);
+      };
+      if (!switched) {
+        set();
+        const t = window.setTimeout(done, ms);
+        return () => window.clearTimeout(t);
+      }
+      graph.fade(0, DIP_MS);
+      const ts = [window.setTimeout(set, DIP_MS), window.setTimeout(done, DIP_MS + ms)];
+      return () => ts.forEach((t) => window.clearTimeout(t));
     }
     // Without it: the element's volume, stepped.
     const from = v.volume;
@@ -316,7 +344,7 @@ export function NatureWindow({
       done();
     }, 100);
     return () => window.clearInterval(t);
-  }, [audible, volume, held, on, ended, n]);
+  }, [audible, volume, sound, held, on, ended, n]);
 
   return (
     <div

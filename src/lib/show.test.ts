@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { ShowBody, leagueFor, pageKey, targetOf, teamFor, viewAsked } from "./show";
 
 describe("ShowBody", () => {
+  it("takes nature's sound, alone or beside a page, by the words people say", () => {
+    expect(ShowBody.parse({ sound: "Mute" })).toEqual({ sound: "off" });
+    expect(ShowBody.parse({ sound: "full" })).toEqual({ sound: "full" });
+    expect(ShowBody.parse({ sound: "mellow" })).toEqual({ sound: "soft" });
+    expect(ShowBody.parse({ page: "nature", sound: "full" })).toEqual({
+      page: "nature",
+      sound: "full",
+    });
+    // A sound that isn't one is left out beside a page, and refused alone.
+    expect(ShowBody.parse({ page: "nature", sound: "blaring" })).toEqual({ page: "nature" });
+    expect(ShowBody.safeParse({ sound: "blaring" }).success).toBe(false);
+    expect(ShowBody.safeParse({ sound: "constructor" }).success).toBe(false);
+    expect(ShowBody.safeParse({}).success).toBe(false);
+    // A Shortcut's empty page variable beside a sound: just the sound.
+    expect(ShowBody.parse({ page: "", sound: "off" })).toEqual({ sound: "off" });
+  });
   it.each([
     ["weather", "weather"],
     [" Week Ahead ", "week"],

@@ -14,6 +14,7 @@ import {
   whenWord,
   type LeaguePick,
 } from "./games";
+import { SOUNDS, type Sound } from "./nature";
 import { addDays, dayKey, happeningsOn, weekdayOf, whenOf } from "./time";
 import { PAGES, type Snapshot, type Page } from "./types";
 
@@ -26,6 +27,8 @@ export type ToolContext = {
    * `league`: for the games page, one league's games (never beside a team).
    */
   show: (page: Page, view?: WeatherView, team?: string, league?: LeaguePick) => unknown;
+  /** How nature sounds from now on: gentle, full, or off. False if it couldn't be asked. */
+  sound: (sound: Sound) => unknown;
   hangUp: () => void;
 };
 
@@ -60,6 +63,15 @@ export async function runTool(
           shown: "the games (the family's teams and the Top 25)",
           say: "I couldn't find that team; here are the games.",
         };
+      }
+      return { ok: true };
+    }
+    case "nature_sound": {
+      const sound = SOUNDS.find((s) => s === args.sound);
+      if (!sound) return { ok: false, error: "No such sound" };
+      // The truth if the TV wasn't reached (the phone asks over the network).
+      if ((await ctx.sound(sound)) === false) {
+        return { ok: false, say: "The TV didn't answer. Try again." };
       }
       return { ok: true };
     }
